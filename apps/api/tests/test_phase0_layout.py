@@ -29,6 +29,7 @@ def test_docker_build_uses_locked_runtime_dependencies_and_explicit_indexes() ->
     assert "--retries 10" in api_dockerfile
     assert "PYPI_INDEX_URL" in compose["services"]["api"]["build"]["args"]
     assert "NPM_REGISTRY" in compose["services"]["admin-web"]["build"]["args"]
+    assert "PROJECT_MANAGER_DATABASE_URL" in compose["services"]["api"]["environment"]
     assert compose["services"]["redis"]["ports"] == ["${REDIS_HOST_PORT:-16379}:6379"]
     for service in ("postgres", "redis", "minio", "api", "admin-web"):
         assert "healthcheck" in compose["services"][service]

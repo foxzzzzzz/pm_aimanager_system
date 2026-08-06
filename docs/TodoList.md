@@ -13,6 +13,10 @@
 | ✅ 已完成 | P0 | 初始化FastAPI健康接口、测试框架和依赖锁 |
 | ✅ 已完成 | P0 | 启动Docker Desktop并完成Compose容器级启动复验 |
 | ✅ 已完成 | P0 | 确认Phase 0提交范围、commit message和v0.1.0 tag |
+| ✅ 已完成 | P0 | 建立Phase 1 Canonical Schema、数据库模型和首次迁移 |
+| ✅ 已完成 | P0 | 完成Lyra模板1.0指纹、ParserRegistry和固定模板解析器 |
+| ✅ 已完成 | P0 | 完成XLSX-01至XLSX-08、语义Diff和导入报告验收 |
+| ✅ 已完成 | P0 | 确认Phase 1提交范围、commit message和v0.2.0 tag |
 | ⏳ 待开始 | P1 | 申请/提供微信小程序测试环境和AppID |
 | ⏳ 待开始 | P1 | 申请订阅消息模板和腾讯云短信测试配置 |
 | ⏳ 待开始 | P1 | 提供首个OpenAI兼容LLM测试配置 |

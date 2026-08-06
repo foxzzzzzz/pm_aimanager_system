@@ -31,6 +31,9 @@ imports:
   template_id: lyra_project_spec
   # Structural version of the Lyra-PRO baseline workbook.
   template_version: "1.0"
+  # Versioned parser manifests loaded by ParserRegistry.
+  manifest_paths:
+    - config/templates/lyra_project_spec-v1.0.yaml
   # Maximum processing time for a single workbook.
   timeout_seconds: 30
 

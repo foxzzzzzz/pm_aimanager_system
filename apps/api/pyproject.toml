@@ -4,13 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "project-manager-api"
-version = "0.1.0"
+version = "0.2.0"
 description = "Backend API for the AI project management system"
 requires-python = ">=3.12"
 dependencies = [
+  "alembic>=1.16,<2.0",
   "fastapi>=0.116,<1.0",
+  "openpyxl>=3.1,<4.0",
+  "psycopg[binary]>=3.2,<4.0",
   "pydantic>=2.11,<3.0",
   "PyYAML>=6.0,<7.0",
+  "SQLAlchemy>=2.0,<3.0",
   "uvicorn[standard]>=0.35,<1.0",
 ]
 
@@ -20,6 +24,7 @@ dev = [
   "mypy>=1.17,<2.0",
   "pytest>=8.4,<9.0",
   "ruff>=0.12,<1.0",
+  "types-openpyxl>=3.1,<4.0",
   "types-PyYAML>=6.0,<7.0",
 ]
 

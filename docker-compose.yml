@@ -54,6 +54,7 @@ services:
         PIP_DEFAULT_TIMEOUT: ${PIP_DEFAULT_TIMEOUT:-60}
     environment:
       APP_CONFIG_PATH: ${APP_CONFIG_PATH:-/app/config/app.example.yaml}
+      PROJECT_MANAGER_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-project_manager}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-project_manager}
       LLM_API_KEY: ${LLM_API_KEY:-}
       WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
       TENCENT_SECRET_ID: ${TENCENT_SECRET_ID:-}

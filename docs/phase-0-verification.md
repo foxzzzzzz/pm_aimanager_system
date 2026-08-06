@@ -6,7 +6,7 @@
 
 ## 已完成范围
 
-- Git仓库初始化为 `main`，未创建commit或tag。
+- Git仓库初始化为 `main`，验收后已创建首次commit和 `v0.1.0` tag。
 - FastAPI最小应用和 `/health` 接口。
 - React + TypeScript + Ant Design管理端最小页面。
 - 原生微信小程序TypeScript最小页面和项目配置。

@@ -13,6 +13,10 @@
 - 初始化Git仓库、Python 3.12 API、React管理端和原生TypeScript小程序骨架。
 - 增加外部配置示例、Docker Compose、CI、依赖锁和统一启动/检查脚本。
 - 增加脱敏Lyra模板1.0夹具及人工核对的预期数据。
+- 完成Phase 1 CanonicalProjectDraft、计划日期状态、成员、规格、里程碑和RACI领域模型。
+- 增加外部YAML模板清单、ParserRegistry和LyraTemplateV1Parser，固定支持 `lyra_project_spec/1.0`。
+- 增加XLSX扩展名/文件类型/模板指纹/必要结构/日期/RACI语义校验和结构化导入报告。
+- 增加字段级语义Diff、Project/ProjectVersion/ImportRecord数据库模型及 `0001_phase1` Alembic迁移。
 
 ### 验证
 
@@ -22,16 +26,19 @@
 - API、管理端、PostgreSQL、Redis和MinIO五个容器均达到healthy。
 - 管理端浏览器渲染通过，关键文案可见且无控制台错误。
 - 修复Docker构建包源隐式依赖和本机Redis端口冲突；增加锁定运行时依赖、构建重试、可配置宿主机端口和全服务健康检查。
+- Phase 1后端27个测试、Ruff、mypy、前端测试/类型检查/构建及Compose配置全部通过。
+- 脱敏Lyra夹具解析结果与人工基准一致：70条规格、22名成员、24个节点、3个计划版本。
+- PostgreSQL实际执行 `0001_phase1` 升级成功，API容器加载模板清单及Excel/数据库依赖成功。
 
 ## 计划里程碑
 
 | Tag | 范围 | 状态 |
 |-----|------|------|
 | v0.1.0 | Phase 0：工程与文档基线 | ✅ 已完成（2026-08-06） |
-| v0.2.0 | Phase 1：领域模型与固定模板解析 | 未开始 |
+| v0.2.0 | Phase 1：领域模型与固定模板解析 | ✅ 已完成（2026-08-06） |
 | v0.3.0 | Phase 2：后台核心与管理端 | 未开始 |
 | v0.4.0 | Phase 3：微信小程序 | 未开始 |
 | v0.5.0 | Phase 4：自动提醒与外部通知 | 未开始 |
 | v1.0.0 | Phase 5：Lyra真实试点和首次生产可用 | 未开始 |
 
-> `v0.1.0`用于标记Phase 0验收通过的首次提交；后续里程碑提交和Tag仍需提前确认。
+> `v0.1.0`用于标记Phase 0工程基线；`v0.2.0`用于标记Phase 1固定模板解析基线。后续里程碑提交和Tag仍须提前确认。

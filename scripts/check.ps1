@@ -9,7 +9,7 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
 
 Push-Location $repoRoot
 try {
-    & $venvPython -m ruff check apps/api/src apps/api/tests
+    & $venvPython -m ruff check apps/api/migrations apps/api/src apps/api/tests
     if ($LASTEXITCODE -ne 0) { throw "Python lint failed with exit code $LASTEXITCODE." }
     & $venvPython -m mypy apps/api/src
     if ($LASTEXITCODE -ne 0) { throw "Python type checking failed with exit code $LASTEXITCODE." }
@@ -28,4 +28,4 @@ finally {
     Pop-Location
 }
 
-Write-Output "All Phase 0 checks passed."
+Write-Output "All project checks passed."

@@ -27,4 +27,4 @@ if ($LASTEXITCODE -ne 0) {
     throw "Installing workspace dependencies failed with exit code $LASTEXITCODE."
 }
 
-Write-Output "Phase 0 dependencies are installed."
+Write-Output "Project dependencies are installed."

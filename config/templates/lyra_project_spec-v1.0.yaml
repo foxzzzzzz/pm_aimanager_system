@@ -1,0 +1,92 @@
+template_id: lyra_project_spec
+template_version: "1.0"
+required_sheets:
+  产品规格书: A1:I75
+  项目团队构成: A1:F26
+  项目进度表: A1:Y15
+  客户-产品规格书: A1:F84
+identity_markers:
+  - sheet: 产品规格书
+    cell: A1
+    contains: 深圳市智林泰电子科技有限公司
+  - sheet: 产品规格书
+    cell: D4
+    contains: 项目号：
+required_markers:
+  - sheet: 项目团队构成
+    cell: A4
+    equals: 团队成员
+  - sheet: 项目团队构成
+    cell: B4
+    equals: 责任部门
+  - sheet: 项目团队构成
+    cell: C4
+    equals: 负责人
+  - sheet: 项目进度表
+    cell: A2
+    equals: 项目节点
+product_specs:
+  sheet: 产品规格书
+  first_row: 6
+  last_row: 75
+  columns:
+    major_category: A
+    category: B
+    item: C
+    configuration: D
+    core_information: E
+    selected_model: F
+    notes: G
+    check_confirmation: H
+    check_content: I
+team:
+  sheet: 项目团队构成
+  first_row: 5
+  last_row: 26
+  columns:
+    role: B
+    name: C
+    phone: D
+    email: E
+    notes: F
+progress:
+  sheet: 项目进度表
+  milestone_header_row: 2
+  first_milestone_column: 2
+  plan_first_row: 3
+  plan_last_row: 5
+  actual_completion_row: 6
+  variance_days_row: 7
+  variance_note_row: 8
+  risk_note_row: 9
+  raci_rows:
+    R: 11
+    A: 12
+    C: 13
+    I: 14
+  output_row: 15
+milestones:
+  - {code: M01, name: 正式立项}
+  - {code: M02, name: MD设计}
+  - {code: M03, name: 结构评审}
+  - {code: M04, name: 投模}
+  - {code: M05, name: 硬件设计}
+  - {code: M06, name: EVT投板}
+  - {code: M07, name: 模具T0}
+  - {code: M08, name: EVT-SMT贴片}
+  - {code: M09, name: EVT装机}
+  - {code: M10, name: EVT可靠性测试}
+  - {code: M11, name: 认证}
+  - {code: M12, name: DVT发板}
+  - {code: M13, name: DVT-SMT贴片}
+  - {code: M14, name: DVT装机}
+  - {code: M15, name: DVT可靠性测试}
+  - {code: M16, name: PVT发板}
+  - {code: M17, name: PVT-SMT贴片}
+  - {code: M18, name: PVT装机}
+  - {code: M19, name: PVT可靠性测试}
+  - {code: M20, name: 长周期备料}
+  - {code: M21, name: 电容笔调试}
+  - {code: M22, name: 摄像头调试}
+  - {code: M23, name: 软件封板}
+  - {code: M24, name: MP}
