@@ -9,7 +9,7 @@ describe("App", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the Phase 2 project workspace", async () => {
+  it("renders the Phase 3 project workspace", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, json: async () => [] }),

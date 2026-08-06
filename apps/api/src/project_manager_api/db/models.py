@@ -45,6 +45,12 @@ class IssueStatus(StrEnum):
     CLOSED = "已关闭"
 
 
+class BindingStatus(StrEnum):
+    INVITED = "invited"
+    PENDING_REVIEW = "pending_review"
+    BOUND = "bound"
+
+
 def utc_now() -> datetime:
     return datetime.now(UTC)
 
@@ -167,6 +173,7 @@ class ChangeProposal(Base):
         ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
     )
     milestone_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    proposal_kind: Mapped[str] = mapped_column(String(32), default="schedule", nullable=False)
     target_path: Mapped[str] = mapped_column(String(512), nullable=False)
     base_version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     before_value: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
@@ -208,4 +215,72 @@ class IdempotencyRecord(Base):
     path: Mapped[str] = mapped_column(String(512), nullable=False)
     response_status: Mapped[int] = mapped_column(Integer, nullable=False)
     response_body: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class MobileUser(Base):
+    __tablename__ = "mobile_users"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    openid: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(32))
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class MobileSession(Base):
+    __tablename__ = "mobile_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("mobile_users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class MemberBinding(Base):
+    __tablename__ = "member_bindings"
+    __table_args__ = (
+        UniqueConstraint("project_id", "member_name", name="uq_member_binding_project_member"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    member_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mobile_users.id", ondelete="SET NULL"), index=True
+    )
+    actor_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    invitation_token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expected_phone: Mapped[str | None] = mapped_column(String(32))
+    provided_phone: Mapped[str | None] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(32), default=BindingStatus.INVITED, nullable=False)
+    invitation_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class InAppMessage(Base):
+    __tablename__ = "in_app_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("mobile_users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), index=True
+    )
+    type: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    is_read: Mapped[bool] = mapped_column(default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

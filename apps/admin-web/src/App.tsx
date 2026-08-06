@@ -117,7 +117,7 @@ export function App() {
               { key: "issues", label: "问题与审计" },
             ]}
           />
-          <div className="phase-badge"><Tag color="cyan">Phase 2</Tag><span>后台核心闭环</span></div>
+          <div className="phase-badge"><Tag color="cyan">Phase 3</Tag><span>小程序协同闭环</span></div>
         </Layout.Sider>
         <Layout>
           <Layout.Header className="top-bar">

@@ -26,6 +26,9 @@ def test_docker_build_uses_locked_runtime_dependencies_and_explicit_indexes() ->
     compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
 
     assert "requirements.runtime.lock" in api_dockerfile
+    assert api_dockerfile.index("COPY apps/api/requirements.runtime.lock") < api_dockerfile.index(
+        "COPY apps/api /app/apps/api"
+    )
     assert "--retries 10" in api_dockerfile
     assert "PYPI_INDEX_URL" in compose["services"]["api"]["build"]["args"]
     assert "NPM_REGISTRY" in compose["services"]["admin-web"]["build"]["args"]

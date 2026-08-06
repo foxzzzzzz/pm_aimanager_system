@@ -1,0 +1,4 @@
+.page-head { margin: 20rpx 0 30rpx; }
+.page-head .muted { display: block; }
+.project-name { display: block; margin: 18rpx 0 10rpx; font-size: 34rpx; font-weight: 650; }
+.empty { color: #63716d; text-align: center; }

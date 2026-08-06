@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ProjectCreate(BaseModel):
@@ -13,6 +13,10 @@ class ProjectCreate(BaseModel):
 
 class PublishRequest(BaseModel):
     expected_project_version: int = Field(ge=0)
+
+
+class RejectRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
 
 
 class ProgressProposalCreate(BaseModel):
@@ -46,3 +50,38 @@ class IssueUpdate(BaseModel):
 class ApiRecord(BaseModel):
     id: str
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+class WechatLoginRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=256)
+    display_name: str = Field(min_length=1, max_length=255)
+
+
+class MemberInvitationCreate(BaseModel):
+    member_name: str = Field(min_length=1, max_length=255)
+    expected_phone: str | None = Field(default=None, min_length=6, max_length=32)
+
+
+class InvitationAccept(BaseModel):
+    invitation_token: str = Field(min_length=16, max_length=512)
+    phone: str | None = Field(default=None, min_length=6, max_length=32)
+    phone_code: str | None = Field(default=None, min_length=1, max_length=512)
+
+    @model_validator(mode="after")
+    def require_phone_source(self) -> InvitationAccept:
+        if not self.phone and not self.phone_code:
+            raise ValueError("phone or phone_code is required")
+        return self
+
+
+class MilestoneUpdateCreate(BaseModel):
+    kind: str = Field(pattern="^(completed|delay)$")
+    base_version_number: int = Field(ge=1)
+    actual_completion_date: date | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class NaturalLanguagePrefillRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)

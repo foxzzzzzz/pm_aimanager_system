@@ -1,36 +1,6 @@
-.page {
-  padding: 40rpx;
-}
-
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-  padding: 40rpx;
-  border: 1rpx solid #c9ddd6;
-  border-radius: 20rpx;
-  background: #ffffff;
-  box-shadow: 0 20rpx 50rpx rgba(23, 50, 45, 0.1);
-}
-
-.phase {
-  color: #146c5a;
-  font-size: 24rpx;
-}
-
-.title {
-  font-size: 44rpx;
-  font-weight: 700;
-}
-
-.status {
-  color: #146c5a;
-  font-size: 32rpx;
-  font-weight: 600;
-}
-
-.description {
-  color: #63716d;
-  font-size: 28rpx;
-  line-height: 1.6;
-}
+.hero { margin-top: 80rpx; }
+.eyebrow { color: #146c5a; font-size: 22rpx; letter-spacing: 4rpx; }
+.section-title { display: block; font-size: 30rpx; font-weight: 700; }
+.success { margin-top: 20rpx; color: #146c5a; }
+.warning { display: block; margin-top: 20rpx; color: #a46116; line-height: 1.5; }
+.divider { margin: 26rpx 0 10rpx; color: #8a9692; font-size: 22rpx; text-align: center; }

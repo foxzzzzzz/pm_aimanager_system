@@ -1,8 +1,18 @@
 <view class="page">
-  <view class="card">
-    <text class="phase">{{phase}}</text>
-    <text class="title">AI项目管理系统</text>
-    <text class="status">{{status}}</text>
-    <text class="description">后续将在这里展示项目计划、临期节点和重难点问题。</text>
+  <view class="hero card">
+    <text class="eyebrow">AI PROJECT CENTER</text>
+    <text class="title">项目进度，随时对齐</text>
+    <text class="muted">微信身份只用于项目授权和通知，未绑定成员无法查看项目。</text>
+    <button wx:if="{{!loggedIn}}" class="primary" loading="{{busy}}" bindtap="login">微信登录</button>
+    <text wx:else class="success">✓ 已完成微信登录</text>
+  </view>
+  <view wx:if="{{loggedIn}}" class="card">
+    <text class="section-title">绑定项目成员</text>
+    <input class="field" value="{{invitationToken}}" placeholder="邀请令牌" bindinput="onTokenInput" />
+    <button class="primary" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber">授权手机号并绑定</button>
+    <view class="divider">开发环境备用</view>
+    <input class="field" type="number" value="{{phone}}" placeholder="测试手机号" bindinput="onPhoneInput" />
+    <button bindtap="bindWithPhone">使用测试手机号绑定</button>
+    <text wx:if="{{bindingStatus === 'pending_review'}}" class="warning">手机号与邀请信息不一致，已提交项目经理审核。</text>
   </view>
 </view>

@@ -1,0 +1,3 @@
+textarea.field { width: auto; min-height: 110rpx; }
+.issue-title { display: block; margin: 16rpx 0 10rpx; font-weight: 650; }
+.card .muted { display: block; margin-top: 8rpx; }

@@ -75,6 +75,8 @@ notifications:
 wechat:
   # Mini-program AppID; replace outside local development.
   app_id: replace-with-wechat-app-id
+  # Opaque mobile login session validity.
+  session_days: 30
   # Subscription-message template identifier.
   subscription_template_id: replace-with-template-id
 

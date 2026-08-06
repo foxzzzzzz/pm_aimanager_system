@@ -3,7 +3,7 @@ import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useState } from "react";
 
 import { api } from "../api";
-import type { AuditLog, Issue, Project } from "../types";
+import type { AuditLog, ChangeProposal, Issue, MemberBinding, Project } from "../types";
 
 interface Props {
   project?: Project;
@@ -20,17 +20,23 @@ interface IssueForm {
 export default function IssuesAuditPage({ project }: Props) {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [bindings, setBindings] = useState<MemberBinding[]>([]);
+  const [proposals, setProposals] = useState<ChangeProposal[]>([]);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm<IssueForm>();
 
   const reload = async () => {
     if (!project) return;
-    const [nextIssues, nextAudit] = await Promise.all([
+    const [nextIssues, nextAudit, nextBindings, nextProposals] = await Promise.all([
       api.listIssues(project.id),
       api.listAuditLogs(project.id),
+      api.listMemberBindings(project.id),
+      api.listChangeProposals(project.id),
     ]);
     setIssues(nextIssues);
     setAuditLogs(nextAudit);
+    setBindings(nextBindings);
+    setProposals(nextProposals);
   };
 
   useEffect(() => {
@@ -47,6 +53,17 @@ export default function IssuesAuditPage({ project }: Props) {
     });
     setOpen(false);
     form.resetFields();
+    await reload();
+  };
+
+  const approveBinding = async (bindingId: string) => {
+    await api.approveMemberBinding(bindingId);
+    await reload();
+  };
+
+  const resolveProposal = async (proposal: ChangeProposal, approve: boolean) => {
+    if (approve) await api.approveChangeProposal(proposal);
+    else await api.rejectChangeProposal(proposal.id, "项目经理驳回");
     await reload();
   };
 
@@ -71,6 +88,53 @@ export default function IssuesAuditPage({ project }: Props) {
                   { title: "责任人", dataIndex: "owner_name" },
                   { title: "完成时间", dataIndex: "due_date" },
                   { title: "状态", dataIndex: "status", render: (value: string) => <Tag>{value}</Tag> },
+                ]}
+              />
+            ),
+          },
+          {
+            key: "bindings",
+            label: `成员绑定 ${bindings.length}`,
+            children: (
+              <Table
+                rowKey="id"
+                dataSource={bindings}
+                columns={[
+                  { title: "成员", dataIndex: "member_name" },
+                  { title: "邀请手机号", dataIndex: "expected_phone", render: (value: string | null) => value ?? "—" },
+                  { title: "授权手机号", dataIndex: "provided_phone", render: (value: string | null) => value ?? "—" },
+                  { title: "状态", dataIndex: "status", render: (value: string) => <Tag>{value}</Tag> },
+                  {
+                    title: "操作",
+                    render: (_value: unknown, binding: MemberBinding) => binding.status === "pending_review"
+                      ? <Button size="small" onClick={() => approveBinding(binding.id)}>通过</Button>
+                      : "—",
+                  },
+                ]}
+              />
+            ),
+          },
+          {
+            key: "proposals",
+            label: `变更审批 ${proposals.filter((item) => item.status === "pending").length}`,
+            children: (
+              <Table
+                rowKey="id"
+                dataSource={proposals}
+                columns={[
+                  { title: "节点", dataIndex: "milestone_code" },
+                  { title: "类型", dataIndex: "kind" },
+                  { title: "原因", dataIndex: "reason" },
+                  { title: "状态", dataIndex: "status", render: (value: string) => <Tag>{value}</Tag> },
+                  {
+                    title: "操作",
+                    render: (_value: unknown, proposal: ChangeProposal) => proposal.status === "pending" ? (
+                      <Space>
+                        <Button size="small" type="primary" onClick={() => resolveProposal(proposal, true)}>通过</Button>
+                        <Button size="small" danger onClick={() => resolveProposal(proposal, false)}>驳回</Button>
+                      </Space>
+                    ) : "—",
+                  },
                 ]}
               />
             ),

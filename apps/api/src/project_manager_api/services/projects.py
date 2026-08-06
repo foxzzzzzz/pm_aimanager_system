@@ -13,11 +13,13 @@ from sqlalchemy.orm import Session
 from project_manager_api.api.schemas import IssueCreate, IssueUpdate, ProgressProposalCreate
 from project_manager_api.db.models import (
     AuditLog,
+    BindingStatus,
     ChangeProposal,
     ImportRecord,
     ImportStatus,
     Issue,
     IssueStatus,
+    MemberBinding,
     Project,
     ProjectMembership,
     ProjectRole,
@@ -251,6 +253,7 @@ class ProjectService:
         proposal = ChangeProposal(
             project_id=project.id,
             milestone_code=milestone_code,
+            proposal_kind="schedule",
             target_path=target_path,
             base_version_number=payload.base_version_number,
             before_value=before_value,
@@ -278,7 +281,8 @@ class ProjectService:
         proposal = self.session.get(ChangeProposal, proposal_id)
         if proposal is None:
             raise NotFoundError("change proposal not found")
-        project = self._require_project(proposal.project_id, manager=True)
+        project = self._require_project(proposal.project_id)
+        self._require_approval_permission(project, proposal.milestone_code)
         if proposal.status != ProposalStatus.PENDING:
             raise ConflictError("change proposal is already resolved")
         if project.current_version_number != expected_project_version:
@@ -287,7 +291,10 @@ class ProjectService:
         if current is None:
             raise ConflictError("project has no published version")
         snapshot = copy.deepcopy(current.snapshot)
-        _replace_milestone_window(snapshot, proposal.milestone_code, proposal.after_value)
+        if proposal.proposal_kind == "completed":
+            _replace_milestone_completion(snapshot, proposal.milestone_code, proposal.after_value)
+        else:
+            _replace_milestone_window(snapshot, proposal.milestone_code, proposal.after_value)
         encoded = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         version = ProjectVersion(
             project_id=project.id,
@@ -315,8 +322,39 @@ class ProjectService:
         )
         return _version_dict(version)
 
+    def list_proposals(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
+        self._require_project(project_id)
+        query = (
+            select(ChangeProposal)
+            .where(ChangeProposal.project_id == project_id)
+            .order_by(ChangeProposal.created_at.desc())
+        )
+        return [_proposal_dict(proposal) for proposal in self.session.scalars(query)]
+
+    def reject_proposal(self, proposal_id: uuid.UUID, reason: str) -> dict[str, Any]:
+        proposal = self.session.get(ChangeProposal, proposal_id)
+        if proposal is None:
+            raise NotFoundError("change proposal not found")
+        project = self._require_project(proposal.project_id)
+        self._require_approval_permission(project, proposal.milestone_code)
+        if proposal.status != ProposalStatus.PENDING:
+            raise ConflictError("change proposal is already resolved")
+        proposal.status = ProposalStatus.REJECTED
+        proposal.approved_by_actor_id = self.actor_id
+        proposal.resolved_at = datetime.now(UTC)
+        self._audit(
+            project.id,
+            "change_proposal.rejected",
+            "change_proposal",
+            str(proposal.id),
+            before=proposal.before_value,
+            after=proposal.after_value,
+            reason=reason,
+        )
+        return _proposal_dict(proposal)
+
     def create_issue(self, project_id: uuid.UUID, payload: IssueCreate) -> dict[str, Any]:
-        project = self._require_project(project_id, manager=True)
+        project = self._require_project(project_id)
         issue = Issue(
             project_id=project.id,
             description=payload.description,
@@ -398,6 +436,36 @@ class ProjectService:
         if record is None or record.project_id is None:
             raise NotFoundError("import not found")
         return record
+
+    def _require_approval_permission(self, project: Project, milestone_code: str) -> None:
+        membership = self.session.scalar(
+            select(ProjectMembership).where(
+                ProjectMembership.project_id == project.id,
+                ProjectMembership.actor_id == self.actor_id,
+            )
+        )
+        if membership is not None and membership.role == ProjectRole.MANAGER:
+            return
+        binding = self.session.scalar(
+            select(MemberBinding).where(
+                MemberBinding.project_id == project.id,
+                MemberBinding.actor_id == self.actor_id,
+                MemberBinding.status == BindingStatus.BOUND,
+            )
+        )
+        current = self._current_version(project)
+        if binding is not None and current is not None:
+            milestone = next(
+                (
+                    item
+                    for item in current.snapshot.get("milestones", [])
+                    if item.get("code") == milestone_code
+                ),
+                None,
+            )
+            if milestone and binding.member_name in milestone.get("assignments", {}).get("A", []):
+                return
+        raise ForbiddenError("project manager or accountable member approval is required")
 
     def _current_version(self, project: Project) -> ProjectVersion | None:
         if project.current_version_number is None:
@@ -498,6 +566,7 @@ def _proposal_dict(proposal: ChangeProposal) -> dict[str, Any]:
         "id": str(proposal.id),
         "project_id": str(proposal.project_id),
         "milestone_code": proposal.milestone_code,
+        "kind": proposal.proposal_kind,
         "target_path": proposal.target_path,
         "base_version_number": proposal.base_version_number,
         "before_value": proposal.before_value,
@@ -566,3 +635,15 @@ def _replace_milestone_window(
     prefix, milestone_name = path.rsplit(".", maxsplit=1)
     index = int(prefix.split("[")[1].split("]")[0])
     snapshot["plan_versions"][index]["milestones"][milestone_name] = after_value
+
+
+def _replace_milestone_completion(
+    snapshot: dict[str, Any], milestone_code: str, after_value: dict[str, Any]
+) -> None:
+    milestone = next(
+        (item for item in snapshot.get("milestones", []) if item.get("code") == milestone_code),
+        None,
+    )
+    if milestone is None:
+        raise NotFoundError("milestone not found")
+    milestone["actual_completion"] = after_value

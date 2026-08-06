@@ -1,0 +1,9 @@
+<view class="page">
+  <view wx:if="{{messages.length === 0}}" class="card muted">暂无消息</view>
+  <view wx:for="{{messages}}" wx:key="id" class="card message {{item.is_read ? 'read' : ''}}">
+    <text class="tag">{{item.type}}</text>
+    <text class="message-title">{{item.title}}</text>
+    <text class="muted">{{item.body}}</text>
+    <text class="time">{{item.created_at}}</text>
+  </view>
+</view>

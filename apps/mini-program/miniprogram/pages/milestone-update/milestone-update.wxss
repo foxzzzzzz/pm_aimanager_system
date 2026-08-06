@@ -1,0 +1,4 @@
+.switches { display: flex; gap: 16rpx; margin: 20rpx 0; }
+.switches button { margin: 0; }
+.switches .selected { color: #fff; background: #146c5a; }
+textarea.field { width: auto; min-height: 130rpx; }

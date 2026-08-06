@@ -33,7 +33,7 @@ $env:PROJECT_MANAGER_DATABASE_URL="postgresql+psycopg://project_manager:change-m
 
 ## Phase 2 后台核心闭环
 
-管理端支持创建项目、上传规格书、查看字段级差异、显式发布、查看看板与版本历史，以及登记问题和查看审计。API写操作使用 `X-Idempotency-Key`，当前开发身份使用 `X-Actor-Id`；Phase 3接入微信登录后替换为正式身份凭证。
+管理端支持创建项目、上传规格书、查看字段级差异、显式发布、查看看板与版本历史，以及登记问题和查看审计。管理端API写操作使用 `X-Idempotency-Key` 和当前开发身份 `X-Actor-Id`；小程序API使用微信登录后取得的Bearer token。
 
 Docker环境通过S3兼容接口将原始规格书保存到MinIO。数据库升级后访问 `http://localhost:15173` 即可使用管理端：
 
@@ -43,5 +43,19 @@ docker compose exec -T api python -m alembic -c /app/apps/api/alembic.ini upgrad
 ```
 
 Phase 2验收记录见 [docs/phase-2-verification.md](docs/phase-2-verification.md)。
+
+## Phase 3 小程序协同闭环
+
+小程序已提供登录/邀请绑定、我的项目、项目看板、节点完成或延期提案、问题登记和消息中心。R成员只能提交本人负责节点，A成员或项目经理审批后才会发布新的项目版本；AI只负责预填待确认表单。
+
+本地验收默认启用开发登录。真实微信联调前需要：
+
+1. 将 `apps/mini-program/project.config.json` 的 `appid` 替换为真实小程序AppID。
+2. 在运行环境设置 `WECHAT_APP_ID`、`WECHAT_APP_SECRET`，并将 `PROJECT_MANAGER_ALLOW_DEV_WECHAT_LOGIN=false`。
+3. 将 `apps/mini-program/miniprogram/config.ts` 的API地址改为已加入微信合法域名的HTTPS地址，并关闭 `useDevelopmentLogin`。
+
+LLM通过 `LLM_API_KEY`、`llm.base_url` 和 `llm.model` 配置任意兼容Chat Completions与严格JSON Schema的服务；未配置密钥时自然语言入口使用本地规则预填，不影响结构化表单。
+
+Phase 3验收记录见 [docs/phase-3-verification.md](docs/phase-3-verification.md)。
 
 产品规格与实施阶段见 [docs/PRD.md](docs/PRD.md) 和 [docs/PLAN.md](docs/PLAN.md)。

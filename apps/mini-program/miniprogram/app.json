@@ -1,5 +1,12 @@
 {
-  "pages": ["pages/index/index"],
+  "pages": [
+    "pages/index/index",
+    "pages/projects/projects",
+    "pages/dashboard/dashboard",
+    "pages/milestone-update/milestone-update",
+    "pages/issues/issues",
+    "pages/messages/messages"
+  ],
   "window": {
     "navigationBarTitleText": "项目管理",
     "navigationBarBackgroundColor": "#146c5a",
@@ -7,5 +14,15 @@
     "backgroundColor": "#edf4f1"
   },
   "style": "v2",
+  "tabBar": {
+    "color": "#63716d",
+    "selectedColor": "#146c5a",
+    "backgroundColor": "#ffffff",
+    "list": [
+      { "pagePath": "pages/projects/projects", "text": "项目" },
+      { "pagePath": "pages/issues/issues", "text": "问题" },
+      { "pagePath": "pages/messages/messages", "text": "消息" }
+    ]
+  },
   "sitemapLocation": "sitemap.json"
 }

@@ -1,0 +1,17 @@
+<view class="page">
+  <view wx:if="{{!projectId}}" class="card muted">请先从“项目”进入一个项目。</view>
+  <view wx:else class="card">
+    <text class="title">登记重难点</text>
+    <textarea class="field" value="{{description}}" placeholder="问题描述" bindinput="onDescription" />
+    <textarea class="field" value="{{impact}}" placeholder="项目影响" bindinput="onImpact" />
+    <input class="field" value="{{ownerName}}" placeholder="责任人姓名" bindinput="onOwner" />
+    <picker mode="date" bindchange="onDueDate"><view class="field">预计完成：{{dueDate || '请选择'}}</view></picker>
+    <button class="primary" bindtap="createIssue">登记问题</button>
+  </view>
+  <view wx:for="{{issues}}" wx:key="id" class="card">
+    <text class="tag">{{item.status}}</text>
+    <text class="issue-title">{{item.description}}</text>
+    <text class="muted">影响：{{item.impact}}</text>
+    <text class="muted">{{item.owner_name}} · {{item.due_date}}</text>
+  </view>
+</view>

@@ -1,0 +1,6 @@
+.summary .muted, .plan { display: block; margin-top: 12rpx; }
+.row { display: flex; align-items: center; gap: 14rpx; margin-bottom: 14rpx; }
+.code { color: #146c5a; font-weight: 700; }
+.name { flex: 1; font-weight: 650; }
+.done { color: #146c5a; font-size: 22rpx; }
+.milestone button { margin: 18rpx 0 0; color: #146c5a; }

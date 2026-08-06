@@ -21,6 +21,14 @@ class AppSettings(BaseModel):
     object_storage_region: str = "us-east-1"
     object_storage_access_key: str | None = None
     object_storage_secret_key: str | None = None
+    allow_development_wechat_login: bool = False
+    wechat_app_id: str | None = None
+    wechat_app_secret: str | None = None
+    mobile_session_days: int = 30
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_api_key: str | None = None
+    llm_model: str = "provider-model-name"
+    llm_timeout_seconds: int = 60
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:15173"])
 
     @classmethod
@@ -43,6 +51,8 @@ class AppSettings(BaseModel):
         )
         max_size = int(config["imports"]["max_file_size_mb"]) * 1024 * 1024
         object_storage = config["object_storage"]
+        wechat = config["wechat"]
+        llm = config["llm"]
         return cls(
             database_url=database_url,
             manifest_paths=manifest_paths,
@@ -60,6 +70,17 @@ class AppSettings(BaseModel):
             object_storage_region=str(object_storage["region"]),
             object_storage_access_key=os.environ.get("PROJECT_MANAGER_S3_ACCESS_KEY"),
             object_storage_secret_key=os.environ.get("PROJECT_MANAGER_S3_SECRET_KEY"),
+            allow_development_wechat_login=os.environ.get(
+                "PROJECT_MANAGER_ALLOW_DEV_WECHAT_LOGIN", "false"
+            ).lower()
+            == "true",
+            wechat_app_id=os.environ.get("WECHAT_APP_ID", wechat.get("app_id")),
+            wechat_app_secret=os.environ.get("WECHAT_APP_SECRET"),
+            mobile_session_days=int(wechat.get("session_days", 30)),
+            llm_base_url=os.environ.get("LLM_BASE_URL", str(llm["base_url"])),
+            llm_api_key=os.environ.get("LLM_API_KEY"),
+            llm_model=os.environ.get("LLM_MODEL", str(llm["model"])),
+            llm_timeout_seconds=int(llm["timeout_seconds"]),
         )
 
 

@@ -1,8 +1,10 @@
 import type {
   AuditLog,
+  ChangeProposal,
   Dashboard,
   ImportRecord,
   Issue,
+  MemberBinding,
   Project,
   ProjectVersion,
 } from "./types";
@@ -82,4 +84,31 @@ export const api = {
     }),
   listAuditLogs: (projectId: string) =>
     request<AuditLog[]>(`/projects/${projectId}/audit-logs`),
+  listMemberBindings: (projectId: string) =>
+    request<MemberBinding[]>(`/projects/${projectId}/member-bindings`),
+  approveMemberBinding: (bindingId: string) =>
+    request<MemberBinding>(`/member-bindings/${bindingId}/approve`, {
+      method: "POST",
+      headers: { "X-Idempotency-Key": requestKey("binding-approve") },
+    }),
+  listChangeProposals: (projectId: string) =>
+    request<ChangeProposal[]>(`/projects/${projectId}/change-proposals`),
+  approveChangeProposal: (proposal: ChangeProposal) =>
+    request<ProjectVersion>(`/change-proposals/${proposal.id}/approve`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": requestKey("proposal-approve"),
+      },
+      body: JSON.stringify({ expected_project_version: proposal.base_version_number }),
+    }),
+  rejectChangeProposal: (proposalId: string, reason: string) =>
+    request<ChangeProposal>(`/change-proposals/${proposalId}/reject`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": requestKey("proposal-reject"),
+      },
+      body: JSON.stringify({ reason }),
+    }),
 };

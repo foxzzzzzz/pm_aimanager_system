@@ -78,3 +78,20 @@ export interface AuditLog {
   reason: string | null;
   created_at: string;
 }
+
+export interface MemberBinding {
+  id: string;
+  member_name: string;
+  status: "invited" | "pending_review" | "bound";
+  expected_phone: string | null;
+  provided_phone: string | null;
+}
+
+export interface ChangeProposal {
+  id: string;
+  milestone_code: string;
+  kind: "completed" | "delay" | "schedule";
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  base_version_number: number;
+}

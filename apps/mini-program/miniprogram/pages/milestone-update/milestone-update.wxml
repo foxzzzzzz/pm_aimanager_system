@@ -1,0 +1,22 @@
+<view class="page">
+  <view class="card">
+    <text class="title">{{code}} 节点更新</text>
+    <view class="switches">
+      <button size="mini" class="{{kind === 'completed' ? 'selected' : ''}}" bindtap="chooseCompleted">completed 完成</button>
+      <button size="mini" class="{{kind === 'delay' ? 'selected' : ''}}" bindtap="chooseDelay">delay 延期</button>
+    </view>
+    <picker wx:if="{{kind === 'completed'}}" mode="date" bindchange="onDate"><view class="field">实际完成日期：{{date || '请选择'}}</view></picker>
+    <block wx:else>
+      <picker mode="date" bindchange="onStartDate"><view class="field">新开始日期：{{startDate || '请选择'}}</view></picker>
+      <picker mode="date" bindchange="onEndDate"><view class="field">新完成日期：{{endDate || '请选择'}}</view></picker>
+    </block>
+    <textarea class="field" value="{{reason}}" placeholder="更新原因" bindinput="onReason" />
+    <button class="primary" bindtap="submit">确认并提交审批</button>
+  </view>
+  <view class="card">
+    <text>自然语言预填</text>
+    <textarea class="field" value="{{naturalText}}" placeholder="例如：M23延期到2026-08-30，原因是驱动联调" bindinput="onNaturalText" />
+    <button bindtap="prefill">AI / 规则预填</button>
+    <text wx:if="{{requiresConfirmation}}" class="muted">预填结果必须由你确认后才能提交。</text>
+  </view>
+</view>
