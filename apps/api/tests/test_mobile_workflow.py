@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -7,15 +9,18 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from openpyxl import load_workbook
+from sqlalchemy import select
 
 from project_manager_api.api.app import create_app
 from project_manager_api.db.base import Base
+from project_manager_api.db.models import MemberBinding, MobileUser
 from project_manager_api.settings import AppSettings
 
 ROOT = Path(__file__).resolve().parents[3]
 WORKBOOK = ROOT / "tests" / "fixtures" / "lyra-template-v1" / "lyra_v1_sanitized.xlsx"
 MANIFEST = ROOT / "config" / "templates" / "lyra_project_spec-v1.0.yaml"
-PM = {"X-Actor-Id": "pm-001"}
+PM = {"Authorization": "Bearer test-admin-token"}
 
 
 @pytest.fixture
@@ -28,6 +33,9 @@ def mobile_workflow() -> Iterator[TestClient]:
             import_storage_path=workdir / "imports",
             max_import_size_bytes=20 * 1024 * 1024,
             allow_development_wechat_login=True,
+            admin_api_token="test-admin-token",
+            admin_actor_id="pm-001",
+            phone_hmac_key="test-phone-key",
         )
         app = create_app(settings)
         Base.metadata.create_all(app.state.engine)
@@ -127,6 +135,19 @@ def test_unbound_user_cannot_view_project_and_bound_user_can(
     assert dashboard.json()["current_version_number"] == 1
     assert len(dashboard.json()["milestones"]) == 24
 
+    with client.app.state.session_factory() as session:
+        user = session.scalar(select(MobileUser).where(MobileUser.display_name == "dev:member10"))
+        binding = session.scalar(
+            select(MemberBinding).where(MemberBinding.project_id == uuid.UUID(project_id))
+        )
+        assert user is not None and binding is not None
+        assert user.phone_masked == "138****0010"
+        assert user.phone_hash != "13800000010"
+        assert binding.provided_phone_masked == "138****0010"
+        assert binding.provided_phone_hash != "13800000010"
+        assert "13800000010" not in str(user.__dict__)
+        assert "13800000010" not in str(binding.__dict__)
+
 
 def test_phone_mismatch_requires_manager_review(mobile_workflow: TestClient) -> None:
     client = mobile_workflow
@@ -152,6 +173,8 @@ def test_phone_mismatch_requires_manager_review(mobile_workflow: TestClient) -> 
     assert pending.status_code == 200
     assert pending.json()[0]["member_name"] == "成员08"
     assert pending.json()[0]["status"] == "pending_review"
+    assert pending.json()[0]["expected_phone"] == "138****0008"
+    assert pending.json()[0]["provided_phone"] == "139****0008"
 
     approved = client.post(
         f"/api/v1/member-bindings/{accepted.json()['id']}/approve",
@@ -179,6 +202,30 @@ def test_production_binding_rejects_a_phone_number_supplied_by_the_client(
 
     assert accepted.status_code == 400
     assert accepted.json()["detail"] == "direct phone input is allowed only in development"
+
+
+def test_same_mobile_user_cannot_bind_two_member_identities_in_one_project(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    first = _invite(client, project_id, "成员10", "invite-first-identity")
+    second = _invite(client, project_id, "成员09", "invite-second-identity")
+    headers, _ = _login(client, "dev:duplicate-identity")
+    accepted = client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=headers,
+        json={"invitation_token": first["invitation_token"], "phone": "13800000010"},
+    )
+    assert accepted.status_code == 200
+
+    duplicate = client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=headers,
+        json={"invitation_token": second["invitation_token"], "phone": "13800000009"},
+    )
+
+    assert duplicate.status_code == 409
 
 
 def test_responsible_member_can_submit_own_milestone_but_not_another(
@@ -241,6 +288,46 @@ def test_responsible_member_can_submit_own_milestone_but_not_another(
     assert milestone["actual_completion"]["end_date"] == "2026-08-06"
 
 
+def test_accountable_member_can_list_only_approvable_pending_proposals(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    responsible = _invite(client, project_id, "成员10", "invite-r-list")
+    responsible_headers, _ = _login(client, "dev:r-list")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=responsible_headers,
+        json={"invitation_token": responsible["invitation_token"], "phone": "13800000010"},
+    )
+    proposal = client.post(
+        f"/api/v1/mobile/projects/{project_id}/milestones/M23/proposals",
+        headers={**responsible_headers, "X-Idempotency-Key": "proposal-for-a-list"},
+        json={
+            "kind": "delay",
+            "base_version_number": 1,
+            "start_date": "2026-11-16",
+            "end_date": "2026-11-20",
+            "reason": "联调延期",
+        },
+    ).json()
+    accountable = _invite(client, project_id, "成员09", "invite-a-list")
+    accountable_headers, _ = _login(client, "dev:a-list")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=accountable_headers,
+        json={"invitation_token": accountable["invitation_token"], "phone": "13800000009"},
+    )
+
+    response = client.get(
+        f"/api/v1/mobile/projects/{project_id}/change-proposals",
+        headers=accountable_headers,
+    )
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()] == [proposal["id"]]
+
+
 def test_mobile_issue_message_center_and_natural_language_prefill(
     mobile_workflow: TestClient,
 ) -> None:
@@ -266,6 +353,13 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
         },
     )
     assert issue.status_code == 201
+    updated = client.patch(
+        f"/api/v1/mobile/issues/{issue.json()['id']}",
+        headers={**member_headers, "X-Idempotency-Key": "mobile-issue-update"},
+        json={"expected_revision": 1, "status": "处理中"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["revision"] == 2
 
     prefill = client.post(
         "/api/v1/mobile/natural-language/prefill",
@@ -280,6 +374,74 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
     messages = client.get("/api/v1/mobile/messages", headers=member_headers)
     assert messages.status_code == 200
     assert any(item["type"] == "binding_approved" for item in messages.json())
+    message = messages.json()[0]
+    marked = client.patch(
+        f"/api/v1/mobile/messages/{message['id']}/read",
+        headers={**member_headers, "X-Idempotency-Key": "read-binding-message"},
+    )
+    assert marked.status_code == 200
+    assert marked.json()["is_read"] is True
+
+
+def test_publishing_team_change_revokes_removed_member_access(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    invitation = _invite(client, project_id, "成员10", "invite-revoked-member")
+    unused_invitation = _invite(client, project_id, "成员11", "invite-revoked-unused-member")
+    member_headers, _ = _login(client, "dev:revoked-member")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=member_headers,
+        json={"invitation_token": invitation["invitation_token"], "phone": "13800000010"},
+    )
+    with TemporaryDirectory(dir=ROOT / "tmp") as directory:
+        changed = Path(directory) / "team-changed.xlsx"
+        shutil.copyfile(WORKBOOK, changed)
+        workbook = load_workbook(changed)
+        team = workbook["项目团队构成"]
+        for row in range(5, 27):
+            if team[f"C{row}"].value == "成员10":
+                team[f"C{row}"] = "成员23"
+            if team[f"C{row}"].value == "成员11":
+                team[f"C{row}"] = "成员24"
+        workbook.save(changed)
+        workbook.close()
+        with changed.open("rb") as source:
+            imported = client.post(
+                f"/api/v1/projects/{project_id}/imports",
+                headers=_admin_headers("import-team-change"),
+                files={
+                    "file": (
+                        changed.name,
+                        source,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                },
+            ).json()
+    published = client.post(
+        f"/api/v1/imports/{imported['id']}/publish",
+        headers=_admin_headers("publish-team-change"),
+        json={"expected_project_version": 1},
+    )
+    assert published.status_code == 200
+
+    assert client.get("/api/v1/mobile/projects", headers=member_headers).json() == []
+    dashboard = client.get(
+        f"/api/v1/mobile/projects/{project_id}/dashboard", headers=member_headers
+    )
+    assert dashboard.status_code == 403
+    unused_headers, _ = _login(client, "dev:revoked-unused-member")
+    revoked_accept = client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=unused_headers,
+        json={
+            "invitation_token": unused_invitation["invitation_token"],
+            "phone": "13800000011",
+        },
+    )
+    assert revoked_accept.status_code == 404
 
 
 def test_manager_can_reject_mobile_proposal_without_publishing(

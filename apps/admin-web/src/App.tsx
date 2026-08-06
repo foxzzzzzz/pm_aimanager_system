@@ -14,7 +14,7 @@ import {
 } from "antd";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
-import { api } from "./api";
+import { api, clearAdminToken, hasAdminToken, setAdminToken } from "./api";
 import "./styles.css";
 import type { Project } from "./types";
 
@@ -32,6 +32,8 @@ interface ProjectForm {
 
 export function App() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [authenticated, setAuthenticated] = useState(hasAdminToken);
+  const [adminToken, setTokenInput] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string>();
   const [page, setPage] = useState<PageKey>("overview");
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -41,15 +43,26 @@ export function App() {
   const [form] = Form.useForm<ProjectForm>();
 
   useEffect(() => {
+    if (!authenticated) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     api
       .listProjects()
       .then((items) => {
         setProjects(items);
         setSelectedProjectId((current) => current ?? items[0]?.id);
       })
-      .catch((reason: Error) => setError(reason.message))
+      .catch((reason: Error & { status?: number }) => {
+        setError(reason.message);
+        if (reason.status === 401 || reason.status === 403) {
+          clearAdminToken();
+          setAuthenticated(false);
+        }
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [authenticated]);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId),
@@ -117,7 +130,7 @@ export function App() {
               { key: "issues", label: "问题与审计" },
             ]}
           />
-          <div className="phase-badge"><Tag color="cyan">Phase 3</Tag><span>小程序协同闭环</span></div>
+          <div className="phase-badge"><Tag color="cyan">Phase 3.1</Tag><span>一致性与安全加固</span></div>
         </Layout.Sider>
         <Layout>
           <Layout.Header className="top-bar">
@@ -150,6 +163,26 @@ export function App() {
           </Layout.Content>
         </Layout>
       </Layout>
+      <Modal
+        title="管理员认证"
+        open={!authenticated}
+        closable={false}
+        maskClosable={false}
+        cancelButtonProps={{ style: { display: "none" } }}
+        okText="进入系统"
+        okButtonProps={{ disabled: !adminToken.trim() }}
+        onOk={() => {
+          setAdminToken(adminToken.trim());
+          setAuthenticated(true);
+        }}
+      >
+        <Input.Password
+          aria-label="管理员访问令牌"
+          value={adminToken}
+          onChange={(event) => setTokenInput(event.target.value)}
+          placeholder="请输入后台配置的管理员访问令牌"
+        />
+      </Modal>
       <Modal
         title="新建项目"
         open={projectModalOpen}

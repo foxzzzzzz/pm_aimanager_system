@@ -25,6 +25,12 @@ class ProgressProposalCreate(BaseModel):
     end_date: date
     reason: str = Field(min_length=1, max_length=2000)
 
+    @model_validator(mode="after")
+    def validate_date_order(self) -> ProgressProposalCreate:
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must be on or before end_date")
+        return self
+
 
 class IssueCreate(BaseModel):
     description: str = Field(min_length=1, max_length=5000)
@@ -81,6 +87,17 @@ class MilestoneUpdateCreate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     reason: str = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_kind_fields(self) -> MilestoneUpdateCreate:
+        if self.kind == "completed" and self.actual_completion_date is None:
+            raise ValueError("actual_completion_date is required for completed updates")
+        if self.kind == "delay":
+            if self.start_date is None or self.end_date is None:
+                raise ValueError("start_date and end_date are required for delay updates")
+            if self.start_date > self.end_date:
+                raise ValueError("start_date must be on or before end_date")
+        return self
 
 
 class NaturalLanguagePrefillRequest(BaseModel):

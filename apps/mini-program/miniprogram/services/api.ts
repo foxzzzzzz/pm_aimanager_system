@@ -1,38 +1,17 @@
 import { runtimeConfig } from "../config";
-import type { Issue, Message, MobileDashboard, ProjectSummary } from "../types";
-
-type Method = "GET" | "POST";
-
-function request<T>(
-  path: string,
-  method: Method = "GET",
-  data?: WechatMiniprogram.IAnyObject,
-): Promise<T> {
-  const accessToken = wx.getStorageSync<string>("access_token");
-  return new Promise((resolve, reject) => {
-    wx.request({
-      url: `${runtimeConfig.apiBaseUrl}${path}`,
-      method,
-      data,
-      header: {
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        ...(method !== "GET" ? { "X-Idempotency-Key": requestKey() } : {}),
-      },
-      success: (response) => {
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          resolve(response.data as unknown as T);
-        } else {
-          reject(new Error(`请求失败：${response.statusCode}`));
-        }
-      },
-      fail: reject,
-    });
-  });
-}
+import type { ChangeProposal, Issue, Message, MobileDashboard, ProjectSummary } from "../types";
+import { createRequester } from "./request-core.mjs";
 
 function requestKey(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
+
+const request = createRequester({
+  baseUrl: runtimeConfig.apiBaseUrl,
+  getToken: () => wx.getStorageSync<string>("access_token"),
+  requestKey,
+  transport: (options: WechatMiniprogram.RequestOption) => { wx.request(options); },
+});
 
 export const api = {
   login: (code: string) =>
@@ -54,7 +33,17 @@ export const api = {
   issues: (projectId: string) => request<Issue[]>(`/mobile/projects/${projectId}/issues`),
   createIssue: (projectId: string, data: WechatMiniprogram.IAnyObject) =>
     request<Issue>(`/mobile/projects/${projectId}/issues`, "POST", data),
+  updateIssue: (issueId: string, data: WechatMiniprogram.IAnyObject) =>
+    request<Issue>(`/mobile/issues/${issueId}`, "PATCH", data),
+  approvableProposals: (projectId: string) =>
+    request<ChangeProposal[]>(`/mobile/projects/${projectId}/change-proposals`),
+  approveProposal: (proposalId: string, expectedVersion: number) =>
+    request(`/mobile/change-proposals/${proposalId}/approve`, "POST", {
+      expected_project_version: expectedVersion,
+    }),
   messages: () => request<Message[]>("/mobile/messages"),
+  markMessageRead: (messageId: string) =>
+    request<Message>(`/mobile/messages/${messageId}/read`, "PATCH"),
   prefill: (text: string) =>
     request<{
       milestone_code: string | null;

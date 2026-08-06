@@ -1,6 +1,6 @@
-import { Button, DatePicker, Empty, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Typography } from "antd";
+import { Alert, Button, DatePicker, Empty, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api } from "../api";
 import type { AuditLog, ChangeProposal, Issue, MemberBinding, Project } from "../types";
@@ -17,30 +17,45 @@ interface IssueForm {
   due_date: Dayjs;
 }
 
+interface InvitationForm { member_name: string; expected_phone?: string }
+
 export default function IssuesAuditPage({ project }: Props) {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [bindings, setBindings] = useState<MemberBinding[]>([]);
   const [proposals, setProposals] = useState<ChangeProposal[]>([]);
   const [open, setOpen] = useState(false);
+  const [invitationOpen, setInvitationOpen] = useState(false);
+  const [invitationToken, setInvitationToken] = useState("");
+  const [error, setError] = useState<string>();
   const [form] = Form.useForm<IssueForm>();
+  const [invitationForm] = Form.useForm<InvitationForm>();
+  const reloadSequence = useRef(0);
 
   const reload = async () => {
     if (!project) return;
-    const [nextIssues, nextAudit, nextBindings, nextProposals] = await Promise.all([
-      api.listIssues(project.id),
-      api.listAuditLogs(project.id),
-      api.listMemberBindings(project.id),
-      api.listChangeProposals(project.id),
-    ]);
-    setIssues(nextIssues);
-    setAuditLogs(nextAudit);
-    setBindings(nextBindings);
-    setProposals(nextProposals);
+    const sequence = ++reloadSequence.current;
+    try {
+      const [nextIssues, nextAudit, nextBindings, nextProposals] = await Promise.all([
+        api.listIssues(project.id),
+        api.listAuditLogs(project.id),
+        api.listMemberBindings(project.id),
+        api.listChangeProposals(project.id),
+      ]);
+      if (sequence !== reloadSequence.current) return;
+      setIssues(nextIssues);
+      setAuditLogs(nextAudit);
+      setBindings(nextBindings);
+      setProposals(nextProposals);
+      setError(undefined);
+    } catch (reason) {
+      if (sequence === reloadSequence.current) setError((reason as Error).message);
+    }
   };
 
   useEffect(() => {
     void reload();
+    return () => { reloadSequence.current += 1; };
   }, [project]);
 
   if (!project) return <Empty description="请先选择项目" />;
@@ -67,8 +82,20 @@ export default function IssuesAuditPage({ project }: Props) {
     await reload();
   };
 
+  const createInvitation = async () => {
+    const values = await invitationForm.validateFields();
+    try {
+      const result = await api.createMemberInvitation(project.id, values);
+      setInvitationToken(result.invitation_token);
+      await reload();
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  };
+
   return (
     <div className="page-stack">
+      {error && <Alert type="error" message={error} showIcon closable onClose={() => setError(undefined)} />}
       <div className="page-heading">
         <Typography.Title level={2}>问题与审计</Typography.Title>
         <Button type="primary" onClick={() => setOpen(true)}>登记问题</Button>
@@ -96,6 +123,8 @@ export default function IssuesAuditPage({ project }: Props) {
             key: "bindings",
             label: `成员绑定 ${bindings.length}`,
             children: (
+              <Space direction="vertical" style={{ width: "100%" }}>
+              <Button onClick={() => { invitationForm.resetFields(); setInvitationToken(""); setInvitationOpen(true); }}>生成邀请</Button>
               <Table
                 rowKey="id"
                 dataSource={bindings}
@@ -112,6 +141,7 @@ export default function IssuesAuditPage({ project }: Props) {
                   },
                 ]}
               />
+              </Space>
             ),
           },
           {
@@ -174,6 +204,23 @@ export default function IssuesAuditPage({ project }: Props) {
             <Form.Item name="due_date" label="预计完成" rules={[{ required: true }]}><DatePicker /></Form.Item>
           </Space>
         </Form>
+      </Modal>
+      <Modal
+        title="生成成员邀请"
+        open={invitationOpen}
+        onCancel={() => setInvitationOpen(false)}
+        onOk={() => invitationToken ? setInvitationOpen(false) : void createInvitation()}
+        okText={invitationToken ? "关闭" : "确认生成"}
+      >
+        <Form form={invitationForm} layout="vertical">
+          <Form.Item name="member_name" label="成员姓名" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="expected_phone" label="手机号（可选）">
+            <Input />
+          </Form.Item>
+        </Form>
+        {invitationToken && <Input readOnly value={invitationToken} />}
       </Modal>
     </div>
   );

@@ -10,23 +10,43 @@ import type {
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:18000/api/v1";
-const ACTOR_ID = import.meta.env.VITE_ACTOR_ID ?? "pm-001";
+const TOKEN_KEY = "admin_api_token";
+
+export function setAdminToken(token: string) {
+  sessionStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearAdminToken() {
+  sessionStorage.removeItem(TOKEN_KEY);
+}
+
+export function hasAdminToken() {
+  return Boolean(sessionStorage.getItem(TOKEN_KEY));
+}
 
 function requestKey(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = sessionStorage.getItem(TOKEN_KEY);
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
-      "X-Actor-Id": ACTOR_ID,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { detail?: unknown } | null;
-    throw new Error(typeof payload?.detail === "string" ? payload.detail : "请求失败，请稍后重试");
+    const detail = payload?.detail;
+    const message =
+      typeof detail === "string"
+        ? detail
+        : detail && typeof detail === "object" && "message" in detail
+          ? String(detail.message)
+          : "请求失败，请稍后重试";
+    throw Object.assign(new Error(message), { status: response.status });
   }
   return (await response.json()) as T;
 }
@@ -86,6 +106,21 @@ export const api = {
     request<AuditLog[]>(`/projects/${projectId}/audit-logs`),
   listMemberBindings: (projectId: string) =>
     request<MemberBinding[]>(`/projects/${projectId}/member-bindings`),
+  createMemberInvitation: (
+    projectId: string,
+    payload: { member_name: string; expected_phone?: string },
+  ) =>
+    request<MemberBinding & { invitation_token: string }>(
+      `/projects/${projectId}/member-invitations`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": requestKey("member-invitation"),
+        },
+        body: JSON.stringify(payload),
+      },
+    ),
   approveMemberBinding: (bindingId: string) =>
     request<MemberBinding>(`/member-bindings/${bindingId}/approve`, {
       method: "POST",

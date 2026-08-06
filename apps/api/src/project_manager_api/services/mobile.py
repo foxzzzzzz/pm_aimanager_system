@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import re
 import secrets
 import uuid
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 from project_manager_api.api.schemas import (
     InvitationAccept,
     IssueCreate,
+    IssueUpdate,
     MemberInvitationCreate,
     MilestoneUpdateCreate,
 )
@@ -21,6 +23,7 @@ from project_manager_api.db.models import (
     BindingStatus,
     ChangeProposal,
     InAppMessage,
+    Issue,
     MemberBinding,
     MobileSession,
     MobileUser,
@@ -112,7 +115,8 @@ class MobileService:
                 project_id=project.id,
                 member_name=payload.member_name,
                 invitation_token_hash=_hash_token(token),
-                expected_phone=payload.expected_phone,
+                expected_phone_hash=self._phone_hash(payload.expected_phone),
+                expected_phone_masked=_mask_phone(payload.expected_phone),
                 status=BindingStatus.INVITED,
                 invitation_expires_at=datetime.now(UTC) + timedelta(days=7),
             )
@@ -120,7 +124,8 @@ class MobileService:
         else:
             binding = existing
             binding.invitation_token_hash = _hash_token(token)
-            binding.expected_phone = payload.expected_phone
+            binding.expected_phone_hash = self._phone_hash(payload.expected_phone)
+            binding.expected_phone_masked = _mask_phone(payload.expected_phone)
             binding.status = BindingStatus.INVITED
             binding.invitation_expires_at = datetime.now(UTC) + timedelta(days=7)
         self.session.flush()
@@ -150,11 +155,24 @@ class MobileService:
             phone = payload.phone
         else:
             phone = exchange_wechat_phone(payload.phone_code or "", self.settings)
+        other_binding = self.session.scalar(
+            select(MemberBinding).where(
+                MemberBinding.project_id == binding.project_id,
+                MemberBinding.user_id == user.id,
+                MemberBinding.id != binding.id,
+                MemberBinding.status != BindingStatus.REVOKED,
+            )
+        )
+        if other_binding is not None:
+            raise ConflictError("user is already bound to another member in this project")
+        phone_hash = self._phone_hash(phone)
         binding.user_id = user.id
         binding.actor_id = _actor_id(user)
-        binding.provided_phone = phone
-        user.phone = phone
-        if binding.expected_phone and binding.expected_phone != phone:
+        binding.provided_phone_hash = phone_hash
+        binding.provided_phone_masked = _mask_phone(phone)
+        user.phone_hash = phone_hash
+        user.phone_masked = _mask_phone(phone)
+        if binding.expected_phone_hash and binding.expected_phone_hash != phone_hash:
             binding.status = BindingStatus.PENDING_REVIEW
         else:
             self._activate_binding(binding, user)
@@ -306,11 +324,60 @@ class MobileService:
         )
         return [_message_dict(message) for message in self.session.scalars(query)]
 
+    def list_approvable_proposals(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
+        _, binding, snapshot = self._bound_project(project_id)
+        accountable_codes = {
+            item["code"]
+            for item in snapshot.get("milestones", [])
+            if binding.member_name in item.get("assignments", {}).get("A", [])
+        }
+        query = (
+            select(ChangeProposal)
+            .where(
+                ChangeProposal.project_id == project_id,
+                ChangeProposal.status == ProposalStatus.PENDING,
+                ChangeProposal.milestone_code.in_(accountable_codes),
+            )
+            .order_by(ChangeProposal.created_at.desc())
+        )
+        return [_proposal_dict(proposal) for proposal in self.session.scalars(query)]
+
+    def update_issue(self, issue_id: uuid.UUID, payload: IssueUpdate) -> dict[str, Any]:
+        issue = self.session.get(Issue, issue_id)
+        if issue is None:
+            raise NotFoundError("issue not found")
+        _, binding, _ = self._bound_project(issue.project_id)
+        if binding.member_name != issue.owner_name:
+            raise ForbiddenError("only the issue owner can update this issue")
+        if payload.owner_name is not None and payload.owner_name != issue.owner_name:
+            raise ForbiddenError("the issue owner cannot reassign ownership")
+        return ProjectService(self.session, _actor_id(self._user())).update_issue_as_member(
+            issue, payload
+        )
+
+    def mark_message_read(self, message_id: uuid.UUID) -> dict[str, Any]:
+        message = self.session.get(InAppMessage, message_id)
+        if message is None or message.user_id != self._user().id:
+            raise NotFoundError("message not found")
+        message.is_read = True
+        return _message_dict(message)
+
+    def _phone_hash(self, phone: str | None) -> str | None:
+        if phone is None:
+            return None
+        if not self.settings.phone_hmac_key:
+            raise ServiceError("phone HMAC key is not configured")
+        return hmac.new(
+            self.settings.phone_hmac_key.encode(), phone.encode(), hashlib.sha256
+        ).hexdigest()
+
     def _activate_binding(self, binding: MemberBinding, user: MobileUser) -> None:
         binding.status = BindingStatus.BOUND
         actor_id = _actor_id(user)
         binding.actor_id = actor_id
         project, snapshot = self._project_snapshot(binding.project_id)
+        if not any(item.get("name") == binding.member_name for item in snapshot.get("members", [])):
+            raise ConflictError("member is no longer present in the current project version")
         role = _member_role(snapshot, binding.member_name)
         membership = self.session.scalar(
             select(ProjectMembership).where(
@@ -404,6 +471,8 @@ def natural_language_prefill(text: str, settings: AppSettings) -> dict[str, Any]
                 settings.llm_api_key,
                 settings.llm_model,
                 settings.llm_timeout_seconds,
+                settings.llm_max_retries,
+                settings.llm_structured_output_mode,
             ).generate_structured(text, _prefill_schema())
             return {
                 **result,
@@ -488,7 +557,7 @@ def _active_window(snapshot: dict[str, Any], milestone_name: str) -> dict[str, A
 
 
 def _user_dict(user: MobileUser) -> dict[str, Any]:
-    return {"id": str(user.id), "display_name": user.display_name, "phone": user.phone}
+    return {"id": str(user.id), "display_name": user.display_name, "phone": user.phone_masked}
 
 
 def _binding_dict(binding: MemberBinding) -> dict[str, Any]:
@@ -497,9 +566,17 @@ def _binding_dict(binding: MemberBinding) -> dict[str, Any]:
         "project_id": str(binding.project_id),
         "member_name": binding.member_name,
         "status": binding.status,
-        "provided_phone": binding.provided_phone,
-        "expected_phone": binding.expected_phone,
+        "provided_phone": binding.provided_phone_masked,
+        "expected_phone": binding.expected_phone_masked,
     }
+
+
+def _mask_phone(phone: str | None) -> str | None:
+    if phone is None:
+        return None
+    if len(phone) <= 7:
+        return f"{phone[:2]}***{phone[-2:]}"
+    return f"{phone[:3]}****{phone[-4:]}"
 
 
 def _proposal_dict(proposal: ChangeProposal) -> dict[str, Any]:

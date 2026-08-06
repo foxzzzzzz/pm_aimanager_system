@@ -18,7 +18,7 @@ from project_manager_api.settings import AppSettings
 ROOT = Path(__file__).resolve().parents[3]
 WORKBOOK = ROOT / "tests" / "fixtures" / "lyra-template-v1" / "lyra_v1_sanitized.xlsx"
 MANIFEST = ROOT / "config" / "templates" / "lyra_project_spec-v1.0.yaml"
-PM_HEADERS = {"X-Actor-Id": "pm-001"}
+PM_HEADERS = {"Authorization": "Bearer test-admin-token"}
 
 
 @pytest.fixture
@@ -30,6 +30,9 @@ def workflow() -> Iterator[tuple[TestClient, Path]]:
             manifest_paths=[MANIFEST],
             import_storage_path=workdir / "imports",
             max_import_size_bytes=20 * 1024 * 1024,
+            admin_api_token="test-admin-token",
+            admin_actor_id="pm-001",
+            phone_hmac_key="test-phone-key",
         )
         app = create_app(settings)
         Base.metadata.create_all(app.state.engine)
@@ -39,7 +42,8 @@ def workflow() -> Iterator[tuple[TestClient, Path]]:
 
 
 def _headers(key: str | None = None, actor: str = "pm-001") -> dict[str, str]:
-    headers = {"X-Actor-Id": actor}
+    token = "test-admin-token" if actor == "pm-001" else "invalid-admin-token"
+    headers = {"Authorization": f"Bearer {token}"}
     if key is not None:
         headers["X-Idempotency-Key"] = key
     return headers
@@ -125,6 +129,20 @@ def test_project_creation_is_idempotent_and_scoped_to_creator(
         headers=_headers(actor="outsider"),
     )
     assert forbidden.status_code == 403
+
+
+def test_admin_api_rejects_spoofed_actor_header_and_invalid_bearer(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+
+    spoofed = client.get("/api/v1/projects", headers={"X-Actor-Id": "pm-001"})
+    invalid = client.get(
+        "/api/v1/projects", headers={"Authorization": "Bearer invalid-admin-token"}
+    )
+
+    assert spoofed.status_code == 401
+    assert invalid.status_code == 403
 
 
 def test_import_diff_publish_history_and_dashboard(workflow: tuple[TestClient, Path]) -> None:
@@ -219,6 +237,55 @@ def test_stale_import_conflicts_with_newer_change_on_same_field(
 
     assert conflict.status_code == 409
     assert any("正式立项" in path for path in conflict.json()["detail"]["conflict_paths"])
+    persisted = client.get(f"/api/v1/imports/{stale['id']}", headers=PM_HEADERS)
+    assert persisted.json()["status"] == "conflict"
+
+
+def test_resaving_business_identical_workbook_has_no_semantic_diff(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, workdir = workflow
+    project_id, _ = _published_project(client)
+    resaved = workdir / "resaved.xlsx"
+    shutil.copyfile(WORKBOOK, resaved)
+    workbook = load_workbook(resaved)
+    workbook.save(resaved)
+    workbook.close()
+
+    imported = _upload(client, project_id, resaved, "import-resaved")
+
+    assert imported["diff_count"] == 0
+
+
+def test_historical_workbook_cannot_report_false_publish_success(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    proposal = client.post(
+        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
+        headers=_headers("history-proposal"),
+        json={
+            "base_version_number": 1,
+            "start_date": "2026-08-04",
+            "end_date": "2026-08-04",
+            "reason": "create v2",
+        },
+    ).json()
+    approved = client.post(
+        f"/api/v1/change-proposals/{proposal['id']}/approve",
+        headers=_headers("history-approve"),
+        json={"expected_project_version": 1},
+    )
+    assert approved.status_code == 200
+    historical = _upload(client, project_id, key="historical-import")
+
+    response = _publish(client, historical["id"], 2, "historical-publish")
+
+    assert response.status_code == 409
+    assert "historical version" in response.json()["detail"]
+    dashboard = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM_HEADERS)
+    assert dashboard.json()["current_version_number"] == 2
 
 
 def test_cancelled_import_does_not_change_current_version(
@@ -315,6 +382,56 @@ def test_progress_proposal_approval_is_optimistic_and_audited(
     assert second.status_code == 409
     audit = client.get(f"/api/v1/projects/{project_id}/audit-logs", headers=PM_HEADERS)
     assert "change_proposal.approved" in [item["action"] for item in audit.json()]
+
+
+def test_proposal_cannot_be_rebased_by_supplying_the_new_current_version(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, workdir = workflow
+    project_id, _ = _published_project(client)
+    proposal = client.post(
+        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
+        headers=_headers("stale-proposal"),
+        json={
+            "base_version_number": 1,
+            "start_date": "2026-08-04",
+            "end_date": "2026-08-04",
+            "reason": "old baseline",
+        },
+    ).json()
+    changed = _copy_with_active_plan_date(workdir, "winner.xlsx", date(2026, 8, 2))
+    winner = _upload(client, project_id, changed, "winner-import")
+    assert _publish(client, winner["id"], 1, "winner-publish").status_code == 200
+
+    response = client.post(
+        f"/api/v1/change-proposals/{proposal['id']}/approve",
+        headers=_headers("stale-proposal-approve"),
+        json={"expected_project_version": 2},
+    )
+
+    assert response.status_code == 409
+    dashboard = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM_HEADERS)
+    assert dashboard.json()["current_version_number"] == 2
+
+
+def test_schedule_proposal_rejects_reversed_date_range(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+
+    response = client.post(
+        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
+        headers=_headers("invalid-range"),
+        json={
+            "base_version_number": 1,
+            "start_date": "2026-09-10",
+            "end_date": "2026-09-01",
+            "reason": "invalid range",
+        },
+    )
+
+    assert response.status_code == 422
 
 
 def test_issue_updates_require_current_revision_and_create_audit(

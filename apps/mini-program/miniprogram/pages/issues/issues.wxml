@@ -13,5 +13,6 @@
     <text class="issue-title">{{item.description}}</text>
     <text class="muted">影响：{{item.impact}}</text>
     <text class="muted">{{item.owner_name}} · {{item.due_date}}</text>
+    <button wx:if="{{item.status === '待处理'}}" size="mini" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="startIssue">开始处理</button>
   </view>
 </view>

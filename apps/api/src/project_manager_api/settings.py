@@ -29,6 +29,11 @@ class AppSettings(BaseModel):
     llm_api_key: str | None = None
     llm_model: str = "provider-model-name"
     llm_timeout_seconds: int = 60
+    llm_max_retries: int = 2
+    llm_structured_output_mode: Literal["auto", "strict", "json"] = "auto"
+    admin_api_token: str | None = None
+    admin_actor_id: str = "pm-001"
+    phone_hmac_key: str | None = None
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:15173"])
 
     @classmethod
@@ -53,6 +58,7 @@ class AppSettings(BaseModel):
         object_storage = config["object_storage"]
         wechat = config["wechat"]
         llm = config["llm"]
+        security = config["security"]
         return cls(
             database_url=database_url,
             manifest_paths=manifest_paths,
@@ -81,6 +87,11 @@ class AppSettings(BaseModel):
             llm_api_key=os.environ.get("LLM_API_KEY"),
             llm_model=os.environ.get("LLM_MODEL", str(llm["model"])),
             llm_timeout_seconds=int(llm["timeout_seconds"]),
+            llm_max_retries=int(llm["max_retries"]),
+            llm_structured_output_mode=llm["structured_output_mode"],
+            admin_api_token=os.environ.get(str(security["admin_api_token_env"])),
+            admin_actor_id=str(security["admin_actor_id"]),
+            phone_hmac_key=os.environ.get(str(security["phone_hmac_key_env"])),
         )
 
 

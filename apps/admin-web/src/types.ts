@@ -82,7 +82,7 @@ export interface AuditLog {
 export interface MemberBinding {
   id: string;
   member_name: string;
-  status: "invited" | "pending_review" | "bound";
+  status: "invited" | "pending_review" | "bound" | "revoked";
   expected_phone: string | null;
   provided_phone: string | null;
 }

@@ -49,6 +49,7 @@ class BindingStatus(StrEnum):
     INVITED = "invited"
     PENDING_REVIEW = "pending_review"
     BOUND = "bound"
+    REVOKED = "revoked"
 
 
 def utc_now() -> datetime:
@@ -84,7 +85,6 @@ class ProjectVersion(Base):
     __tablename__ = "project_versions"
     __table_args__ = (
         UniqueConstraint("project_id", "version_number", name="uq_project_version_number"),
-        UniqueConstraint("project_id", "content_sha256", name="uq_project_version_content"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -223,7 +223,8 @@ class MobileUser(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     openid: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
-    phone: Mapped[str | None] = mapped_column(String(32))
+    phone_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+    phone_masked: Mapped[str | None] = mapped_column(String(32))
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
@@ -247,6 +248,7 @@ class MemberBinding(Base):
     __tablename__ = "member_bindings"
     __table_args__ = (
         UniqueConstraint("project_id", "member_name", name="uq_member_binding_project_member"),
+        UniqueConstraint("project_id", "user_id", name="uq_member_binding_project_user"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -259,8 +261,10 @@ class MemberBinding(Base):
     )
     actor_id: Mapped[str | None] = mapped_column(String(128), index=True)
     invitation_token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    expected_phone: Mapped[str | None] = mapped_column(String(32))
-    provided_phone: Mapped[str | None] = mapped_column(String(32))
+    expected_phone_hash: Mapped[str | None] = mapped_column(String(64))
+    expected_phone_masked: Mapped[str | None] = mapped_column(String(32))
+    provided_phone_hash: Mapped[str | None] = mapped_column(String(64))
+    provided_phone_masked: Mapped[str | None] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32), default=BindingStatus.INVITED, nullable=False)
     invitation_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

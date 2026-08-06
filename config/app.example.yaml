@@ -52,6 +52,15 @@ llm:
   # Prefer strict JSON Schema and fall back to validated JSON when unsupported.
   structured_output_mode: auto
 
+# Security identities and secret environment-variable names.
+security:
+  # Server-side actor recorded for MVP administrator operations.
+  admin_actor_id: pm-001
+  # Bearer token used by the administrator console; the secret value stays in the environment.
+  admin_api_token_env: ADMIN_API_TOKEN
+  # Secret key used to HMAC phone numbers before persistence.
+  phone_hmac_key_env: PHONE_HMAC_KEY
+
 # Reminder schedule and escalation thresholds.
 notifications:
   # Daily scan time in local app timezone.

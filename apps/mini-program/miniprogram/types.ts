@@ -30,6 +30,16 @@ export interface Issue {
   owner_name: string;
   due_date: string;
   status: string;
+  revision: number;
+}
+
+export interface ChangeProposal {
+  id: string;
+  milestone_code: string;
+  kind: "completed" | "delay";
+  reason: string;
+  status: string;
+  base_version_number: number;
 }
 
 export interface Message {

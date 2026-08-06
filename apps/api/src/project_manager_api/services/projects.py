@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from project_manager_api.api.schemas import IssueCreate, IssueUpdate, ProgressProposalCreate
@@ -28,7 +28,12 @@ from project_manager_api.db.models import (
 )
 from project_manager_api.imports.diff import semantic_diff
 from project_manager_api.imports.report import ParseResult
-from project_manager_api.services.errors import ConflictError, ForbiddenError, NotFoundError
+from project_manager_api.services.errors import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    PersistedConflictError,
+)
 
 
 class ProjectService:
@@ -82,7 +87,8 @@ class ProjectService:
         current_snapshot: dict[str, Any] = current.snapshot if current is not None else {}
         draft = result.draft.model_dump(mode="json")
         changes = [
-            entry.model_dump(mode="json") for entry in semantic_diff(current_snapshot, draft)
+            entry.model_dump(mode="json")
+            for entry in _business_diff(current_snapshot, draft)
         ]
         record = ImportRecord(
             project_id=project.id,
@@ -142,45 +148,54 @@ class ProjectService:
     def publish_import(self, import_id: uuid.UUID, expected_project_version: int) -> dict[str, Any]:
         record = self._require_import(import_id)
         assert record.project_id is not None
-        project = self._require_project(record.project_id, manager=True)
+        project = self._require_project(record.project_id, manager=True, lock=True)
         if record.status not in (ImportStatus.VALIDATED, ImportStatus.CONFLICT):
             raise ConflictError("import is not publishable")
+        if record.draft is None:
+            raise ConflictError("validated import has no draft")
+        draft_hash = _business_hash(record.draft)
+        current = self._current_version(project)
+        if current is not None and current.content_sha256 == draft_hash:
+            record.status = ImportStatus.PUBLISHED
+            return _version_dict(current)
         existing = self.session.scalar(
             select(ProjectVersion).where(
                 ProjectVersion.project_id == project.id,
-                ProjectVersion.content_sha256 == record.source_sha256,
+                ProjectVersion.content_sha256 == draft_hash,
+                ProjectVersion.version_number != (project.current_version_number or 0),
             )
         )
         if existing is not None:
-            record.status = ImportStatus.PUBLISHED
-            return _version_dict(existing)
+            record.status = ImportStatus.CONFLICT
+            raise PersistedConflictError(
+                "workbook matches a historical version; current version was not changed"
+            )
 
         current_number = project.current_version_number or 0
         if current_number != expected_project_version:
             conflict_paths = self._import_conflict_paths(record, project)
             record.status = ImportStatus.CONFLICT
-            raise ConflictError(
+            raise PersistedConflictError(
                 {
                     "message": "project version changed after import validation",
                     "current_version_number": current_number,
                     "conflict_paths": conflict_paths,
                 }
             )
-        if record.draft is None:
-            raise ConflictError("validated import has no draft")
         version = ProjectVersion(
             project_id=project.id,
             version_number=current_number + 1,
             template_id=record.template_id or "unknown",
             template_version=record.template_version or "unknown",
             document_version=str(record.draft["document_version"]),
-            content_sha256=record.source_sha256,
+            content_sha256=draft_hash,
             snapshot=record.draft,
         )
         self.session.add(version)
         self.session.flush()
         project.current_version_number = version.version_number
         record.status = ImportStatus.PUBLISHED
+        self._reconcile_member_bindings(project, record.draft)
         self._audit(
             project.id,
             "import.published",
@@ -281,28 +296,35 @@ class ProjectService:
         proposal = self.session.get(ChangeProposal, proposal_id)
         if proposal is None:
             raise NotFoundError("change proposal not found")
-        project = self._require_project(proposal.project_id)
+        project = self._require_project(proposal.project_id, lock=True)
         self._require_approval_permission(project, proposal.milestone_code)
         if proposal.status != ProposalStatus.PENDING:
             raise ConflictError("change proposal is already resolved")
         if project.current_version_number != expected_project_version:
             raise ConflictError("project version changed before proposal approval")
+        if proposal.base_version_number != expected_project_version:
+            raise ConflictError("proposal base version is stale")
         current = self._current_version(project)
         if current is None:
             raise ConflictError("project has no published version")
         snapshot = copy.deepcopy(current.snapshot)
         if proposal.proposal_kind == "completed":
+            current_value = _find_milestone_completion(snapshot, proposal.milestone_code)
+            if current_value != proposal.before_value:
+                raise ConflictError("proposal target changed after submission")
             _replace_milestone_completion(snapshot, proposal.milestone_code, proposal.after_value)
         else:
+            _, current_value = _find_milestone_window(snapshot, proposal.milestone_code)
+            if current_value != proposal.before_value:
+                raise ConflictError("proposal target changed after submission")
             _replace_milestone_window(snapshot, proposal.milestone_code, proposal.after_value)
-        encoded = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         version = ProjectVersion(
             project_id=project.id,
             version_number=expected_project_version + 1,
             template_id=current.template_id,
             template_version=current.template_version,
             document_version=current.document_version,
-            content_sha256=hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
+            content_sha256=_business_hash(snapshot),
             snapshot=snapshot,
         )
         self.session.add(version)
@@ -381,6 +403,9 @@ class ProjectService:
         if issue is None:
             raise NotFoundError("issue not found")
         self._require_project(issue.project_id, manager=True)
+        return self.update_issue_as_member(issue, payload)
+
+    def update_issue_as_member(self, issue: Issue, payload: IssueUpdate) -> dict[str, Any]:
         if issue.revision != payload.expected_revision:
             raise ConflictError("issue revision is stale")
         before = _issue_dict(issue)
@@ -401,6 +426,37 @@ class ProjectService:
         )
         return after
 
+    def _reconcile_member_bindings(
+        self, project: Project, snapshot: dict[str, Any]
+    ) -> None:
+        member_names = {item["name"] for item in snapshot.get("members", [])}
+        bindings = self.session.scalars(
+            select(MemberBinding).where(
+                MemberBinding.project_id == project.id,
+                MemberBinding.status != BindingStatus.REVOKED,
+            )
+        )
+        for binding in bindings:
+            if binding.member_name not in member_names:
+                binding.status = BindingStatus.REVOKED
+                if binding.actor_id:
+                    self.session.execute(
+                        delete(ProjectMembership).where(
+                            ProjectMembership.project_id == project.id,
+                            ProjectMembership.actor_id == binding.actor_id,
+                        )
+                    )
+                continue
+            if binding.actor_id:
+                membership = self.session.scalar(
+                    select(ProjectMembership).where(
+                        ProjectMembership.project_id == project.id,
+                        ProjectMembership.actor_id == binding.actor_id,
+                    )
+                )
+                if membership is not None:
+                    membership.role = _member_role(snapshot, binding.member_name)
+
     def list_issues(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
         self._require_project(project_id)
         query = (
@@ -415,8 +471,15 @@ class ProjectService:
         )
         return [_audit_dict(log) for log in self.session.scalars(query)]
 
-    def _require_project(self, project_id: uuid.UUID, manager: bool = False) -> Project:
-        project = self.session.get(Project, project_id)
+    def _require_project(
+        self, project_id: uuid.UUID, manager: bool = False, lock: bool = False
+    ) -> Project:
+        if lock:
+            project = self.session.scalar(
+                select(Project).where(Project.id == project_id).with_for_update()
+            )
+        else:
+            project = self.session.get(Project, project_id)
         if project is None:
             raise NotFoundError("project not found")
         membership = self.session.scalar(
@@ -491,7 +554,7 @@ class ProjectService:
                 base_snapshot = base.snapshot
         current = self._current_version(project)
         current_paths = {
-            item.path for item in semantic_diff(base_snapshot, current.snapshot if current else {})
+            item.path for item in _business_diff(base_snapshot, current.snapshot if current else {})
         }
         conflicts = sorted(proposed_paths & current_paths)
         return conflicts or ["project.current_version_number"]
@@ -626,6 +689,45 @@ def _find_milestone_window(
             path = f"plan_versions[{index}].milestones.{milestone['name']}"
             return path, dict(window)
     raise NotFoundError("active plan not found")
+
+
+def _find_milestone_completion(
+    snapshot: dict[str, Any], milestone_code: str
+) -> dict[str, Any] | None:
+    milestone = next(
+        (item for item in snapshot.get("milestones", []) if item.get("code") == milestone_code),
+        None,
+    )
+    if milestone is None:
+        raise NotFoundError("milestone not found")
+    value = milestone.get("actual_completion")
+    return dict(value) if isinstance(value, dict) else value
+
+
+def _business_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    business = copy.deepcopy(snapshot)
+    business.pop("source_sha256", None)
+    return business
+
+
+def _business_diff(before: dict[str, Any], after: dict[str, Any]) -> list[Any]:
+    return semantic_diff(_business_snapshot(before), _business_snapshot(after))
+
+
+def _business_hash(snapshot: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        _business_snapshot(snapshot), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _member_role(snapshot: dict[str, Any], member_name: str) -> str:
+    assignments = [item.get("assignments", {}) for item in snapshot.get("milestones", [])]
+    if any(member_name in item.get("A", []) for item in assignments):
+        return ProjectRole.ACCOUNTABLE
+    if any(member_name in item.get("R", []) for item in assignments):
+        return ProjectRole.RESPONSIBLE
+    return ProjectRole.COLLABORATOR
 
 
 def _replace_milestone_window(

@@ -1,10 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 
 describe("App", () => {
+  beforeEach(() => sessionStorage.setItem("admin_api_token", "test-token"));
   afterEach(() => {
+    sessionStorage.clear();
     cleanup();
     vi.unstubAllGlobals();
   });

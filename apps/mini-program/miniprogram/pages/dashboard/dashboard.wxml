@@ -5,6 +5,11 @@
     <text class="muted">身份：{{dashboard.member_name}} · 正式版本 v{{dashboard.current_version_number}}</text>
     <text class="plan">当前计划：{{dashboard.active_plan_name}}</text>
   </view>
+  <view wx:for="{{proposals}}" wx:key="id" class="card milestone">
+    <text class="tag">待我审批</text>
+    <text class="name">{{item.milestone_code}} · {{item.reason}}</text>
+    <button size="mini" type="primary" data-id="{{item.id}}" data-version="{{item.base_version_number}}" bindtap="approveProposal">批准变更</button>
+  </view>
   <view wx:for="{{dashboard.milestones}}" wx:key="code" class="card milestone">
     <view class="row">
       <text class="code">{{item.code}}</text>

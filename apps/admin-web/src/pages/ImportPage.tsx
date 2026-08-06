@@ -1,5 +1,5 @@
 import { Alert, Button, Card, Descriptions, Empty, Space, Table, Tag, Typography, Upload, message } from "antd";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api } from "../api";
 import type { ImportRecord, Project } from "../types";
@@ -21,6 +21,12 @@ export default function ImportPage({ project, onPublished }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [messageApi, contextHolder] = message.useMessage();
+
+  useEffect(() => {
+    setFile(undefined);
+    setRecord(undefined);
+    setError(undefined);
+  }, [project?.id]);
 
   if (!project) return <Empty description="请先选择项目" />;
 

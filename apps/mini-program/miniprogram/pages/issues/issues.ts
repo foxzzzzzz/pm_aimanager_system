@@ -3,6 +3,7 @@ import type { Issue } from "../../types";
 
 interface InputEvent { detail: { value: string } }
 interface PickerEvent { detail: { value: string } }
+interface IssueTapEvent { currentTarget: { dataset: { id: string; revision: number } } }
 
 Page({
   data: {
@@ -44,6 +45,17 @@ Page({
       wx.showToast({ title: "问题已登记", icon: "success" });
     } catch {
       wx.showToast({ title: "请完整填写问题", icon: "none" });
+    }
+  },
+  async startIssue(event: IssueTapEvent) {
+    try {
+      await api.updateIssue(event.currentTarget.dataset.id, {
+        expected_revision: event.currentTarget.dataset.revision,
+        status: "处理中",
+      });
+      this.setData({ issues: await api.issues(this.data.projectId) });
+    } catch (reason) {
+      wx.showToast({ title: (reason as Error).message, icon: "none" });
     }
   },
 });

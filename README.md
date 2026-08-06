@@ -33,7 +33,7 @@ $env:PROJECT_MANAGER_DATABASE_URL="postgresql+psycopg://project_manager:change-m
 
 ## Phase 2 后台核心闭环
 
-管理端支持创建项目、上传规格书、查看字段级差异、显式发布、查看看板与版本历史，以及登记问题和查看审计。管理端API写操作使用 `X-Idempotency-Key` 和当前开发身份 `X-Actor-Id`；小程序API使用微信登录后取得的Bearer token。
+管理端支持创建项目、上传规格书、查看字段级差异、显式发布、查看看板与版本历史，以及登记问题和查看审计。管理端API使用运行时输入的Bearer token，服务端将其映射为配置的管理员身份；写操作同时使用 `X-Idempotency-Key`。小程序API使用微信登录后取得的Bearer token。
 
 Docker环境通过S3兼容接口将原始规格书保存到MinIO。数据库升级后访问 `http://localhost:15173` 即可使用管理端：
 
@@ -41,6 +41,8 @@ Docker环境通过S3兼容接口将原始规格书保存到MinIO。数据库升�
 docker compose up -d
 docker compose exec -T api python -m alembic -c /app/apps/api/alembic.ini upgrade head
 ```
+
+启动前必须在 `.env` 配置 `ADMIN_API_TOKEN` 和 `PHONE_HMAC_KEY`；两者都不得提交到仓库。管理端首次打开时输入 `ADMIN_API_TOKEN`，令牌仅保存在当前浏览器会话中。
 
 Phase 2验收记录见 [docs/phase-2-verification.md](docs/phase-2-verification.md)。
 
@@ -57,5 +59,7 @@ Phase 2验收记录见 [docs/phase-2-verification.md](docs/phase-2-verification.
 LLM通过 `LLM_API_KEY`、`llm.base_url` 和 `llm.model` 配置任意兼容Chat Completions与严格JSON Schema的服务；未配置密钥时自然语言入口使用本地规则预填，不影响结构化表单。
 
 Phase 3验收记录见 [docs/phase-3-verification.md](docs/phase-3-verification.md)。
+
+Phase 3.1安全与一致性补强验收记录见 [docs/phase-3.1-verification.md](docs/phase-3.1-verification.md)。
 
 产品规格与实施阶段见 [docs/PRD.md](docs/PRD.md) 和 [docs/PLAN.md](docs/PLAN.md)。

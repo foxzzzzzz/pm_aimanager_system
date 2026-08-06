@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
     },
   ]),
   approveMemberBinding: vi.fn().mockResolvedValue({}),
+  createMemberInvitation: vi.fn().mockResolvedValue({ invitation_token: "invite-token" }),
+  createIssue: vi.fn().mockResolvedValue({}),
   listChangeProposals: vi.fn().mockResolvedValue([
     {
       id: "proposal-1",
@@ -77,5 +79,25 @@ describe("IssuesAuditPage", () => {
     await waitFor(() =>
       expect(mocks.rejectChangeProposal).toHaveBeenCalledWith("proposal-1", "项目经理驳回"),
     );
+  });
+
+  it("creates a member invitation from the binding tab", async () => {
+    render(
+      <IssuesAuditPage
+        project={{ id: "project-1", code: "ZPD1322", name: "Lyra Pro", status: "active", current_version_number: 1 }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("tab", { name: /成员绑定/ }));
+    fireEvent.click(screen.getByRole("button", { name: "生成邀请" }));
+    fireEvent.change(screen.getByLabelText("成员姓名"), { target: { value: "成员10" } });
+    fireEvent.click(screen.getByRole("button", { name: "确认生成" }));
+
+    await waitFor(() =>
+      expect(mocks.createMemberInvitation).toHaveBeenCalledWith("project-1", {
+        member_name: "成员10",
+        expected_phone: undefined,
+      }),
+    );
+    expect(await screen.findByDisplayValue("invite-token")).toBeInTheDocument();
   });
 });

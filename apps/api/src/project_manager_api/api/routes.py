@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import uuid
 from collections.abc import Callable, Iterator
 from typing import Annotated, Any
@@ -25,7 +26,14 @@ from project_manager_api.api.schemas import (
 )
 from project_manager_api.db.models import IdempotencyRecord, MobileUser
 from project_manager_api.imports.errors import ImportErrorBase
-from project_manager_api.services.errors import ConflictError, ServiceError
+from project_manager_api.services.errors import (
+    ConfigurationError,
+    ConflictError,
+    ForbiddenError,
+    PersistedConflictError,
+    ServiceError,
+    UnauthorizedError,
+)
 from project_manager_api.services.mobile import (
     MobileService,
     authenticate_mobile_user,
@@ -44,8 +52,21 @@ def get_session(request: Request) -> Iterator[Session]:
         session.close()
 
 
-def get_actor_id(x_actor_id: str = Header(min_length=1)) -> str:
-    return x_actor_id
+def get_admin_actor(
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> str:
+    configured_token = request.app.state.settings.admin_api_token
+    if not configured_token:
+        raise ConfigurationError("administrator authentication is not configured")
+    if not authorization:
+        raise UnauthorizedError("administrator bearer token is required")
+    scheme, separator, token = authorization.partition(" ")
+    if separator != " " or scheme.lower() != "bearer" or not token:
+        raise UnauthorizedError("administrator bearer token is required")
+    if not hmac.compare_digest(token, configured_token):
+        raise ForbiddenError("invalid administrator bearer token")
+    return request.app.state.settings.admin_actor_id
 
 
 def get_idempotency_key(x_idempotency_key: str = Header(min_length=1)) -> str:
@@ -53,7 +74,7 @@ def get_idempotency_key(x_idempotency_key: str = Header(min_length=1)) -> str:
 
 
 SessionDependency = Annotated[Session, Depends(get_session)]
-ActorDependency = Annotated[str, Depends(get_actor_id)]
+ActorDependency = Annotated[str, Depends(get_admin_actor)]
 IdempotencyDependency = Annotated[str, Depends(get_idempotency_key)]
 UploadDependency = Annotated[UploadFile, File()]
 
@@ -222,6 +243,18 @@ def approve_mobile_proposal(
     )
 
 
+@router.get("/mobile/projects/{project_id}/change-proposals")
+def list_mobile_approvable_proposals(
+    project_id: uuid.UUID,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+) -> list[dict[str, Any]]:
+    return MobileService(session, request.app.state.settings, user).list_approvable_proposals(
+        project_id
+    )
+
+
 @router.post("/mobile/projects/{project_id}/issues", status_code=201)
 def create_mobile_issue(
     project_id: uuid.UUID,
@@ -257,6 +290,29 @@ def list_mobile_issues(
     return ProjectService(session, f"mobile:{user.id}").list_issues(project_id)
 
 
+@router.patch("/mobile/issues/{issue_id}")
+def update_mobile_issue(
+    issue_id: uuid.UUID,
+    payload: IssueUpdate,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    actor_id = f"mobile:{user.id}"
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        lambda: MobileService(session, request.app.state.settings, user).update_issue(
+            issue_id, payload
+        ),
+    )
+
+
 @router.get("/mobile/messages")
 def list_mobile_messages(
     request: Request,
@@ -264,6 +320,21 @@ def list_mobile_messages(
     user: MobileUserDependency,
 ) -> list[dict[str, Any]]:
     return MobileService(session, request.app.state.settings, user).list_messages()
+
+
+@router.patch("/mobile/messages/{message_id}/read")
+def mark_mobile_message_read(
+    message_id: uuid.UUID,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+) -> dict[str, Any]:
+    return _execute_transaction(
+        session,
+        lambda: MobileService(session, request.app.state.settings, user).mark_message_read(
+            message_id
+        ),
+    )
 
 
 @router.post("/mobile/natural-language/prefill")
@@ -596,6 +667,9 @@ def _execute_idempotent(
             )
         )
         session.commit()
+    except PersistedConflictError:
+        session.commit()
+        raise
     except Exception:
         session.rollback()
         raise

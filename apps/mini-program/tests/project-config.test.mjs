@@ -31,14 +31,20 @@ test("mini program provides authenticated API and structured update flows", asyn
     new URL("../miniprogram/services/api.ts", import.meta.url),
     "utf8",
   );
+  const requestSource = await readFile(
+    new URL("../miniprogram/services/request-core.mjs", import.meta.url),
+    "utf8",
+  );
   const updateSource = await readFile(
     new URL("../miniprogram/pages/milestone-update/milestone-update.ts", import.meta.url),
     "utf8",
   );
 
-  assert.match(apiSource, /Authorization/);
+  assert.match(requestSource, /Authorization/);
   assert.match(apiSource, /mobile\/auth\/wechat/);
   assert.match(apiSource, /mobile\/messages/);
+  assert.match(apiSource, /change-proposals/);
+  assert.match(apiSource, /messages\/\$\{messageId\}\/read/);
   assert.match(updateSource, /completed/);
   assert.match(updateSource, /delay/);
   assert.match(updateSource, /requires_confirmation/);
