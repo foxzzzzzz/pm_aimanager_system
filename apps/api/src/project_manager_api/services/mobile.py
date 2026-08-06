@@ -32,8 +32,11 @@ from project_manager_api.db.models import (
     ProjectRole,
     ProjectVersion,
     ProposalStatus,
+    WechatSubscriptionGrant,
 )
+from project_manager_api.services.crypto import PhoneCipher
 from project_manager_api.services.errors import (
+    ConfigurationError,
     ConflictError,
     ForbiddenError,
     NotFoundError,
@@ -172,12 +175,38 @@ class MobileService:
         binding.provided_phone_masked = _mask_phone(phone)
         user.phone_hash = phone_hash
         user.phone_masked = _mask_phone(phone)
+        try:
+            user.phone_ciphertext = PhoneCipher(self.settings.phone_encryption_key).encrypt(phone)
+        except ValueError as exc:
+            raise ConfigurationError(str(exc)) from exc
+        user.phone_key_version = 1
         if binding.expected_phone_hash and binding.expected_phone_hash != phone_hash:
             binding.status = BindingStatus.PENDING_REVIEW
         else:
             self._activate_binding(binding, user)
         self.session.flush()
         return _binding_dict(binding)
+
+    def grant_subscription(self, template_id: str) -> dict[str, Any]:
+        user = self._user()
+        configured = self.settings.wechat_subscription_template_id
+        if not configured or template_id != configured:
+            raise ConflictError("subscription template is not configured for this application")
+        grant = self.session.scalar(
+            select(WechatSubscriptionGrant).where(
+                WechatSubscriptionGrant.user_id == user.id,
+                WechatSubscriptionGrant.template_id == template_id,
+            )
+        )
+        if grant is None:
+            grant = WechatSubscriptionGrant(
+                user_id=user.id, template_id=template_id, remaining_uses=1
+            )
+            self.session.add(grant)
+        else:
+            grant.remaining_uses += 1
+        self.session.flush()
+        return {"template_id": template_id, "remaining_uses": grant.remaining_uses}
 
     def approve_binding(self, binding_id: uuid.UUID, actor_id: str) -> dict[str, Any]:
         binding = self.session.get(MemberBinding, binding_id)

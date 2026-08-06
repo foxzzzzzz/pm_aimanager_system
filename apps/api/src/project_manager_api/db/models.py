@@ -225,6 +225,8 @@ class MobileUser(Base):
     openid: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     phone_hash: Mapped[str | None] = mapped_column(String(64), index=True)
     phone_masked: Mapped[str | None] = mapped_column(String(32))
+    phone_ciphertext: Mapped[str | None] = mapped_column(Text)
+    phone_key_version: Mapped[int | None] = mapped_column(Integer)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
@@ -288,3 +290,51 @@ class InAppMessage(Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     is_read: Mapped[bool] = mapped_column(default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    notification_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("notification_deliveries.id", ondelete="SET NULL"), unique=True
+    )
+
+
+class WechatSubscriptionGrant(Base):
+    __tablename__ = "wechat_subscription_grants"
+    __table_args__ = (
+        UniqueConstraint("user_id", "template_id", name="uq_wechat_grant_user_template"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("mobile_users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    template_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    remaining_uses: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class NotificationDelivery(Base):
+    __tablename__ = "notification_deliveries"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), index=True
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mobile_users.id", ondelete="SET NULL"), index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    object_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    object_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    business_date: Mapped[date] = mapped_column(Date, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )

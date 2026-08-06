@@ -36,6 +36,8 @@ def mobile_workflow() -> Iterator[TestClient]:
             admin_api_token="test-admin-token",
             admin_actor_id="pm-001",
             phone_hmac_key="test-phone-key",
+            phone_encryption_key="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            wechat_subscription_template_id="test-template",
         )
         app = create_app(settings)
         Base.metadata.create_all(app.state.engine)
@@ -143,10 +145,33 @@ def test_unbound_user_cannot_view_project_and_bound_user_can(
         assert user is not None and binding is not None
         assert user.phone_masked == "138****0010"
         assert user.phone_hash != "13800000010"
+        assert user.phone_ciphertext is not None
+        assert "13800000010" not in user.phone_ciphertext
+        assert user.phone_key_version == 1
         assert binding.provided_phone_masked == "138****0010"
         assert binding.provided_phone_hash != "13800000010"
         assert "13800000010" not in str(user.__dict__)
         assert "13800000010" not in str(binding.__dict__)
+
+
+def test_user_can_register_an_explicit_wechat_subscription_grant(
+    mobile_workflow: TestClient,
+) -> None:
+    headers, _ = _login(mobile_workflow, "dev:subscriber")
+
+    first = mobile_workflow.post(
+        "/api/v1/mobile/subscription-grants",
+        headers=headers,
+        json={"template_id": "test-template"},
+    )
+    second = mobile_workflow.post(
+        "/api/v1/mobile/subscription-grants",
+        headers=headers,
+        json={"template_id": "test-template"},
+    )
+
+    assert first.status_code == 200
+    assert second.json() == {"template_id": "test-template", "remaining_uses": 2}
 
 
 def test_phone_mismatch_requires_manager_review(mobile_workflow: TestClient) -> None:

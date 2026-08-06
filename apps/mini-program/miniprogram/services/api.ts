@@ -44,6 +44,12 @@ export const api = {
   messages: () => request<Message[]>("/mobile/messages"),
   markMessageRead: (messageId: string) =>
     request<Message>(`/mobile/messages/${messageId}/read`, "PATCH"),
+  registerSubscriptionGrant: (templateId: string) =>
+    request<{ template_id: string; remaining_uses: number }>(
+      "/mobile/subscription-grants",
+      "POST",
+      { template_id: templateId },
+    ),
   prefill: (text: string) =>
     request<{
       milestone_code: string | null;

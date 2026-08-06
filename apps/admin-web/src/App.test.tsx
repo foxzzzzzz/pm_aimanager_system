@@ -23,6 +23,7 @@ describe("App", () => {
     expect(screen.getByText("Excel导入")).toBeInTheDocument();
     expect(screen.getByText("版本历史")).toBeInTheDocument();
     expect(screen.getByText("问题与审计")).toBeInTheDocument();
+    expect(screen.getByText("通知诊断")).toBeInTheDocument();
   });
 
   it("creates a project through the management form", async () => {

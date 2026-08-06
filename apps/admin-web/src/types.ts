@@ -95,3 +95,18 @@ export interface ChangeProposal {
   status: "pending" | "approved" | "rejected";
   base_version_number: number;
 }
+
+export interface NotificationDelivery {
+  id: string;
+  project_id: string | null;
+  user_id: string | null;
+  event_type: string;
+  object_type: string;
+  object_id: string;
+  channel: "in_app" | "wechat" | "sms";
+  business_date: string;
+  status: "pending" | "sent" | "failed" | "failed_fallback_sent" | "skipped";
+  attempts: number;
+  error_message: string | null;
+  created_at: string;
+}

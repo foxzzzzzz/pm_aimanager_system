@@ -5,6 +5,7 @@ import type {
   ImportRecord,
   Issue,
   MemberBinding,
+  NotificationDelivery,
   Project,
   ProjectVersion,
 } from "./types";
@@ -146,4 +147,16 @@ export const api = {
       },
       body: JSON.stringify({ reason }),
     }),
+  listNotifications: (projectId?: string) =>
+    request<NotificationDelivery[]>(
+      `/notifications${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ""}`,
+    ),
+  runNotificationScan: (kind: "daily" | "weekly", businessDate?: string) =>
+    request<{ created: number; skipped: number }>(`/notifications/scans/${kind}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ business_date: businessDate ?? null }),
+    }),
+  retryNotification: (deliveryId: string) =>
+    request<{ status: string }>(`/notifications/${deliveryId}/retry`, { method: "POST" }),
 };

@@ -39,6 +39,10 @@ test("mini program provides authenticated API and structured update flows", asyn
     new URL("../miniprogram/pages/milestone-update/milestone-update.ts", import.meta.url),
     "utf8",
   );
+  const messagesSource = await readFile(
+    new URL("../miniprogram/pages/messages/messages.ts", import.meta.url),
+    "utf8",
+  );
 
   assert.match(requestSource, /Authorization/);
   assert.match(apiSource, /mobile\/auth\/wechat/);
@@ -48,4 +52,6 @@ test("mini program provides authenticated API and structured update flows", asyn
   assert.match(updateSource, /completed/);
   assert.match(updateSource, /delay/);
   assert.match(updateSource, /requires_confirmation/);
+  assert.match(apiSource, /mobile\/subscription-grants/);
+  assert.match(messagesSource, /requestSubscribeMessage/);
 });

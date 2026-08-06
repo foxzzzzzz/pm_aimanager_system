@@ -34,6 +34,27 @@ class AppSettings(BaseModel):
     admin_api_token: str | None = None
     admin_actor_id: str = "pm-001"
     phone_hmac_key: str | None = None
+    phone_encryption_key: str | None = None
+    redis_url: str = "redis://redis:6379/0"
+    app_timezone: str = "Asia/Shanghai"
+    notification_daily_scan_time: str = "09:00"
+    notification_weekly_weekday: int = 1
+    notification_weekly_time: str = "09:15"
+    notification_due_soon_days: int = 3
+    notification_weekly_days: int = 14
+    notification_escalate_accountable_days: int = 2
+    notification_escalate_manager_days: int = 5
+    notification_daily_external_limit: int = 20
+    wechat_subscription_template_id: str | None = None
+    wechat_subscription_title_field: str = "thing1"
+    wechat_subscription_body_field: str = "thing2"
+    sms_enabled: bool = False
+    sms_region: str = "ap-guangzhou"
+    sms_sdk_app_id: str | None = None
+    sms_sign_name: str | None = None
+    sms_critical_template_id: str | None = None
+    tencent_secret_id: str | None = None
+    tencent_secret_key: str | None = None
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:15173"])
 
     @classmethod
@@ -59,6 +80,8 @@ class AppSettings(BaseModel):
         wechat = config["wechat"]
         llm = config["llm"]
         security = config["security"]
+        notifications = config["notifications"]
+        sms = config["sms"]
         return cls(
             database_url=database_url,
             manifest_paths=manifest_paths,
@@ -92,6 +115,34 @@ class AppSettings(BaseModel):
             admin_api_token=os.environ.get(str(security["admin_api_token_env"])),
             admin_actor_id=str(security["admin_actor_id"]),
             phone_hmac_key=os.environ.get(str(security["phone_hmac_key_env"])),
+            phone_encryption_key=os.environ.get(str(security["phone_encryption_key_env"])),
+            redis_url=os.environ.get("PROJECT_MANAGER_REDIS_URL", str(config["redis"]["url"])),
+            app_timezone=str(config["app"]["timezone"]),
+            notification_daily_scan_time=str(notifications["daily_scan_time"]),
+            notification_weekly_weekday=int(notifications["weekly_summary_weekday"]),
+            notification_weekly_time=str(notifications["weekly_summary_time"]),
+            notification_due_soon_days=int(notifications["due_soon_days"]),
+            notification_weekly_days=int(notifications["weekly_summary_days"]),
+            notification_escalate_accountable_days=int(
+                notifications["escalate_to_accountable_after_days"]
+            ),
+            notification_escalate_manager_days=int(
+                notifications["escalate_to_manager_after_days"]
+            ),
+            notification_daily_external_limit=int(
+                notifications["daily_external_message_limit"]
+            ),
+            wechat_subscription_template_id=wechat.get("subscription_template_id"),
+            wechat_subscription_title_field=str(wechat["subscription_title_field"]),
+            wechat_subscription_body_field=str(wechat["subscription_body_field"]),
+            sms_enabled=os.environ.get("PROJECT_MANAGER_SMS_ENABLED", str(sms["enabled"])).lower()
+            == "true",
+            sms_region=str(sms["region"]),
+            sms_sdk_app_id=str(sms["sdk_app_id"]),
+            sms_sign_name=str(sms["sign_name"]),
+            sms_critical_template_id=str(sms["critical_template_id"]),
+            tencent_secret_id=os.environ.get("TENCENT_SECRET_ID"),
+            tencent_secret_key=os.environ.get("TENCENT_SECRET_KEY"),
         )
 
 

@@ -16,7 +16,7 @@ from project_manager_api.storage.s3 import S3ImportStorage
 def create_app(settings: AppSettings | None = None) -> FastAPI:
     resolved_settings = settings or AppSettings.from_environment()
     engine, session_factory = create_database(resolved_settings.database_url)
-    app = FastAPI(title="AI Project Manager API", version="0.4.0")
+    app = FastAPI(title="AI Project Manager API", version="0.5.0")
     app.state.settings = resolved_settings
     app.state.engine = engine
     app.state.session_factory = session_factory

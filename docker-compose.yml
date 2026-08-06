@@ -55,6 +55,7 @@ services:
     environment:
       APP_CONFIG_PATH: ${APP_CONFIG_PATH:-/app/config/app.example.yaml}
       PROJECT_MANAGER_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-project_manager}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-project_manager}
+      PROJECT_MANAGER_REDIS_URL: redis://redis:6379/0
       PROJECT_MANAGER_STORAGE_BACKEND: s3
       PROJECT_MANAGER_S3_ENDPOINT: http://minio:9000
       PROJECT_MANAGER_S3_BUCKET: project-manager
@@ -86,6 +87,51 @@ services:
       redis:
         condition: service_healthy
       minio:
+        condition: service_healthy
+
+  notification-worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://pypi.org/simple}
+        PIP_DEFAULT_TIMEOUT: ${PIP_DEFAULT_TIMEOUT:-60}
+    command: ["celery", "-A", "project_manager_api.tasks:celery_app", "worker", "--loglevel=INFO"]
+    environment:
+      APP_CONFIG_PATH: ${APP_CONFIG_PATH:-/app/config/app.example.yaml}
+      PROJECT_MANAGER_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-project_manager}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-project_manager}
+      PROJECT_MANAGER_REDIS_URL: redis://redis:6379/0
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-}
+      PHONE_HMAC_KEY: ${PHONE_HMAC_KEY:-}
+      PHONE_ENCRYPTION_KEY: ${PHONE_ENCRYPTION_KEY:-}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      TENCENT_SECRET_ID: ${TENCENT_SECRET_ID:-}
+      TENCENT_SECRET_KEY: ${TENCENT_SECRET_KEY:-}
+      PROJECT_MANAGER_SMS_ENABLED: ${PROJECT_MANAGER_SMS_ENABLED:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  notification-beat:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://pypi.org/simple}
+        PIP_DEFAULT_TIMEOUT: ${PIP_DEFAULT_TIMEOUT:-60}
+    command: ["celery", "-A", "project_manager_api.tasks:celery_app", "beat", "--loglevel=INFO"]
+    environment:
+      APP_CONFIG_PATH: ${APP_CONFIG_PATH:-/app/config/app.example.yaml}
+      PROJECT_MANAGER_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-project_manager}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-project_manager}
+      PROJECT_MANAGER_REDIS_URL: redis://redis:6379/0
+      PHONE_ENCRYPTION_KEY: ${PHONE_ENCRYPTION_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   admin-web:

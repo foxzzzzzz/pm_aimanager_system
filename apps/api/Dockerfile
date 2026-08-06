@@ -17,5 +17,10 @@ COPY apps/api /app/apps/api
 COPY config /app/config
 RUN pip install --disable-pip-version-check --no-cache-dir --no-deps /app/apps/api
 
+RUN addgroup --system app && adduser --system --ingroup app app \
+    && mkdir -p /app/tmp \
+    && chown -R app:app /app
+USER app
+
 EXPOSE 8000
 CMD ["uvicorn", "project_manager_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

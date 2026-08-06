@@ -1,4 +1,5 @@
 <view class="page">
+  <button type="primary" bindtap="enableReminder">开启一次微信提醒</button>
   <view wx:if="{{messages.length === 0}}" class="card muted">暂无消息</view>
   <view wx:for="{{messages}}" wx:key="id" class="card message {{item.is_read ? 'read' : ''}}" data-id="{{item.id}}" bindtap="markRead">
     <text class="tag">{{item.type}}</text>

@@ -18,18 +18,21 @@ from project_manager_api.api.schemas import (
     MemberInvitationCreate,
     MilestoneUpdateCreate,
     NaturalLanguagePrefillRequest,
+    NotificationScanRequest,
     ProgressProposalCreate,
     ProjectCreate,
     PublishRequest,
     RejectRequest,
+    SubscriptionGrantCreate,
     WechatLoginRequest,
 )
-from project_manager_api.db.models import IdempotencyRecord, MobileUser
+from project_manager_api.db.models import IdempotencyRecord, MobileUser, NotificationDelivery
 from project_manager_api.imports.errors import ImportErrorBase
 from project_manager_api.services.errors import (
     ConfigurationError,
     ConflictError,
     ForbiddenError,
+    NotFoundError,
     PersistedConflictError,
     ServiceError,
     UnauthorizedError,
@@ -39,6 +42,11 @@ from project_manager_api.services.mobile import (
     authenticate_mobile_user,
     natural_language_prefill,
 )
+from project_manager_api.services.notification_adapters import (
+    TencentSmsSender,
+    WechatSubscriptionSender,
+)
+from project_manager_api.services.notifications import NotificationService
 from project_manager_api.services.projects import ProjectService
 
 router = APIRouter(prefix="/api/v1")
@@ -144,6 +152,93 @@ def accept_member_invitation(
         session,
         lambda: MobileService(session, request.app.state.settings, user).accept_invitation(payload),
     )
+
+
+@router.post("/mobile/subscription-grants")
+def create_subscription_grant(
+    payload: SubscriptionGrantCreate,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+) -> dict[str, Any]:
+    return _execute_transaction(
+        session,
+        lambda: MobileService(session, request.app.state.settings, user).grant_subscription(
+            payload.template_id
+        ),
+    )
+
+
+@router.post("/notifications/scans/{scan_kind}")
+def run_notification_scan(
+    scan_kind: str,
+    payload: NotificationScanRequest,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+) -> dict[str, int]:
+    from datetime import date
+
+    if scan_kind not in {"daily", "weekly"}:
+        raise NotFoundError("unsupported notification scan")
+    service = NotificationService(
+        session,
+        request.app.state.settings,
+        wechat=WechatSubscriptionSender(request.app.state.settings),
+        sms=TencentSmsSender(request.app.state.settings),
+    )
+    operation = service.scan_daily if scan_kind == "daily" else service.scan_weekly
+    result = operation(payload.business_date or date.today())
+    return {"created": result.created, "skipped": result.skipped}
+
+
+@router.get("/notifications")
+def list_notification_deliveries(
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    project_id: uuid.UUID | None = None,
+    channel: str | None = None,
+    status: str | None = None,
+) -> list[dict[str, Any]]:
+    query = select(NotificationDelivery).order_by(NotificationDelivery.created_at.desc()).limit(500)
+    if project_id is not None:
+        query = query.where(NotificationDelivery.project_id == project_id)
+    if channel is not None:
+        query = query.where(NotificationDelivery.channel == channel)
+    if status is not None:
+        query = query.where(NotificationDelivery.status == status)
+    return [
+        {
+            "id": str(item.id),
+            "project_id": str(item.project_id) if item.project_id else None,
+            "user_id": str(item.user_id) if item.user_id else None,
+            "event_type": item.event_type,
+            "object_type": item.object_type,
+            "object_id": item.object_id,
+            "channel": item.channel,
+            "business_date": item.business_date.isoformat(),
+            "status": item.status,
+            "attempts": item.attempts,
+            "error_message": item.error_message,
+            "created_at": item.created_at.isoformat(),
+        }
+        for item in session.scalars(query)
+    ]
+
+
+@router.post("/notifications/{delivery_id}/retry")
+def retry_notification_delivery(
+    delivery_id: uuid.UUID,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+) -> dict[str, Any]:
+    return NotificationService(
+        session,
+        request.app.state.settings,
+        wechat=WechatSubscriptionSender(request.app.state.settings),
+        sms=TencentSmsSender(request.app.state.settings),
+    ).retry_failed(delivery_id)
 
 
 @router.post("/member-bindings/{binding_id}/approve")

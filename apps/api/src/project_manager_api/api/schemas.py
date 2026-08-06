@@ -102,3 +102,11 @@ class MilestoneUpdateCreate(BaseModel):
 
 class NaturalLanguagePrefillRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+
+
+class SubscriptionGrantCreate(BaseModel):
+    template_id: str = Field(min_length=1, max_length=128)
+
+
+class NotificationScanRequest(BaseModel):
+    business_date: date | None = None
