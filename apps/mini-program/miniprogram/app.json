@@ -1,0 +1,11 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "navigationBarTitleText": "项目管理",
+    "navigationBarBackgroundColor": "#146c5a",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#edf4f1"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

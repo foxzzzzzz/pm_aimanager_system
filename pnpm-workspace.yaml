@@ -1,0 +1,6 @@
+packages:
+  - apps/admin-web
+  - apps/mini-program
+
+allowBuilds:
+  esbuild: true

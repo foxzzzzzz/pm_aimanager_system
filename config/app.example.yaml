@@ -1,0 +1,87 @@
+# Application-wide settings.
+app:
+  # IANA timezone used for all project schedules and reminder scans.
+  timezone: Asia/Shanghai
+  # Logging threshold for the API and worker processes.
+  log_level: INFO
+
+# Database and background-job connections. Secrets may be overridden by environment variables.
+database:
+  # SQLAlchemy-compatible PostgreSQL connection URL for local development.
+  url: postgresql+psycopg://project_manager:change-me@postgres:5432/project_manager
+redis:
+  # Redis database used by Celery and notification idempotency.
+  url: redis://redis:6379/0
+object_storage:
+  # S3-compatible endpoint; use the company object store in production.
+  endpoint: http://minio:9000
+  # Bucket containing original imports and generated reports.
+  bucket: project-manager
+  # Region passed to the S3-compatible client.
+  region: ap-guangzhou
+
+# Excel import boundaries and the first supported template.
+imports:
+  # MVP accepts only modern Office Open XML workbooks.
+  allowed_extensions:
+    - .xlsx
+  # Maximum upload size in mebibytes.
+  max_file_size_mb: 20
+  # Identifier used by the parser registry.
+  template_id: lyra_project_spec
+  # Structural version of the Lyra-PRO baseline workbook.
+  template_version: "1.0"
+  # Maximum processing time for a single workbook.
+  timeout_seconds: 30
+
+# OpenAI-compatible LLM transport. The API key is supplied through LLM_API_KEY.
+llm:
+  # Provider base URL; replace for the selected compatible service.
+  base_url: https://api.openai.com/v1
+  # Provider model identifier; deployment-specific and intentionally configurable.
+  model: provider-model-name
+  # Request timeout in seconds.
+  timeout_seconds: 60
+  # Retry count for transient failures and invalid structured output.
+  max_retries: 2
+  # Prefer strict JSON Schema and fall back to validated JSON when unsupported.
+  structured_output_mode: auto
+
+# Reminder schedule and escalation thresholds.
+notifications:
+  # Daily scan time in local app timezone.
+  daily_scan_time: "09:00"
+  # Weekly summary weekday using ISO numbering, where Monday is 1.
+  weekly_summary_weekday: 1
+  # Weekly summary send time in local app timezone.
+  weekly_summary_time: "09:15"
+  # Natural-day window for due-soon reminders.
+  due_soon_days: 3
+  # Future-day window included in the weekly summary.
+  weekly_summary_days: 14
+  # Days overdue before notifying the accountable owner.
+  escalate_to_accountable_after_days: 2
+  # Days overdue before notifying the project manager.
+  escalate_to_manager_after_days: 5
+  # Per-user daily safety cap across external notification channels.
+  daily_external_message_limit: 20
+
+# WeChat mini-program settings. Secrets and template IDs are runtime values.
+wechat:
+  # Mini-program AppID; replace outside local development.
+  app_id: replace-with-wechat-app-id
+  # Subscription-message template identifier.
+  subscription_template_id: replace-with-template-id
+
+# Tencent Cloud SMS fallback. Credentials are supplied through environment variables.
+sms:
+  # Enables actual external delivery; keep disabled in local development.
+  enabled: false
+  # Tencent Cloud SMS region.
+  region: ap-guangzhou
+  # Approved SMS application identifier.
+  sdk_app_id: replace-with-sms-sdk-app-id
+  # Approved SMS signature.
+  sign_name: replace-with-approved-sign
+  # Approved critical-alert template identifier.
+  critical_template_id: replace-with-template-id

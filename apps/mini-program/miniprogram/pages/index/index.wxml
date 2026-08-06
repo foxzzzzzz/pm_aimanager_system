@@ -1,0 +1,8 @@
+<view class="page">
+  <view class="card">
+    <text class="phase">{{phase}}</text>
+    <text class="title">AI项目管理系统</text>
+    <text class="status">{{status}}</text>
+    <text class="description">后续将在这里展示项目计划、临期节点和重难点问题。</text>
+  </view>
+</view>

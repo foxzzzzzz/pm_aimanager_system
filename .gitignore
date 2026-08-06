@@ -1,0 +1,33 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Python / Node generated files
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# IDE / OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+project.private.config.json
+.venv/
+
+# Project temporary files
+tmp/*
+!tmp/.gitkeep
+
+# Local object storage and database volumes
+.data/

@@ -1,0 +1,32 @@
+:root {
+  color: #17322d;
+  background: #edf4f1;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.status-card {
+  width: min(640px, 100%);
+  border: 1px solid #c9ddd6;
+  box-shadow: 0 20px 50px rgb(23 50 45 / 10%);
+}
+
+.status-copy {
+  margin-bottom: 8px !important;
+  color: #146c5a;
+  font-size: 18px;
+  font-weight: 600;
+}
