@@ -31,4 +31,17 @@ $env:PROJECT_MANAGER_DATABASE_URL="postgresql+psycopg://project_manager:change-m
 
 解析器只接受 `.xlsx`。未知模板、伪装文件、缺少必要Sheet/表头、非法日期或未知RACI成员都会明确失败，不会产生正式项目版本。
 
+## Phase 2 后台核心闭环
+
+管理端支持创建项目、上传规格书、查看字段级差异、显式发布、查看看板与版本历史，以及登记问题和查看审计。API写操作使用 `X-Idempotency-Key`，当前开发身份使用 `X-Actor-Id`；Phase 3接入微信登录后替换为正式身份凭证。
+
+Docker环境通过S3兼容接口将原始规格书保存到MinIO。数据库升级后访问 `http://localhost:15173` 即可使用管理端：
+
+```powershell
+docker compose up -d
+docker compose exec -T api python -m alembic -c /app/apps/api/alembic.ini upgrade head
+```
+
+Phase 2验收记录见 [docs/phase-2-verification.md](docs/phase-2-verification.md)。
+
 产品规格与实施阶段见 [docs/PRD.md](docs/PRD.md) 和 [docs/PLAN.md](docs/PLAN.md)。

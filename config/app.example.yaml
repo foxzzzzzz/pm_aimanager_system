@@ -13,6 +13,8 @@ redis:
   # Redis database used by Celery and notification idempotency.
   url: redis://redis:6379/0
 object_storage:
+  # Use s3 for Docker/production. Unit tests explicitly select the local adapter.
+  backend: s3
   # S3-compatible endpoint; use the company object store in production.
   endpoint: http://minio:9000
   # Bucket containing original imports and generated reports.

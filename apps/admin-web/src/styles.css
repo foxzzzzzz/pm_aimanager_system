@@ -1,32 +1,67 @@
 :root {
-  color: #17322d;
-  background: #edf4f1;
+  color: #14211f;
+  background: #eef4f2;
   font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-synthesis: none;
 }
 
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-}
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button, input { font: inherit; }
 
-.app-shell {
+.app-layout { min-height: 100vh; background: #eef4f2; }
+.app-sider { background: linear-gradient(180deg, #102c2a 0%, #0a1f1d 100%) !important; }
+.brand-block { display: flex; gap: 12px; align-items: center; padding: 28px 22px 22px; }
+.brand-mark {
   display: grid;
-  min-height: 100vh;
+  width: 42px;
+  height: 42px;
   place-items: center;
-  padding: 24px;
-  box-sizing: border-box;
+  border: 1px solid rgba(126, 231, 211, .35);
+  border-radius: 13px;
+  color: #d7fff7;
+  background: rgba(33, 173, 151, .2);
+  font-weight: 800;
+  letter-spacing: .04em;
 }
-
-.status-card {
-  width: min(640px, 100%);
-  border: 1px solid #c9ddd6;
-  box-shadow: 0 20px 50px rgb(23 50 45 / 10%);
+.brand-block .ant-typography { margin: 0 !important; color: #f5fffd; }
+.brand-block span.ant-typography { color: #83a8a2; font-size: 12px; }
+.main-menu { border-inline-end: 0 !important; background: transparent !important; padding: 8px 12px; }
+.main-menu .ant-menu-item { margin-block: 6px; }
+.phase-badge {
+  position: absolute;
+  bottom: 22px;
+  left: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #7da19b;
+  font-size: 12px;
 }
+.top-bar {
+  display: flex;
+  height: 72px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 0 32px;
+  border-bottom: 1px solid #dbe7e4;
+  background: rgba(255, 255, 255, .9);
+  backdrop-filter: blur(12px);
+}
+.project-select { width: min(380px, 55vw); }
+.workspace { padding: 28px 32px 48px; }
+.global-alert { margin-bottom: 18px; }
+.page-stack { display: grid; gap: 18px; max-width: 1500px; margin: 0 auto; }
+.page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.page-heading .ant-typography { margin: 0 !important; }
+.ant-card { border-color: #dce8e5; box-shadow: 0 8px 24px rgba(24, 67, 61, .045); }
+.ant-statistic-content { color: #123f39 !important; }
+.diff-table { margin-top: 22px; }
+.diff-table td { max-width: 360px; overflow-wrap: anywhere; }
 
-.status-copy {
-  margin-bottom: 8px !important;
-  color: #146c5a;
-  font-size: 18px;
-  font-weight: 600;
+@media (max-width: 767px) {
+  .top-bar { padding: 0 16px; }
+  .workspace { padding: 20px 16px 36px; }
+  .page-heading { align-items: flex-start; flex-direction: column; }
 }

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from project_manager_api.db.base import Base
@@ -20,6 +20,29 @@ class ImportStatus(StrEnum):
     VALIDATED = "validated"
     FAILED = "failed"
     PUBLISHED = "published"
+    CANCELLED = "cancelled"
+    CONFLICT = "conflict"
+
+
+class ProjectRole(StrEnum):
+    MANAGER = "project_manager"
+    ACCOUNTABLE = "accountable"
+    RESPONSIBLE = "responsible"
+    COLLABORATOR = "collaborator"
+
+
+class ProposalStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class IssueStatus(StrEnum):
+    OPEN = "待处理"
+    IN_PROGRESS = "处理中"
+    PENDING_VERIFICATION = "待验证"
+    RESOLVED = "已解决"
+    CLOSED = "已关闭"
 
 
 def utc_now() -> datetime:
@@ -43,6 +66,12 @@ class Project(Base):
         back_populates="project", cascade="all, delete-orphan"
     )
     imports: Mapped[list[ImportRecord]] = relationship(back_populates="project")
+    memberships: Mapped[list[ProjectMembership]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    issues: Mapped[list[Issue]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
 
 
 class ProjectVersion(Base):
@@ -76,12 +105,107 @@ class ImportRecord(Base):
     )
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     source_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    object_key: Mapped[str] = mapped_column(String(512), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    base_version_number: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     template_id: Mapped[str | None] = mapped_column(String(128))
     template_version: Mapped[str | None] = mapped_column(String(32))
     draft: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     report: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    diff: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     project: Mapped[Project | None] = relationship(back_populates="imports")
+
+
+class ProjectMembership(Base):
+    __tablename__ = "project_memberships"
+    __table_args__ = (
+        UniqueConstraint("project_id", "actor_id", name="uq_project_membership_actor"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    project: Mapped[Project] = relationship(back_populates="memberships")
+
+
+class Issue(Base):
+    __tablename__ = "issues"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    impact: Mapped[str] = mapped_column(Text, nullable=False)
+    owner_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False)
+    due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default=IssueStatus.OPEN, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_by_actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+    project: Mapped[Project] = relationship(back_populates="issues")
+
+
+class ChangeProposal(Base):
+    __tablename__ = "change_proposals"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    milestone_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    base_version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    before_value: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    after_value: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default=ProposalStatus.PENDING, nullable=False)
+    submitted_by_actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    approved_by_actor_id: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), index=True
+    )
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    action: Mapped[str] = mapped_column(String(128), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    before_value: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    after_value: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class IdempotencyRecord(Base):
+    __tablename__ = "idempotency_records"
+    __table_args__ = (UniqueConstraint("actor_id", "request_key", name="uq_idempotency_actor_key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    method: Mapped[str] = mapped_column(String(16), nullable=False)
+    path: Mapped[str] = mapped_column(String(512), nullable=False)
+    response_status: Mapped[int] = mapped_column(Integer, nullable=False)
+    response_body: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

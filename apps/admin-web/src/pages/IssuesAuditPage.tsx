@@ -1,0 +1,116 @@
+import { Button, DatePicker, Empty, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Typography } from "antd";
+import dayjs, { type Dayjs } from "dayjs";
+import { useEffect, useState } from "react";
+
+import { api } from "../api";
+import type { AuditLog, Issue, Project } from "../types";
+
+interface Props {
+  project?: Project;
+}
+
+interface IssueForm {
+  description: string;
+  impact: string;
+  owner_name: string;
+  severity: string;
+  due_date: Dayjs;
+}
+
+export default function IssuesAuditPage({ project }: Props) {
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [open, setOpen] = useState(false);
+  const [form] = Form.useForm<IssueForm>();
+
+  const reload = async () => {
+    if (!project) return;
+    const [nextIssues, nextAudit] = await Promise.all([
+      api.listIssues(project.id),
+      api.listAuditLogs(project.id),
+    ]);
+    setIssues(nextIssues);
+    setAuditLogs(nextAudit);
+  };
+
+  useEffect(() => {
+    void reload();
+  }, [project]);
+
+  if (!project) return <Empty description="请先选择项目" />;
+
+  const submit = async () => {
+    const values = await form.validateFields();
+    await api.createIssue(project.id, {
+      ...values,
+      due_date: values.due_date.format("YYYY-MM-DD"),
+    });
+    setOpen(false);
+    form.resetFields();
+    await reload();
+  };
+
+  return (
+    <div className="page-stack">
+      <div className="page-heading">
+        <Typography.Title level={2}>问题与审计</Typography.Title>
+        <Button type="primary" onClick={() => setOpen(true)}>登记问题</Button>
+      </div>
+      <Tabs
+        items={[
+          {
+            key: "issues",
+            label: `重难点问题 ${issues.length}`,
+            children: (
+              <Table
+                rowKey="id"
+                dataSource={issues}
+                columns={[
+                  { title: "问题", dataIndex: "description" },
+                  { title: "影响", dataIndex: "impact" },
+                  { title: "责任人", dataIndex: "owner_name" },
+                  { title: "完成时间", dataIndex: "due_date" },
+                  { title: "状态", dataIndex: "status", render: (value: string) => <Tag>{value}</Tag> },
+                ]}
+              />
+            ),
+          },
+          {
+            key: "audit",
+            label: `审计记录 ${auditLogs.length}`,
+            children: (
+              <Table
+                rowKey="id"
+                dataSource={auditLogs}
+                columns={[
+                  { title: "时间", dataIndex: "created_at", render: (value: string) => dayjs(value).format("YYYY-MM-DD HH:mm") },
+                  { title: "操作", dataIndex: "action" },
+                  { title: "操作者", dataIndex: "actor_id" },
+                  { title: "原因", dataIndex: "reason", render: (value: string | null) => value ?? "—" },
+                ]}
+              />
+            ),
+          },
+        ]}
+      />
+      <Modal title="登记重难点问题" open={open} onCancel={() => setOpen(false)} onOk={submit} okText="保存">
+        <Form form={form} layout="vertical">
+          <Form.Item name="description" label="问题描述" rules={[{ required: true }]}><Input.TextArea /></Form.Item>
+          <Form.Item name="impact" label="项目影响" rules={[{ required: true }]}><Input.TextArea /></Form.Item>
+          <Space align="start">
+            <Form.Item name="owner_name" label="责任人" rules={[{ required: true }]}><Input /></Form.Item>
+            <Form.Item name="severity" label="严重程度" initialValue="high" rules={[{ required: true }]}>
+              <Select style={{ width: 120 }} options={[
+                { value: "low", label: "低" },
+                { value: "medium", label: "中" },
+                { value: "high", label: "高" },
+                { value: "critical", label: "重大" },
+              ]} />
+            </Form.Item>
+            <Form.Item name="due_date" label="预计完成" rules={[{ required: true }]}><DatePicker /></Form.Item>
+          </Space>
+        </Form>
+      </Modal>
+    </div>
+  );
+}
