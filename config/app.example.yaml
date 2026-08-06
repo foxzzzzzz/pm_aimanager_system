@@ -60,6 +60,8 @@ security:
   admin_api_token_env: ADMIN_API_TOKEN
   # Secret key used to HMAC phone numbers before persistence.
   phone_hmac_key_env: PHONE_HMAC_KEY
+  # AES-GCM envelope-encryption key reserved for Phase 4 SMS delivery.
+  phone_encryption_key_env: PHONE_ENCRYPTION_KEY
 
 # Reminder schedule and escalation thresholds.
 notifications:

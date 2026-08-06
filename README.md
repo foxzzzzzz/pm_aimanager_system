@@ -44,6 +44,8 @@ docker compose exec -T api python -m alembic -c /app/apps/api/alembic.ini upgrad
 
 启动前必须在 `.env` 配置 `ADMIN_API_TOKEN` 和 `PHONE_HMAC_KEY`；两者都不得提交到仓库。管理端首次打开时输入 `ADMIN_API_TOKEN`，令牌仅保存在当前浏览器会话中。
 
+本地测试环境可直接运行 `./scripts/configure-local-secrets.ps1`，脚本会生成管理员令牌、手机号HMAC密钥和Phase 4手机号AES-GCM加密密钥；重复运行默认保留已有值，不会静默轮换密钥。
+
 Phase 2验收记录见 [docs/phase-2-verification.md](docs/phase-2-verification.md)。
 
 ## Phase 3 小程序协同闭环

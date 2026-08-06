@@ -13,6 +13,7 @@ def test_phase0_required_files_exist() -> None:
         "config/app.example.yaml",
         "docker-compose.yml",
         "scripts/check.ps1",
+        "scripts/configure-local-secrets.ps1",
         "tests/fixtures/lyra-template-v1/lyra_v1_sanitized.xlsx",
         "tests/fixtures/lyra-template-v1/expected.json",
     ]

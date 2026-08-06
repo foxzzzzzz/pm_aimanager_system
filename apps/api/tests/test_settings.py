@@ -24,6 +24,7 @@ def test_example_config_contains_required_external_parameters() -> None:
     assert config["security"]["admin_actor_id"] == "pm-001"
     assert config["security"]["admin_api_token_env"] == "ADMIN_API_TOKEN"
     assert config["security"]["phone_hmac_key_env"] == "PHONE_HMAC_KEY"
+    assert config["security"]["phone_encryption_key_env"] == "PHONE_ENCRYPTION_KEY"
 
 
 def test_example_config_does_not_contain_real_secrets() -> None:

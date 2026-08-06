@@ -2,6 +2,12 @@
 
 ## 2026-08-07
 
+### Phase 4 前置设计与本地配置
+
+- 确认短信兜底采用AES-GCM密文、HMAC摘要和掩码三态手机号存储，新增外部密钥 `PHONE_ENCRYPTION_KEY`，仅通知服务可解密。
+- 增加 `scripts/configure-local-secrets.ps1`，自动生成并默认保留本地管理员令牌、手机号HMAC密钥和手机号加密密钥。
+- 本机 `.env` 已生成且受 `.gitignore` 保护；Docker API和管理端使用持久化本地配置重启后健康，Bearer认证验证通过。
+
 ### Phase 3.1 修复与优化
 
 - 管理端取消可伪造的 `X-Actor-Id`，改为运行时Bearer令牌和服务端管理员身份映射。
