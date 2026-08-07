@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   approveMemberBinding: vi.fn().mockResolvedValue({}),
   createMemberInvitation: vi.fn().mockResolvedValue({ invitation_token: "invite-token" }),
   createIssue: vi.fn().mockResolvedValue({}),
+  updateIssue: vi.fn().mockResolvedValue({}),
+  deleteIssue: vi.fn().mockResolvedValue({}),
   listChangeProposals: vi.fn().mockResolvedValue([
     {
       id: "proposal-1",
@@ -99,5 +101,38 @@ describe("IssuesAuditPage", () => {
       }),
     );
     expect(await screen.findByDisplayValue("invite-token")).toBeInTheDocument();
+  });
+
+  it("updates and deletes an issue from the admin table", async () => {
+    mocks.listIssues.mockResolvedValue([
+      {
+        id: "issue-1",
+        description: "原问题",
+        impact: "原影响",
+        owner_name: "成员10",
+        severity: "high",
+        due_date: "2026-08-20",
+        status: "待处理",
+        revision: 1,
+      },
+    ]);
+    render(
+      <IssuesAuditPage
+        project={{ id: "project-1", code: "ZPD1322", name: "Lyra Pro", status: "active", current_version_number: 1 }}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /编\s*辑/ }));
+    fireEvent.change(screen.getByLabelText("问题描述"), { target: { value: "修正后问题" } });
+    fireEvent.click(screen.getByRole("button", { name: /保\s*存/ }));
+    await waitFor(() => expect(mocks.updateIssue).toHaveBeenCalledWith(
+      "issue-1",
+      expect.objectContaining({ expected_revision: 1, description: "修正后问题" }),
+    ));
+
+    fireEvent.click(screen.getByRole("button", { name: /删\s*除/ }));
+    fireEvent.change(screen.getByLabelText("删除原因"), { target: { value: "记录作废" } });
+    fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+    await waitFor(() => expect(mocks.deleteIssue).toHaveBeenCalledWith("issue-1", 1, "记录作废"));
   });
 });

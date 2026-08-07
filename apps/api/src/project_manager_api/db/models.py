@@ -37,6 +37,12 @@ class ProposalStatus(StrEnum):
     REJECTED = "rejected"
 
 
+class ChangeSetStatus(StrEnum):
+    PENDING = "pending"
+    PUBLISHED = "published"
+    CANCELLED = "cancelled"
+
+
 class IssueStatus(StrEnum):
     OPEN = "待处理"
     IN_PROGRESS = "处理中"
@@ -182,6 +188,27 @@ class ChangeProposal(Base):
     status: Mapped[str] = mapped_column(String(32), default=ProposalStatus.PENDING, nullable=False)
     submitted_by_actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
     approved_by_actor_id: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ProjectChangeSet(Base):
+    __tablename__ = "project_change_sets"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    base_version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    operations: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    diff: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32), default=ChangeSetStatus.PENDING, nullable=False
+    )
+    submitted_by_actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    published_by_actor_id: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

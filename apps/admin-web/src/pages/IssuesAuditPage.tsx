@@ -15,6 +15,7 @@ interface IssueForm {
   owner_name: string;
   severity: string;
   due_date: Dayjs;
+  status?: string;
 }
 
 interface InvitationForm { member_name: string; expected_phone?: string }
@@ -25,6 +26,9 @@ export default function IssuesAuditPage({ project }: Props) {
   const [bindings, setBindings] = useState<MemberBinding[]>([]);
   const [proposals, setProposals] = useState<ChangeProposal[]>([]);
   const [open, setOpen] = useState(false);
+  const [editingIssue, setEditingIssue] = useState<Issue>();
+  const [deletingIssue, setDeletingIssue] = useState<Issue>();
+  const [deleteReason, setDeleteReason] = useState("");
   const [invitationOpen, setInvitationOpen] = useState(false);
   const [invitationToken, setInvitationToken] = useState("");
   const [error, setError] = useState<string>();
@@ -62,12 +66,42 @@ export default function IssuesAuditPage({ project }: Props) {
 
   const submit = async () => {
     const values = await form.validateFields();
-    await api.createIssue(project.id, {
-      ...values,
-      due_date: values.due_date.format("YYYY-MM-DD"),
-    });
+    if (editingIssue) {
+      await api.updateIssue(editingIssue.id, {
+        expected_revision: editingIssue.revision,
+        ...values,
+        due_date: values.due_date.format("YYYY-MM-DD"),
+      });
+    } else {
+      await api.createIssue(project.id, {
+        ...values,
+        due_date: values.due_date.format("YYYY-MM-DD"),
+      });
+    }
     setOpen(false);
+    setEditingIssue(undefined);
     form.resetFields();
+    await reload();
+  };
+
+  const openIssueEditor = (issue: Issue) => {
+    setEditingIssue(issue);
+    form.setFieldsValue({
+      description: issue.description,
+      impact: issue.impact,
+      owner_name: issue.owner_name,
+      severity: issue.severity,
+      due_date: dayjs(issue.due_date),
+      status: issue.status,
+    });
+    setOpen(true);
+  };
+
+  const deleteIssue = async () => {
+    if (!deletingIssue || !deleteReason.trim()) return;
+    await api.deleteIssue(deletingIssue.id, deletingIssue.revision, deleteReason.trim());
+    setDeletingIssue(undefined);
+    setDeleteReason("");
     await reload();
   };
 
@@ -98,7 +132,7 @@ export default function IssuesAuditPage({ project }: Props) {
       {error && <Alert type="error" message={error} showIcon closable onClose={() => setError(undefined)} />}
       <div className="page-heading">
         <Typography.Title level={2}>问题与审计</Typography.Title>
-        <Button type="primary" onClick={() => setOpen(true)}>登记问题</Button>
+        <Button type="primary" onClick={() => { setEditingIssue(undefined); form.resetFields(); setOpen(true); }}>登记问题</Button>
       </div>
       <Tabs
         items={[
@@ -115,6 +149,20 @@ export default function IssuesAuditPage({ project }: Props) {
                   { title: "责任人", dataIndex: "owner_name" },
                   { title: "完成时间", dataIndex: "due_date" },
                   { title: "状态", dataIndex: "status", render: (value: string) => <Tag>{value}</Tag> },
+                  {
+                    title: "操作",
+                    render: (_value: unknown, issue: Issue) => (
+                      <Space>
+                        <Button size="small" onClick={() => openIssueEditor(issue)}>编辑</Button>
+                        <Button
+                          size="small"
+                          danger
+                          disabled={issue.status === "已关闭"}
+                          onClick={() => { setDeletingIssue(issue); setDeleteReason(""); }}
+                        >删除</Button>
+                      </Space>
+                    ),
+                  },
                 ]}
               />
             ),
@@ -187,7 +235,7 @@ export default function IssuesAuditPage({ project }: Props) {
           },
         ]}
       />
-      <Modal title="登记重难点问题" open={open} onCancel={() => setOpen(false)} onOk={submit} okText="保存">
+      <Modal title={editingIssue ? "编辑重难点问题" : "登记重难点问题"} open={open} onCancel={() => { setOpen(false); setEditingIssue(undefined); }} onOk={submit} okText="保存">
         <Form form={form} layout="vertical">
           <Form.Item name="description" label="问题描述" rules={[{ required: true }]}><Input.TextArea /></Form.Item>
           <Form.Item name="impact" label="项目影响" rules={[{ required: true }]}><Input.TextArea /></Form.Item>
@@ -203,6 +251,34 @@ export default function IssuesAuditPage({ project }: Props) {
             </Form.Item>
             <Form.Item name="due_date" label="预计完成" rules={[{ required: true }]}><DatePicker /></Form.Item>
           </Space>
+          {editingIssue && (
+            <Form.Item name="status" label="状态" rules={[{ required: true }]}>
+              <Select options={["待处理", "处理中", "待验证", "已解决", "已关闭"].map((value) => ({ value, label: value }))} />
+            </Form.Item>
+          )}
+        </Form>
+      </Modal>
+      <Modal
+        title="删除问题（版本化关闭）"
+        open={Boolean(deletingIssue)}
+        okText="确认删除"
+        cancelText="取消"
+        okButtonProps={{ disabled: !deleteReason.trim(), danger: true }}
+        onOk={deleteIssue}
+        onCancel={() => {
+          setDeletingIssue(undefined);
+          setDeleteReason("");
+        }}
+      >
+        <Alert type="warning" showIcon message="该操作会将问题标记为已关闭，历史和审计记录仍保留。" />
+        <Form layout="vertical">
+          <Form.Item label="删除原因" htmlFor="issue-delete-reason" required>
+            <Input.TextArea
+              id="issue-delete-reason"
+              value={deleteReason}
+              onChange={(event) => setDeleteReason(event.target.value)}
+            />
+          </Form.Item>
         </Form>
       </Modal>
       <Modal

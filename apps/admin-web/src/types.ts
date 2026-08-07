@@ -110,3 +110,99 @@ export interface NotificationDelivery {
   error_message: string | null;
   created_at: string;
 }
+
+export interface OperationalStatus {
+  status: "ok" | "alert";
+  notification_failures: number;
+  stale_pending: number;
+  unbound_recipients: number;
+  configuration_issues: string[];
+}
+
+export interface ProductSpecReview {
+  row_number: number;
+  major_category: string | null;
+  category: string | null;
+  item: string;
+  configuration: string | null;
+  core_information: string | null;
+  selected_model: string | null;
+  notes: string | null;
+  check_confirmation: string | null;
+  check_content: string | null;
+}
+
+export interface ProjectMemberReview {
+  name: string;
+  role: string;
+  notes: string | null;
+}
+
+export interface MilestoneReview {
+  code: string;
+  name: string;
+  output: string | null;
+  schedule: PlanWindow;
+  assignments: Record<"R" | "A" | "C" | "I", string[]>;
+  risk_note: string | null;
+}
+
+export interface ProjectReview {
+  current_version_number: number;
+  document_version: string | null;
+  active_plan_name: string | null;
+  tbd_count: number;
+  product_specs: ProductSpecReview[];
+  members: ProjectMemberReview[];
+  milestones: MilestoneReview[];
+}
+
+export interface EditableProjectMember {
+  name: string;
+  role: string;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+}
+
+export interface EditableMilestone extends Omit<MilestoneReview, "schedule"> {
+  actual_completion: PlanWindow;
+  variance_days: number | null;
+  variance_note: string | null;
+}
+
+export interface EditableProjectData {
+  current_version_number: number;
+  template_id: string;
+  template_version: string;
+  document_version: string;
+  source_sha256: string;
+  project: { code: string; name: string };
+  product_specs: ProductSpecReview[];
+  members: EditableProjectMember[];
+  milestones: EditableMilestone[];
+  plan_versions: Array<{ name: string; milestones: Record<string, PlanWindow> }>;
+  active_plan_name: string;
+}
+
+export interface ProjectDataOperation {
+  op: "add" | "replace" | "remove";
+  resource: "product_spec" | "member" | "milestone" | "plan" | "raci";
+  key: string;
+  value?: Record<string, unknown>;
+}
+
+export interface ProjectChangeSet {
+  id: string;
+  project_id: string;
+  base_version_number: number;
+  source: string;
+  operations: ProjectDataOperation[];
+  diff: DiffEntry[];
+  reason: string;
+  status: "pending" | "published" | "cancelled";
+  submitted_by_actor_id?: string;
+  published_by_actor_id?: string | null;
+  created_at?: string;
+  resolved_at?: string | null;
+}

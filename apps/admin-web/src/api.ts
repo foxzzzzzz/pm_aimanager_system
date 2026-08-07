@@ -2,11 +2,16 @@ import type {
   AuditLog,
   ChangeProposal,
   Dashboard,
+  EditableProjectData,
   ImportRecord,
   Issue,
   MemberBinding,
   NotificationDelivery,
+  OperationalStatus,
   Project,
+  ProjectChangeSet,
+  ProjectDataOperation,
+  ProjectReview,
   ProjectVersion,
 } from "./types";
 
@@ -64,6 +69,40 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   dashboard: (projectId: string) => request<Dashboard>(`/projects/${projectId}/dashboard`),
+  projectReview: (projectId: string) =>
+    request<ProjectReview>(`/projects/${projectId}/review`),
+  projectEditableData: (projectId: string) =>
+    request<EditableProjectData>(`/projects/${projectId}/editable-data`),
+  createProjectChangeSet: (
+    projectId: string,
+    payload: {
+      base_version_number: number;
+      reason: string;
+      operations: ProjectDataOperation[];
+    },
+  ) =>
+    request<ProjectChangeSet>(`/projects/${projectId}/change-sets`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": requestKey("project-change-set"),
+      },
+      body: JSON.stringify(payload),
+    }),
+  publishProjectChangeSet: (changeSetId: string, expectedVersion: number) =>
+    request<ProjectVersion>(`/change-sets/${changeSetId}/publish`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": requestKey("project-change-set-publish"),
+      },
+      body: JSON.stringify({ expected_project_version: expectedVersion }),
+    }),
+  cancelProjectChangeSet: (changeSetId: string) =>
+    request<ProjectChangeSet>(`/change-sets/${changeSetId}/cancel`, {
+      method: "POST",
+      headers: { "X-Idempotency-Key": requestKey("project-change-set-cancel") },
+    }),
   uploadImport: (projectId: string, file: File) => {
     const form = new FormData();
     form.append("file", file);
@@ -102,6 +141,35 @@ export const api = {
         "X-Idempotency-Key": requestKey("issue"),
       },
       body: JSON.stringify(payload),
+    }),
+  updateIssue: (
+    issueId: string,
+    payload: {
+      expected_revision: number;
+      description?: string;
+      impact?: string;
+      owner_name?: string;
+      severity?: string;
+      due_date?: string;
+      status?: string;
+    },
+  ) =>
+    request<Issue>(`/issues/${issueId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": requestKey("issue-update"),
+      },
+      body: JSON.stringify(payload),
+    }),
+  deleteIssue: (issueId: string, expectedRevision: number, reason: string) =>
+    request<Issue>(`/issues/${issueId}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": requestKey("issue-delete"),
+      },
+      body: JSON.stringify({ expected_revision: expectedRevision, reason }),
     }),
   listAuditLogs: (projectId: string) =>
     request<AuditLog[]>(`/projects/${projectId}/audit-logs`),
@@ -159,4 +227,5 @@ export const api = {
     }),
   retryNotification: (deliveryId: string) =>
     request<{ status: string }>(`/notifications/${deliveryId}/retry`, { method: "POST" }),
+  operationsStatus: () => request<OperationalStatus>("/operations/status"),
 };

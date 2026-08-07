@@ -14,12 +14,14 @@ from sqlalchemy.orm import Session
 from project_manager_api.api.schemas import (
     InvitationAccept,
     IssueCreate,
+    IssueDelete,
     IssueUpdate,
     MemberInvitationCreate,
     MilestoneUpdateCreate,
     NaturalLanguagePrefillRequest,
     NotificationScanRequest,
     ProgressProposalCreate,
+    ProjectChangeSetCreate,
     ProjectCreate,
     PublishRequest,
     RejectRequest,
@@ -47,6 +49,7 @@ from project_manager_api.services.notification_adapters import (
     WechatSubscriptionSender,
 )
 from project_manager_api.services.notifications import NotificationService
+from project_manager_api.services.operations import build_operational_status
 from project_manager_api.services.projects import ProjectService
 
 router = APIRouter(prefix="/api/v1")
@@ -224,6 +227,15 @@ def list_notification_deliveries(
         }
         for item in session.scalars(query)
     ]
+
+
+@router.get("/operations/status")
+def get_operational_status(
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+) -> dict[str, Any]:
+    return build_operational_status(session, request.app.state.settings)
 
 
 @router.post("/notifications/{delivery_id}/retry")
@@ -408,6 +420,29 @@ def update_mobile_issue(
     )
 
 
+@router.delete("/mobile/issues/{issue_id}")
+def delete_mobile_issue(
+    issue_id: uuid.UUID,
+    payload: IssueDelete,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    actor_id = f"mobile:{user.id}"
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        lambda: MobileService(session, request.app.state.settings, user).delete_issue(
+            issue_id, payload
+        ),
+    )
+
+
 @router.get("/mobile/messages")
 def list_mobile_messages(
     request: Request,
@@ -583,6 +618,103 @@ def get_dashboard(
     return ProjectService(session, actor_id).dashboard(project_id)
 
 
+@router.get("/projects/{project_id}/review")
+def get_project_review(
+    project_id: uuid.UUID,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+) -> dict[str, Any]:
+    return ProjectService(session, actor_id).review(project_id)
+
+
+@router.get("/projects/{project_id}/editable-data")
+def get_project_editable_data(
+    project_id: uuid.UUID,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+) -> dict[str, Any]:
+    return ProjectService(session, actor_id).editable_data(project_id)
+
+
+@router.post("/projects/{project_id}/change-sets", status_code=201)
+def create_project_change_set(
+    project_id: uuid.UUID,
+    payload: ProjectChangeSetCreate,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        201,
+        lambda: ProjectService(session, actor_id).create_change_set(project_id, payload),
+    )
+
+
+@router.get("/projects/{project_id}/change-sets")
+def list_project_change_sets(
+    project_id: uuid.UUID,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+) -> list[dict[str, Any]]:
+    return ProjectService(session, actor_id).list_change_sets(project_id)
+
+
+@router.get("/change-sets/{change_set_id}")
+def get_project_change_set(
+    change_set_id: uuid.UUID,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+) -> dict[str, Any]:
+    return ProjectService(session, actor_id).get_change_set(change_set_id)
+
+
+@router.post("/change-sets/{change_set_id}/publish")
+def publish_project_change_set(
+    change_set_id: uuid.UUID,
+    payload: PublishRequest,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        lambda: ProjectService(session, actor_id).publish_change_set(
+            change_set_id, payload.expected_project_version
+        ),
+    )
+
+
+@router.post("/change-sets/{change_set_id}/cancel")
+def cancel_project_change_set(
+    change_set_id: uuid.UUID,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        lambda: ProjectService(session, actor_id).cancel_change_set(change_set_id),
+    )
+
+
 @router.post(
     "/projects/{project_id}/milestones/{milestone_code}/progress-proposals", status_code=201
 )
@@ -696,6 +828,26 @@ def update_issue(
         request.url.path,
         200,
         lambda: ProjectService(session, actor_id).update_issue(issue_id, payload),
+    )
+
+
+@router.delete("/issues/{issue_id}")
+def delete_issue(
+    issue_id: uuid.UUID,
+    payload: IssueDelete,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        lambda: ProjectService(session, actor_id).delete_issue(issue_id, payload),
     )
 
 

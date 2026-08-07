@@ -2,17 +2,23 @@ import { Alert, Button, Space, Table, Tag, Typography } from "antd";
 import { useEffect, useState } from "react";
 
 import { api } from "../api";
-import type { NotificationDelivery, Project } from "../types";
+import type { NotificationDelivery, OperationalStatus, Project } from "../types";
 
 export default function NotificationsPage({ project }: { project?: Project }) {
   const [items, setItems] = useState<NotificationDelivery[]>([]);
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
+  const [operations, setOperations] = useState<OperationalStatus>();
 
   const load = async () => {
     setLoading(true);
     try {
-      setItems(await api.listNotifications(project?.id));
+      const [deliveries, operationalStatus] = await Promise.all([
+        api.listNotifications(project?.id),
+        api.operationsStatus(),
+      ]);
+      setItems(deliveries);
+      setOperations(operationalStatus);
       setError(undefined);
     } catch (reason) {
       setError((reason as Error).message);
@@ -36,6 +42,41 @@ export default function NotificationsPage({ project }: { project?: Project }) {
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       <Typography.Title level={2}>通知诊断</Typography.Title>
       {error && <Alert type="error" message={error} showIcon />}
+      {operations?.status === "alert" && (
+        <Alert
+          type="warning"
+          showIcon
+          message={
+            operations.configuration_issues.length > 0
+              ? "生产配置待完善"
+              : "通知运行异常"
+          }
+          description={
+            operations.configuration_issues.length > 0 ? (
+              <>
+                <ul>
+                  {operations.configuration_issues.map((issue) => <li key={issue}>{issue}</li>)}
+                </ul>
+                <div>
+                  失败 {operations.notification_failures} 条，滞留 {operations.stale_pending} 条
+                </div>
+                {operations.unbound_recipients > 0 && (
+                  <div>未绑定接收人 {operations.unbound_recipients} 人</div>
+                )}
+              </>
+            ) : (
+              <>
+                <div>
+                  失败 {operations.notification_failures} 条，滞留 {operations.stale_pending} 条
+                </div>
+                {operations.unbound_recipients > 0 && (
+                  <div>未绑定接收人 {operations.unbound_recipients} 人</div>
+                )}
+              </>
+            )
+          }
+        />
+      )}
       <Space>
         <Button type="primary" onClick={() => void scan("daily")}>立即执行每日扫描</Button>
         <Button onClick={() => void scan("weekly")}>立即执行周报扫描</Button>
@@ -44,6 +85,7 @@ export default function NotificationsPage({ project }: { project?: Project }) {
         rowKey="id"
         loading={loading}
         dataSource={items}
+        locale={{ emptyText: "暂无通知投递记录" }}
         pagination={{ pageSize: 20 }}
         columns={[
           { title: "业务日期", dataIndex: "business_date" },

@@ -54,9 +54,13 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("idempotency_key"),
     )
-    op.create_index("ix_notification_deliveries_project_id", "notification_deliveries", ["project_id"])
+    op.create_index(
+        "ix_notification_deliveries_project_id", "notification_deliveries", ["project_id"]
+    )
     op.create_index("ix_notification_deliveries_user_id", "notification_deliveries", ["user_id"])
-    op.create_index("ix_notification_deliveries_event_type", "notification_deliveries", ["event_type"])
+    op.create_index(
+        "ix_notification_deliveries_event_type", "notification_deliveries", ["event_type"]
+    )
     op.create_index("ix_notification_deliveries_channel", "notification_deliveries", ["channel"])
     with op.batch_alter_table("in_app_messages") as batch:
         batch.add_column(sa.Column("notification_id", sa.Uuid(), nullable=True))

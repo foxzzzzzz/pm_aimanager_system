@@ -1,6 +1,8 @@
 param(
     [string]$EnvPath = (Join-Path (Split-Path -Parent $PSScriptRoot) ".env"),
-    [switch]$Rotate
+    [switch]$Rotate,
+    [ValidateSet("ADMIN_API_TOKEN", "PHONE_HMAC_KEY", "PHONE_ENCRYPTION_KEY")]
+    [string[]]$SecretNames = @("ADMIN_API_TOKEN", "PHONE_HMAC_KEY", "PHONE_ENCRYPTION_KEY")
 )
 
 $ErrorActionPreference = "Stop"
@@ -60,7 +62,7 @@ function Set-SecretValue([string]$Name) {
 }
 
 $results = [ordered]@{}
-foreach ($name in ("ADMIN_API_TOKEN", "PHONE_HMAC_KEY", "PHONE_ENCRYPTION_KEY")) {
+foreach ($name in $SecretNames) {
     $results[$name] = Set-SecretValue $name
 }
 

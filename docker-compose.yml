@@ -56,6 +56,7 @@ services:
       APP_CONFIG_PATH: ${APP_CONFIG_PATH:-/app/config/app.example.yaml}
       PROJECT_MANAGER_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-project_manager}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-project_manager}
       PROJECT_MANAGER_REDIS_URL: redis://redis:6379/0
+      PROJECT_MANAGER_IMPORT_STORAGE_PATH: /app/tmp/imports
       PROJECT_MANAGER_STORAGE_BACKEND: s3
       PROJECT_MANAGER_S3_ENDPOINT: http://minio:9000
       PROJECT_MANAGER_S3_BUCKET: project-manager
@@ -67,9 +68,18 @@ services:
       PHONE_ENCRYPTION_KEY: ${PHONE_ENCRYPTION_KEY:-}
       WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
       WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_SUBSCRIPTION_TEMPLATE_ID: ${WECHAT_SUBSCRIPTION_TEMPLATE_ID:-}
+      WECHAT_SUBSCRIPTION_TITLE_FIELD: ${WECHAT_SUBSCRIPTION_TITLE_FIELD:-thing1}
+      WECHAT_SUBSCRIPTION_BODY_FIELD: ${WECHAT_SUBSCRIPTION_BODY_FIELD:-thing2}
+      PROJECT_MANAGER_CORS_ORIGINS: ${PROJECT_MANAGER_CORS_ORIGINS:-http://localhost:15173}
       PROJECT_MANAGER_ALLOW_DEV_WECHAT_LOGIN: ${PROJECT_MANAGER_ALLOW_DEV_WECHAT_LOGIN:-true}
       TENCENT_SECRET_ID: ${TENCENT_SECRET_ID:-}
       TENCENT_SECRET_KEY: ${TENCENT_SECRET_KEY:-}
+      TENCENT_SMS_REGION: ${TENCENT_SMS_REGION:-ap-guangzhou}
+      TENCENT_SMS_SDK_APP_ID: ${TENCENT_SMS_SDK_APP_ID:-}
+      TENCENT_SMS_SIGN_NAME: ${TENCENT_SMS_SIGN_NAME:-}
+      TENCENT_SMS_CRITICAL_TEMPLATE_ID: ${TENCENT_SMS_CRITICAL_TEMPLATE_ID:-}
+      PROJECT_MANAGER_SMS_ENABLED: ${PROJECT_MANAGER_SMS_ENABLED:-false}
     ports:
       - "${API_HOST_PORT:-18000}:8000"
     healthcheck:
@@ -106,14 +116,28 @@ services:
       PHONE_ENCRYPTION_KEY: ${PHONE_ENCRYPTION_KEY:-}
       WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
       WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_SUBSCRIPTION_TEMPLATE_ID: ${WECHAT_SUBSCRIPTION_TEMPLATE_ID:-}
+      WECHAT_SUBSCRIPTION_TITLE_FIELD: ${WECHAT_SUBSCRIPTION_TITLE_FIELD:-thing1}
+      WECHAT_SUBSCRIPTION_BODY_FIELD: ${WECHAT_SUBSCRIPTION_BODY_FIELD:-thing2}
       TENCENT_SECRET_ID: ${TENCENT_SECRET_ID:-}
       TENCENT_SECRET_KEY: ${TENCENT_SECRET_KEY:-}
+      TENCENT_SMS_REGION: ${TENCENT_SMS_REGION:-ap-guangzhou}
+      TENCENT_SMS_SDK_APP_ID: ${TENCENT_SMS_SDK_APP_ID:-}
+      TENCENT_SMS_SIGN_NAME: ${TENCENT_SMS_SIGN_NAME:-}
+      TENCENT_SMS_CRITICAL_TEMPLATE_ID: ${TENCENT_SMS_CRITICAL_TEMPLATE_ID:-}
       PROJECT_MANAGER_SMS_ENABLED: ${PROJECT_MANAGER_SMS_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'celery -A project_manager_api.tasks:celery_app inspect ping --destination "celery@$${HOSTNAME}" --timeout 5 | grep -q pong'
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   notification-beat:
     build:
@@ -133,6 +157,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /app/celerybeat-schedule"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   admin-web:
     build:

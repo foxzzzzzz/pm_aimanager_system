@@ -154,6 +154,39 @@ def test_unbound_user_cannot_view_project_and_bound_user_can(
         assert "13800000010" not in str(binding.__dict__)
 
 
+def test_mobile_token_cannot_use_admin_project_data_change_endpoints(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    member_headers, _ = _login(client, "dev:project-data-boundary")
+
+    editable = client.get(
+        f"/api/v1/projects/{project_id}/editable-data",
+        headers=member_headers,
+    )
+    assert editable.status_code == 403
+
+    create_change_set = client.post(
+        f"/api/v1/projects/{project_id}/change-sets",
+        headers={**member_headers, "X-Idempotency-Key": "mobile-admin-boundary"},
+        json={
+            "base_version_number": 1,
+            "source": "mini_program",
+            "reason": "尝试越权修改项目基础数据",
+            "operations": [
+                {
+                    "op": "replace",
+                    "resource": "product_spec",
+                    "key": "OS版本",
+                    "value": {"item": "OS版本", "value": "Android 17"},
+                }
+            ],
+        },
+    )
+    assert create_change_set.status_code == 403
+
+
 def test_user_can_register_an_explicit_wechat_subscription_grant(
     mobile_workflow: TestClient,
 ) -> None:
@@ -385,6 +418,29 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
     )
     assert updated.status_code == 200
     assert updated.json()["revision"] == 2
+    other_invitation = _invite(client, project_id, "成员11", "invite-other-issue-owner")
+    other_headers, _ = _login(client, "dev:other-issue-owner")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=other_headers,
+        json={"invitation_token": other_invitation["invitation_token"], "phone": "13800000011"},
+    )
+    forbidden_delete = client.request(
+        "DELETE",
+        f"/api/v1/mobile/issues/{issue.json()['id']}",
+        headers={**other_headers, "X-Idempotency-Key": "mobile-issue-delete-forbidden"},
+        json={"expected_revision": 2, "reason": "越权作废"},
+    )
+    assert forbidden_delete.status_code == 403
+    deleted = client.request(
+        "DELETE",
+        f"/api/v1/mobile/issues/{issue.json()['id']}",
+        headers={**member_headers, "X-Idempotency-Key": "mobile-issue-delete"},
+        json={"expected_revision": 2, "reason": "问题已作废"},
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["status"] == "已关闭"
+    assert deleted.json()["revision"] == 3
 
     prefill = client.post(
         "/api/v1/mobile/natural-language/prefill",

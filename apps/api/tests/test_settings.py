@@ -2,6 +2,8 @@ from pathlib import Path
 
 import yaml
 
+from project_manager_api.settings import AppSettings
+
 ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -32,3 +34,27 @@ def test_example_config_does_not_contain_real_secrets() -> None:
 
     forbidden = ("sk-", "AKID", "BEGIN PRIVATE KEY")
     assert not any(value in config_text for value in forbidden)
+
+
+def test_production_channel_and_cors_settings_can_be_overridden_by_environment(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("PROJECT_MANAGER_CORS_ORIGINS", "https://pm.example.com,https://ops.example.com")
+    monkeypatch.setenv("WECHAT_SUBSCRIPTION_TEMPLATE_ID", "wechat-template")
+    monkeypatch.setenv("WECHAT_SUBSCRIPTION_TITLE_FIELD", "thing5")
+    monkeypatch.setenv("WECHAT_SUBSCRIPTION_BODY_FIELD", "thing8")
+    monkeypatch.setenv("TENCENT_SMS_REGION", "ap-shanghai")
+    monkeypatch.setenv("TENCENT_SMS_SDK_APP_ID", "1400000000")
+    monkeypatch.setenv("TENCENT_SMS_SIGN_NAME", "approved-sign")
+    monkeypatch.setenv("TENCENT_SMS_CRITICAL_TEMPLATE_ID", "1234567")
+
+    settings = AppSettings.from_environment()
+
+    assert settings.cors_origins == ["https://pm.example.com", "https://ops.example.com"]
+    assert settings.wechat_subscription_template_id == "wechat-template"
+    assert settings.wechat_subscription_title_field == "thing5"
+    assert settings.wechat_subscription_body_field == "thing8"
+    assert settings.sms_region == "ap-shanghai"
+    assert settings.sms_sdk_app_id == "1400000000"
+    assert settings.sms_sign_name == "approved-sign"
+    assert settings.sms_critical_template_id == "1234567"

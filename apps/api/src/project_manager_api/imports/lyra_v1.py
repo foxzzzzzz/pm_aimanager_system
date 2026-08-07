@@ -164,6 +164,7 @@ class LyraTemplateV1Parser:
         config = self.manifest.team
         sheet = workbook[config.sheet]
         members: list[ProjectMemberDraft] = []
+        member_indexes: dict[str, int] = {}
         for row_number in range(config.first_row, config.last_row + 1):
             values = {
                 key: _cell_text(sheet[f"{column}{row_number}"].value)
@@ -173,7 +174,28 @@ class LyraTemplateV1Parser:
                 raise WorkbookValidationError(
                     f"missing team role or owner at {config.sheet}!B{row_number}:C{row_number}"
                 )
-            members.append(ProjectMemberDraft.model_validate(values))
+            member = ProjectMemberDraft.model_validate(values)
+            existing_index = member_indexes.get(member.name)
+            if existing_index is None:
+                member_indexes[member.name] = len(members)
+                members.append(member)
+                continue
+            existing = members[existing_index]
+            if _conflicting_value(existing.phone, member.phone) or _conflicting_value(
+                existing.email, member.email
+            ):
+                raise WorkbookValidationError(
+                    f"conflicting contact details for duplicate member at "
+                    f"{config.sheet}!C{row_number}"
+                )
+            members[existing_index] = existing.model_copy(
+                update={
+                    "role": _merge_distinct(existing.role, member.role),
+                    "phone": existing.phone or member.phone,
+                    "email": existing.email or member.email,
+                    "notes": _merge_distinct(existing.notes, member.notes),
+                }
+            )
         return members
 
     def _parse_plan_versions(self, workbook: Workbook) -> list[PlanVersionDraft]:
@@ -270,8 +292,6 @@ class LyraTemplateV1Parser:
         milestones: list[MilestoneDefinition],
     ) -> None:
         member_names = [member.name for member in members]
-        if len(member_names) != len(set(member_names)):
-            raise WorkbookValidationError("duplicate team member names are not supported")
         milestone_codes = [milestone.code for milestone in milestones]
         if len(milestone_codes) != len(set(milestone_codes)):
             raise WorkbookValidationError("duplicate milestone codes in template manifest")
@@ -298,6 +318,15 @@ def _cell_text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _conflicting_value(left: str | None, right: str | None) -> bool:
+    return bool(left and right and left != right)
+
+
+def _merge_distinct(left: str | None, right: str | None) -> str | None:
+    values = [value for value in (left, right) if value]
+    return " / ".join(dict.fromkeys(values)) or None
 
 
 def _parse_plan_window(value: Any, epoch: datetime, location: str) -> PlanWindow:

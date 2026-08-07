@@ -15,6 +15,27 @@ class PublishRequest(BaseModel):
     expected_project_version: int = Field(ge=0)
 
 
+class ProjectDataOperation(BaseModel):
+    op: str = Field(pattern="^(add|replace|remove)$")
+    resource: str = Field(pattern="^(product_spec|member|milestone|plan|raci)$")
+    key: str = Field(min_length=1, max_length=255)
+    value: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_value(self) -> ProjectDataOperation:
+        if self.op == "remove" and self.value is not None:
+            raise ValueError("remove operations cannot contain value")
+        if self.op != "remove" and self.value is None:
+            raise ValueError("add and replace operations require value")
+        return self
+
+
+class ProjectChangeSetCreate(BaseModel):
+    base_version_number: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=2000)
+    operations: list[ProjectDataOperation] = Field(min_length=1, max_length=100)
+
+
 class RejectRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
 
@@ -51,6 +72,11 @@ class IssueUpdate(BaseModel):
         default=None,
         pattern="^(待处理|处理中|待验证|已解决|已关闭)$",
     )
+
+
+class IssueDelete(BaseModel):
+    expected_revision: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=2000)
 
 
 class ApiRecord(BaseModel):

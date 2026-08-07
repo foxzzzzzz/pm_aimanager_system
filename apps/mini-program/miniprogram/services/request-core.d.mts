@@ -1,4 +1,4 @@
-export type RequestMethod = "GET" | "POST" | "PATCH";
+export type RequestMethod = "GET" | "POST" | "PATCH" | "DELETE";
 export function createRequester(options: {
   baseUrl: string;
   getToken: () => string;

@@ -14,6 +14,9 @@ def test_phase0_required_files_exist() -> None:
         "docker-compose.yml",
         "scripts/check.ps1",
         "scripts/configure-local-secrets.ps1",
+        "scripts/backup.ps1",
+        "scripts/restore-test.ps1",
+        "scripts/operational-check.ps1",
         "tests/fixtures/lyra-template-v1/lyra_v1_sanitized.xlsx",
         "tests/fixtures/lyra-template-v1/expected.json",
     ]
@@ -34,6 +37,23 @@ def test_docker_build_uses_locked_runtime_dependencies_and_explicit_indexes() ->
     assert "PYPI_INDEX_URL" in compose["services"]["api"]["build"]["args"]
     assert "NPM_REGISTRY" in compose["services"]["admin-web"]["build"]["args"]
     assert "PROJECT_MANAGER_DATABASE_URL" in compose["services"]["api"]["environment"]
+    assert (
+        compose["services"]["api"]["environment"]["PROJECT_MANAGER_IMPORT_STORAGE_PATH"]
+        == "/app/tmp/imports"
+    )
     assert compose["services"]["redis"]["ports"] == ["${REDIS_HOST_PORT:-16379}:6379"]
     for service in ("postgres", "redis", "minio", "api", "admin-web"):
         assert "healthcheck" in compose["services"][service]
+    for service in ("notification-worker", "notification-beat"):
+        assert "healthcheck" in compose["services"][service]
+    required_sms_environment = {
+        "PROJECT_MANAGER_SMS_ENABLED",
+        "TENCENT_SECRET_ID",
+        "TENCENT_SECRET_KEY",
+        "TENCENT_SMS_REGION",
+        "TENCENT_SMS_SDK_APP_ID",
+        "TENCENT_SMS_SIGN_NAME",
+        "TENCENT_SMS_CRITICAL_TEMPLATE_ID",
+    }
+    for service in ("api", "notification-worker"):
+        assert required_sms_environment <= compose["services"][service]["environment"].keys()

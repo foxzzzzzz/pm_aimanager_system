@@ -35,6 +35,8 @@ export const api = {
     request<Issue>(`/mobile/projects/${projectId}/issues`, "POST", data),
   updateIssue: (issueId: string, data: WechatMiniprogram.IAnyObject) =>
     request<Issue>(`/mobile/issues/${issueId}`, "PATCH", data),
+  deleteIssue: (issueId: string, data: WechatMiniprogram.IAnyObject) =>
+    request<Issue>(`/mobile/issues/${issueId}`, "DELETE", data),
   approvableProposals: (projectId: string) =>
     request<ChangeProposal[]>(`/mobile/projects/${projectId}/change-proposals`),
   approveProposal: (proposalId: string, expectedVersion: number) =>

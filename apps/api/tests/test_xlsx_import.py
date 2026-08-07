@@ -184,6 +184,42 @@ def test_same_template_accepts_a_different_project_identity(
     assert draft.project.name == "Nova Pro"
 
 
+def test_same_person_with_multiple_team_roles_is_merged(
+    registry: ParserRegistry,
+    phase1_tmp_path: Path,
+) -> None:
+    changed = phase1_tmp_path / "multiple-roles.xlsx"
+    shutil.copyfile(WORKBOOK, changed)
+    workbook = load_workbook(changed)
+    team = workbook["项目团队构成"]
+    team["C6"] = team["C5"].value
+    team["D6"] = team["D5"].value
+    workbook.save(changed)
+
+    draft = registry.parse(changed).draft
+
+    member = next(item for item in draft.members if item.name == team["C5"].value)
+    assert member.role == f"{team['B5'].value} / {team['B6'].value}"
+    assert len(draft.members) == 21
+
+
+def test_same_person_with_conflicting_phone_numbers_is_rejected(
+    registry: ParserRegistry,
+    phase1_tmp_path: Path,
+) -> None:
+    changed = phase1_tmp_path / "conflicting-member-phone.xlsx"
+    shutil.copyfile(WORKBOOK, changed)
+    workbook = load_workbook(changed)
+    team = workbook["项目团队构成"]
+    team["C6"] = team["C5"].value
+    team["D5"] = "13800008888"
+    team["D6"] = "13900009999"
+    workbook.save(changed)
+
+    with pytest.raises(WorkbookValidationError, match="conflicting contact details"):
+        registry.parse(changed)
+
+
 def test_semantic_validation_rejects_unknown_raci_member(
     registry: ParserRegistry,
     phase1_tmp_path: Path,

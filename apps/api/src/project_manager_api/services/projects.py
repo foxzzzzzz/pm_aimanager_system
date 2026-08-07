@@ -10,21 +10,37 @@ from typing import Any
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from project_manager_api.api.schemas import IssueCreate, IssueUpdate, ProgressProposalCreate
+from project_manager_api.api.schemas import (
+    IssueCreate,
+    IssueDelete,
+    IssueUpdate,
+    ProgressProposalCreate,
+    ProjectChangeSetCreate,
+    ProjectDataOperation,
+)
 from project_manager_api.db.models import (
     AuditLog,
     BindingStatus,
     ChangeProposal,
+    ChangeSetStatus,
     ImportRecord,
     ImportStatus,
     Issue,
     IssueStatus,
     MemberBinding,
     Project,
+    ProjectChangeSet,
     ProjectMembership,
     ProjectRole,
     ProjectVersion,
     ProposalStatus,
+)
+from project_manager_api.domain.models import (
+    CanonicalProjectDraft,
+    MilestoneDefinition,
+    PlanVersionDraft,
+    ProductSpecItem,
+    ProjectMemberDraft,
 )
 from project_manager_api.imports.diff import semantic_diff
 from project_manager_api.imports.report import ParseResult
@@ -247,6 +263,177 @@ class ProjectService:
             },
         }
 
+    def review(self, project_id: uuid.UUID) -> dict[str, Any]:
+        project = self._require_project(project_id)
+        version = self._current_version(project)
+        snapshot = version.snapshot if version is not None else {}
+        active_plan_name = snapshot.get("active_plan_name")
+        active_plan = next(
+            (
+                plan
+                for plan in snapshot.get("plan_versions", [])
+                if plan.get("name") == active_plan_name
+            ),
+            None,
+        )
+        active_milestones = active_plan.get("milestones", {}) if active_plan else {}
+        milestones = [
+            {
+                "code": milestone.get("code"),
+                "name": milestone.get("name"),
+                "output": milestone.get("output"),
+                "schedule": active_milestones.get(
+                    milestone.get("name"),
+                    {"state": "tbd", "start_date": None, "end_date": None},
+                ),
+                "assignments": milestone.get("assignments", {}),
+                "risk_note": milestone.get("risk_note"),
+            }
+            for milestone in snapshot.get("milestones", [])
+        ]
+        return {
+            "current_version_number": project.current_version_number or 0,
+            "document_version": snapshot.get("document_version"),
+            "active_plan_name": active_plan_name,
+            "tbd_count": sum(
+                milestone["schedule"].get("state") == "tbd" for milestone in milestones
+            ),
+            "product_specs": snapshot.get("product_specs", []),
+            "members": [
+                {
+                    "name": member.get("name"),
+                    "role": member.get("role"),
+                    "notes": member.get("notes"),
+                }
+                for member in snapshot.get("members", [])
+            ],
+            "milestones": milestones,
+        }
+
+    def editable_data(self, project_id: uuid.UUID) -> dict[str, Any]:
+        project = self._require_project(project_id, manager=True)
+        version = self._current_version(project)
+        if version is None:
+            raise ConflictError("project has no published version")
+        return {
+            "current_version_number": project.current_version_number,
+            **copy.deepcopy(version.snapshot),
+        }
+
+    def create_change_set(
+        self, project_id: uuid.UUID, payload: ProjectChangeSetCreate
+    ) -> dict[str, Any]:
+        project = self._require_project(project_id, manager=True)
+        if project.current_version_number != payload.base_version_number:
+            raise ConflictError("change set base version is stale")
+        current = self._current_version(project)
+        if current is None:
+            raise ConflictError("project has no published version")
+        operations = [item.model_dump(mode="json") for item in payload.operations]
+        draft = copy.deepcopy(current.snapshot)
+        _apply_project_data_operations(draft, payload.operations)
+        _validate_editable_snapshot(draft, current.snapshot)
+        changes = [item.model_dump(mode="json") for item in _business_diff(current.snapshot, draft)]
+        if not changes:
+            raise ConflictError("change set does not contain business changes")
+        change_set = ProjectChangeSet(
+            project_id=project.id,
+            base_version_number=payload.base_version_number,
+            source="admin_web",
+            operations=operations,
+            diff=changes,
+            reason=payload.reason,
+            status=ChangeSetStatus.PENDING,
+            submitted_by_actor_id=self.actor_id,
+        )
+        self.session.add(change_set)
+        self.session.flush()
+        self._audit(
+            project.id,
+            "project_change_set.created",
+            "project_change_set",
+            str(change_set.id),
+            after={"operations": operations, "diff": changes},
+            reason=payload.reason,
+        )
+        return _change_set_dict(change_set)
+
+    def list_change_sets(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
+        self._require_project(project_id, manager=True)
+        query = (
+            select(ProjectChangeSet)
+            .where(ProjectChangeSet.project_id == project_id)
+            .order_by(ProjectChangeSet.created_at.desc())
+        )
+        return [_change_set_dict(item) for item in self.session.scalars(query)]
+
+    def get_change_set(self, change_set_id: uuid.UUID) -> dict[str, Any]:
+        change_set = self._require_change_set(change_set_id)
+        self._require_project(change_set.project_id, manager=True)
+        return _change_set_dict(change_set)
+
+    def publish_change_set(
+        self, change_set_id: uuid.UUID, expected_project_version: int
+    ) -> dict[str, Any]:
+        change_set = self._require_change_set(change_set_id)
+        project = self._require_project(change_set.project_id, manager=True, lock=True)
+        if change_set.status != ChangeSetStatus.PENDING:
+            raise ConflictError("change set is already resolved")
+        if (
+            project.current_version_number != expected_project_version
+            or change_set.base_version_number != expected_project_version
+        ):
+            raise ConflictError("change set base version is stale")
+        current = self._current_version(project)
+        if current is None:
+            raise ConflictError("project has no published version")
+        snapshot = copy.deepcopy(current.snapshot)
+        operations = [ProjectDataOperation.model_validate(item) for item in change_set.operations]
+        _apply_project_data_operations(snapshot, operations)
+        _validate_editable_snapshot(snapshot, current.snapshot)
+        version = ProjectVersion(
+            project_id=project.id,
+            version_number=expected_project_version + 1,
+            template_id=current.template_id,
+            template_version=current.template_version,
+            document_version=current.document_version,
+            content_sha256=_business_hash(snapshot),
+            snapshot=snapshot,
+        )
+        self.session.add(version)
+        self.session.flush()
+        project.current_version_number = version.version_number
+        change_set.status = ChangeSetStatus.PUBLISHED
+        change_set.published_by_actor_id = self.actor_id
+        change_set.resolved_at = datetime.now(UTC)
+        self._reconcile_member_bindings(project, snapshot)
+        self._audit(
+            project.id,
+            "project_change_set.published",
+            "project_change_set",
+            str(change_set.id),
+            before={"version_number": expected_project_version},
+            after={"version_number": version.version_number, "diff": change_set.diff},
+            reason=change_set.reason,
+        )
+        return _version_dict(version)
+
+    def cancel_change_set(self, change_set_id: uuid.UUID) -> dict[str, Any]:
+        change_set = self._require_change_set(change_set_id)
+        project = self._require_project(change_set.project_id, manager=True)
+        if change_set.status != ChangeSetStatus.PENDING:
+            raise ConflictError("change set is already resolved")
+        change_set.status = ChangeSetStatus.CANCELLED
+        change_set.resolved_at = datetime.now(UTC)
+        self._audit(
+            project.id,
+            "project_change_set.cancelled",
+            "project_change_set",
+            str(change_set.id),
+            reason=change_set.reason,
+        )
+        return _change_set_dict(change_set)
+
     def create_progress_proposal(
         self,
         project_id: uuid.UUID,
@@ -405,6 +592,35 @@ class ProjectService:
         self._require_project(issue.project_id, manager=True)
         return self.update_issue_as_member(issue, payload)
 
+    def delete_issue(self, issue_id: uuid.UUID, payload: IssueDelete) -> dict[str, Any]:
+        issue = self.session.get(Issue, issue_id)
+        if issue is None:
+            raise NotFoundError("issue not found")
+        self._require_project(issue.project_id, manager=True)
+        return self.delete_issue_as_member(issue, payload)
+
+    def delete_issue_as_member(
+        self, issue: Issue, payload: IssueDelete
+    ) -> dict[str, Any]:
+        if issue.revision != payload.expected_revision:
+            raise ConflictError("issue revision is stale")
+        before = _issue_dict(issue)
+        issue.status = IssueStatus.CLOSED
+        issue.revision += 1
+        issue.updated_at = datetime.now(UTC)
+        self.session.flush()
+        after = _issue_dict(issue)
+        self._audit(
+            issue.project_id,
+            "issue.deleted",
+            "issue",
+            str(issue.id),
+            before=before,
+            after=after,
+            reason=payload.reason,
+        )
+        return after
+
     def update_issue_as_member(self, issue: Issue, payload: IssueUpdate) -> dict[str, Any]:
         if issue.revision != payload.expected_revision:
             raise ConflictError("issue revision is stale")
@@ -499,6 +715,12 @@ class ProjectService:
         if record is None or record.project_id is None:
             raise NotFoundError("import not found")
         return record
+
+    def _require_change_set(self, change_set_id: uuid.UUID) -> ProjectChangeSet:
+        change_set = self.session.get(ProjectChangeSet, change_set_id)
+        if change_set is None:
+            raise NotFoundError("change set not found")
+        return change_set
 
     def _require_approval_permission(self, project: Project, milestone_code: str) -> None:
         membership = self.session.scalar(
@@ -639,6 +861,23 @@ def _proposal_dict(proposal: ChangeProposal) -> dict[str, Any]:
     }
 
 
+def _change_set_dict(change_set: ProjectChangeSet) -> dict[str, Any]:
+    return {
+        "id": str(change_set.id),
+        "project_id": str(change_set.project_id),
+        "base_version_number": change_set.base_version_number,
+        "source": change_set.source,
+        "operations": change_set.operations,
+        "diff": change_set.diff,
+        "reason": change_set.reason,
+        "status": change_set.status,
+        "submitted_by_actor_id": change_set.submitted_by_actor_id,
+        "published_by_actor_id": change_set.published_by_actor_id,
+        "created_at": change_set.created_at.isoformat(),
+        "resolved_at": change_set.resolved_at.isoformat() if change_set.resolved_at else None,
+    }
+
+
 def _issue_dict(issue: Issue) -> dict[str, Any]:
     return {
         "id": str(issue.id),
@@ -728,6 +967,126 @@ def _member_role(snapshot: dict[str, Any], member_name: str) -> str:
     if any(member_name in item.get("R", []) for item in assignments):
         return ProjectRole.RESPONSIBLE
     return ProjectRole.COLLABORATOR
+
+
+def _apply_project_data_operations(
+    snapshot: dict[str, Any], operations: list[ProjectDataOperation]
+) -> None:
+    for operation in operations:
+        if operation.value is not None:
+            allowed_fields = {
+                "product_spec": set(ProductSpecItem.model_fields),
+                "member": set(ProjectMemberDraft.model_fields),
+                "milestone": set(MilestoneDefinition.model_fields),
+                "plan": set(PlanVersionDraft.model_fields),
+                "raci": {"R", "A", "C", "I"},
+            }[operation.resource]
+            unknown_fields = sorted(set(operation.value) - allowed_fields)
+            if unknown_fields:
+                raise ConflictError(
+                    f"{operation.resource} contains unknown fields: {', '.join(unknown_fields)}"
+                )
+        if operation.resource == "raci":
+            milestone = next(
+                (
+                    item
+                    for item in snapshot.get("milestones", [])
+                    if str(item.get("code")) == operation.key
+                ),
+                None,
+            )
+            if milestone is None:
+                raise NotFoundError("milestone not found")
+            if operation.op == "remove":
+                milestone["assignments"] = {}
+            else:
+                milestone["assignments"] = copy.deepcopy(operation.value)
+            continue
+
+        collection_name, key_field = {
+            "product_spec": ("product_specs", "row_number"),
+            "member": ("members", "name"),
+            "milestone": ("milestones", "code"),
+            "plan": ("plan_versions", "name"),
+        }[operation.resource]
+        collection = snapshot.setdefault(collection_name, [])
+        index = next(
+            (
+                position
+                for position, item in enumerate(collection)
+                if str(item.get(key_field)) == operation.key
+            ),
+            None,
+        )
+        if operation.op == "add":
+            if index is not None:
+                raise ConflictError(f"{operation.resource} already exists")
+            value = copy.deepcopy(operation.value)
+            if value is None or str(value.get(key_field)) != operation.key:
+                raise ConflictError(f"{operation.resource} key does not match value")
+            collection.append(value)
+        elif operation.op == "replace":
+            if index is None:
+                raise NotFoundError(f"{operation.resource} not found")
+            value = copy.deepcopy(operation.value)
+            if value is None:
+                raise ConflictError(f"{operation.resource} replacement is missing")
+            collection[index] = value
+        else:
+            if index is None:
+                raise NotFoundError(f"{operation.resource} not found")
+            collection.pop(index)
+
+
+def _validate_editable_snapshot(
+    snapshot: dict[str, Any], baseline: dict[str, Any] | None = None
+) -> None:
+    try:
+        CanonicalProjectDraft.model_validate(snapshot)
+    except ValueError as exc:
+        raise ConflictError(f"invalid project data: {exc}") from exc
+
+    product_rows = [item.get("row_number") for item in snapshot.get("product_specs", [])]
+    if len(product_rows) != len(set(product_rows)):
+        raise ConflictError("product specification row numbers must be unique")
+    members = [str(item.get("name")) for item in snapshot.get("members", [])]
+    member_names = set(members)
+    if len(members) != len(member_names):
+        raise ConflictError("member names must be unique")
+    milestones = snapshot.get("milestones", [])
+    milestone_codes = [str(item.get("code")) for item in milestones]
+    milestone_names = [str(item.get("name")) for item in milestones]
+    if len(milestone_codes) != len(set(milestone_codes)):
+        raise ConflictError("milestone codes must be unique")
+    if len(milestone_names) != len(set(milestone_names)):
+        raise ConflictError("milestone names must be unique")
+    baseline_member_names = {
+        str(item.get("name")) for item in (baseline or {}).get("members", [])
+    }
+    baseline_unknown = {
+        name
+        for milestone in (baseline or {}).get("milestones", [])
+        for names in milestone.get("assignments", {}).values()
+        for name in names
+        if name not in baseline_member_names
+    }
+    for milestone in milestones:
+        for names in milestone.get("assignments", {}).values():
+            unknown = sorted(set(names) - member_names - baseline_unknown)
+            if unknown:
+                raise ConflictError(
+                    f"RACI references unknown members: {', '.join(unknown)}"
+                )
+    plans = snapshot.get("plan_versions", [])
+    plan_names = [str(item.get("name")) for item in plans]
+    if len(plan_names) != len(set(plan_names)):
+        raise ConflictError("plan names must be unique")
+    if snapshot.get("active_plan_name") not in set(plan_names):
+        raise ConflictError("active plan does not exist")
+    expected_milestones = set(milestone_names)
+    for plan in plans:
+        if set(plan.get("milestones", {})) != expected_milestones:
+            raise ConflictError("plan milestone references are incomplete")
 
 
 def _replace_milestone_window(

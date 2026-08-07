@@ -4,6 +4,9 @@ app:
   timezone: Asia/Shanghai
   # Logging threshold for the API and worker processes.
   log_level: INFO
+  # Browser origins allowed to call the API; replace with HTTPS origins in production.
+  cors_origins:
+    - http://localhost:15173
 
 # Database and background-job connections. Secrets may be overridden by environment variables.
 database:
@@ -107,3 +110,12 @@ sms:
   sign_name: replace-with-approved-sign
   # Approved critical-alert template identifier.
   critical_template_id: replace-with-template-id
+
+# Production monitoring thresholds consumed by the operational status endpoint.
+operations:
+  # Lookback window for failed external notification alerts.
+  notification_failure_window_hours: 24
+  # Number of failed deliveries that changes operational status to alert.
+  notification_failure_threshold: 1
+  # Pending delivery age after which the delivery is considered stuck.
+  stale_pending_minutes: 10

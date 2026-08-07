@@ -19,12 +19,13 @@ import "./styles.css";
 import type { Project } from "./types";
 
 const OverviewPage = lazy(() => import("./pages/OverviewPage"));
+const ProjectReviewPage = lazy(() => import("./pages/ProjectReviewPage"));
 const ImportPage = lazy(() => import("./pages/ImportPage"));
 const HistoryPage = lazy(() => import("./pages/HistoryPage"));
 const IssuesAuditPage = lazy(() => import("./pages/IssuesAuditPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 
-type PageKey = "overview" | "imports" | "history" | "issues" | "notifications";
+type PageKey = "overview" | "review" | "imports" | "history" | "issues" | "notifications";
 
 interface ProjectForm {
   code: string;
@@ -85,6 +86,12 @@ export function App() {
 
   const content = {
     overview: <OverviewPage project={selectedProject} />,
+    review: (
+      <ProjectReviewPage
+        project={selectedProject}
+        onPublished={() => setRefreshToken((value) => value + 1)}
+      />
+    ),
     imports: (
       <ImportPage
         project={selectedProject}
@@ -127,13 +134,14 @@ export function App() {
             onClick={({ key }) => setPage(key as PageKey)}
             items={[
               { key: "overview", label: "项目总览" },
+              { key: "review", label: "项目核对" },
               { key: "imports", label: "Excel导入" },
               { key: "history", label: "版本历史" },
               { key: "issues", label: "问题与审计" },
               { key: "notifications", label: "通知诊断" },
             ]}
           />
-          <div className="phase-badge"><Tag color="cyan">Phase 4</Tag><span>智能提醒与多通道通知</span></div>
+          <div className="phase-badge"><Tag color="cyan">Phase 5</Tag><span>真实试点与生产准备</span></div>
         </Layout.Sider>
         <Layout>
           <Layout.Header className="top-bar">

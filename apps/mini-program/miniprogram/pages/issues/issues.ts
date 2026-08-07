@@ -58,4 +58,25 @@ Page({
       wx.showToast({ title: (reason as Error).message, icon: "none" });
     }
   },
+  async deleteIssue(event: IssueTapEvent) {
+    const confirmation = await wx.showModal({
+      title: "作废问题",
+      content: "请输入作废原因",
+      editable: true,
+      placeholderText: "作废原因（必填）",
+      confirmColor: "#c53030",
+    });
+    const reason = confirmation.content?.trim();
+    if (!confirmation.confirm || !reason) return;
+    try {
+      await api.deleteIssue(event.currentTarget.dataset.id, {
+        expected_revision: event.currentTarget.dataset.revision,
+        reason,
+      });
+      this.setData({ issues: await api.issues(this.data.projectId) });
+      wx.showToast({ title: "问题已作废", icon: "success" });
+    } catch (error) {
+      wx.showToast({ title: (error as Error).message, icon: "none" });
+    }
+  },
 });

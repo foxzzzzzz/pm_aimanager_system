@@ -55,6 +55,9 @@ class AppSettings(BaseModel):
     sms_critical_template_id: str | None = None
     tencent_secret_id: str | None = None
     tencent_secret_key: str | None = None
+    operations_notification_failure_window_hours: int = 24
+    operations_notification_failure_threshold: int = 1
+    operations_stale_pending_minutes: int = 10
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:15173"])
 
     @classmethod
@@ -82,6 +85,13 @@ class AppSettings(BaseModel):
         security = config["security"]
         notifications = config["notifications"]
         sms = config["sms"]
+        operations = config["operations"]
+        configured_origins = os.environ.get("PROJECT_MANAGER_CORS_ORIGINS")
+        cors_origins = (
+            [origin.strip() for origin in configured_origins.split(",") if origin.strip()]
+            if configured_origins is not None
+            else [str(origin) for origin in config["app"]["cors_origins"]]
+        )
         return cls(
             database_url=database_url,
             manifest_paths=manifest_paths,
@@ -132,17 +142,33 @@ class AppSettings(BaseModel):
             notification_daily_external_limit=int(
                 notifications["daily_external_message_limit"]
             ),
-            wechat_subscription_template_id=wechat.get("subscription_template_id"),
-            wechat_subscription_title_field=str(wechat["subscription_title_field"]),
-            wechat_subscription_body_field=str(wechat["subscription_body_field"]),
+            wechat_subscription_template_id=os.environ.get(
+                "WECHAT_SUBSCRIPTION_TEMPLATE_ID", wechat.get("subscription_template_id")
+            ),
+            wechat_subscription_title_field=os.environ.get(
+                "WECHAT_SUBSCRIPTION_TITLE_FIELD", str(wechat["subscription_title_field"])
+            ),
+            wechat_subscription_body_field=os.environ.get(
+                "WECHAT_SUBSCRIPTION_BODY_FIELD", str(wechat["subscription_body_field"])
+            ),
             sms_enabled=os.environ.get("PROJECT_MANAGER_SMS_ENABLED", str(sms["enabled"])).lower()
             == "true",
-            sms_region=str(sms["region"]),
-            sms_sdk_app_id=str(sms["sdk_app_id"]),
-            sms_sign_name=str(sms["sign_name"]),
-            sms_critical_template_id=str(sms["critical_template_id"]),
+            sms_region=os.environ.get("TENCENT_SMS_REGION", str(sms["region"])),
+            sms_sdk_app_id=os.environ.get("TENCENT_SMS_SDK_APP_ID", str(sms["sdk_app_id"])),
+            sms_sign_name=os.environ.get("TENCENT_SMS_SIGN_NAME", str(sms["sign_name"])),
+            sms_critical_template_id=os.environ.get(
+                "TENCENT_SMS_CRITICAL_TEMPLATE_ID", str(sms["critical_template_id"])
+            ),
             tencent_secret_id=os.environ.get("TENCENT_SECRET_ID"),
             tencent_secret_key=os.environ.get("TENCENT_SECRET_KEY"),
+            operations_notification_failure_window_hours=int(
+                operations["notification_failure_window_hours"]
+            ),
+            operations_notification_failure_threshold=int(
+                operations["notification_failure_threshold"]
+            ),
+            operations_stale_pending_minutes=int(operations["stale_pending_minutes"]),
+            cors_origins=cors_origins,
         )
 
 

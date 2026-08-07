@@ -178,6 +178,30 @@ def test_import_diff_publish_history_and_dashboard(workflow: tuple[TestClient, P
     assert [item["version_number"] for item in versions.json()] == [1]
 
 
+def test_project_review_exposes_specs_roles_raci_and_tbd_without_contacts(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+
+    response = client.get(f"/api/v1/projects/{project_id}/review", headers=PM_HEADERS)
+
+    assert response.status_code == 200
+    review = response.json()
+    assert review["current_version_number"] == 1
+    assert len(review["product_specs"]) == 70
+    assert review["product_specs"][0]["item"]
+    assert len(review["members"]) == 22
+    assert review["members"][0]["role"] == "项目经理"
+    assert "phone" not in review["members"][0]
+    assert "email" not in review["members"][0]
+    assert len(review["milestones"]) == 24
+    assert review["tbd_count"] == 3
+    tbd = next(item for item in review["milestones"] if item["schedule"]["state"] == "tbd")
+    assert tbd["assignments"]["R"]
+    assert tbd["assignments"]["A"]
+
+
 def test_duplicate_file_does_not_create_duplicate_official_version(
     workflow: tuple[TestClient, Path],
 ) -> None:
@@ -450,7 +474,7 @@ def test_issue_updates_require_current_revision_and_create_audit(
             "due_date": "2026-08-20",
         },
     )
-    assert created.status_code == 201
+    assert created.status_code == 201, created.json()
 
     updated = client.patch(
         f"/api/v1/issues/{created.json()['id']}",
@@ -470,3 +494,355 @@ def test_issue_updates_require_current_revision_and_create_audit(
     assert issues.json()[0]["status"] == "处理中"
     audit = client.get(f"/api/v1/projects/{project_id}/audit-logs", headers=PM_HEADERS)
     assert "issue.updated" in [item["action"] for item in audit.json()]
+
+    deleted = client.request(
+        "DELETE",
+        f"/api/v1/issues/{created.json()['id']}",
+        headers=_headers("issue-delete"),
+        json={"expected_revision": 2, "reason": "问题记录作废"},
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["status"] == "已关闭"
+    assert deleted.json()["revision"] == 3
+    audit = client.get(f"/api/v1/projects/{project_id}/audit-logs", headers=PM_HEADERS)
+    assert "issue.deleted" in [item["action"] for item in audit.json()]
+
+
+def test_admin_change_set_crud_publishes_one_immutable_version(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    editable = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM_HEADERS
+    )
+    assert editable.status_code == 200
+    assert editable.json()["current_version_number"] == 1
+    original_specs = editable.json()["product_specs"]
+    first = original_specs[0]
+    removed = original_specs[1]
+
+    created = client.post(
+        f"/api/v1/projects/{project_id}/change-sets",
+        headers=_headers("change-set-spec-crud"),
+        json={
+            "base_version_number": 1,
+            "reason": "项目核对修正产品规格",
+            "operations": [
+                {
+                    "op": "replace",
+                    "resource": "product_spec",
+                    "key": str(first["row_number"]),
+                    "value": {**first, "configuration": "Web修正值"},
+                },
+                {
+                    "op": "remove",
+                    "resource": "product_spec",
+                    "key": str(removed["row_number"]),
+                },
+                {
+                    "op": "add",
+                    "resource": "product_spec",
+                    "key": "999",
+                    "value": {
+                        "row_number": 999,
+                        "major_category": "新增大类",
+                        "category": "新增分类",
+                        "item": "Web新增规格",
+                        "configuration": "新增值",
+                        "core_information": None,
+                        "selected_model": None,
+                        "notes": None,
+                        "check_confirmation": None,
+                        "check_content": None,
+                    },
+                },
+            ],
+        },
+    )
+
+    assert created.status_code == 201, created.json()
+    assert created.json()["status"] == "pending"
+    assert created.json()["diff"]
+    published = client.post(
+        f"/api/v1/change-sets/{created.json()['id']}/publish",
+        headers=_headers("publish-spec-crud"),
+        json={"expected_project_version": 1},
+    )
+    assert published.status_code == 200
+    assert published.json()["version_number"] == 2
+
+    current = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM_HEADERS
+    ).json()
+    by_row = {item["row_number"]: item for item in current["product_specs"]}
+    assert by_row[first["row_number"]]["configuration"] == "Web修正值"
+    assert removed["row_number"] not in by_row
+    assert by_row[999]["item"] == "Web新增规格"
+    versions = client.get(f"/api/v1/projects/{project_id}/versions", headers=PM_HEADERS)
+    assert [item["version_number"] for item in versions.json()] == [1, 2]
+
+
+def test_change_set_rejects_dangling_member_reference_and_stale_baseline(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    editable = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM_HEADERS
+    ).json()
+    referenced_name = next(
+        name
+        for milestone in editable["milestones"]
+        for names in milestone["assignments"].values()
+        for name in names
+    )
+
+    invalid = client.post(
+        f"/api/v1/projects/{project_id}/change-sets",
+        headers=_headers("remove-referenced-member"),
+        json={
+            "base_version_number": 1,
+            "reason": "验证成员引用保护",
+            "operations": [
+                {"op": "remove", "resource": "member", "key": referenced_name}
+            ],
+        },
+    )
+    assert invalid.status_code == 409
+    assert "RACI" in invalid.json()["detail"]
+
+    winner_response = client.post(
+        f"/api/v1/projects/{project_id}/change-sets",
+        headers=_headers("winner-change-set"),
+        json={
+            "base_version_number": 1,
+            "reason": "创建新版本",
+            "operations": [
+                {
+                    "op": "replace",
+                    "resource": "product_spec",
+                    "key": str(editable["product_specs"][0]["row_number"]),
+                    "value": {
+                        **editable["product_specs"][0],
+                        "notes": "winner",
+                    },
+                }
+            ],
+        },
+    )
+    assert winner_response.status_code == 201, winner_response.json()
+    winner = winner_response.json()
+    assert client.post(
+        f"/api/v1/change-sets/{winner['id']}/publish",
+        headers=_headers("publish-winner-change-set"),
+        json={"expected_project_version": 1},
+    ).status_code == 200
+
+    stale = client.post(
+        f"/api/v1/projects/{project_id}/change-sets",
+        headers=_headers("stale-change-set"),
+        json={
+            "base_version_number": 1,
+            "reason": "过期基线",
+            "operations": [
+                {
+                    "op": "replace",
+                    "resource": "product_spec",
+                    "key": str(editable["product_specs"][0]["row_number"]),
+                    "value": editable["product_specs"][0],
+                }
+            ],
+        },
+    )
+    assert stale.status_code == 409
+
+
+def test_change_set_rejects_unknown_resource_fields(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    editable = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM_HEADERS
+    ).json()
+    spec = editable["product_specs"][0]
+
+    response = client.post(
+        f"/api/v1/projects/{project_id}/change-sets",
+        headers=_headers("unknown-change-set-field"),
+        json={
+            "base_version_number": 1,
+            "reason": "验证字段白名单",
+            "operations": [
+                {
+                    "op": "replace",
+                    "resource": "product_spec",
+                    "key": str(spec["row_number"]),
+                    "value": {**spec, "unexpected": "must not persist"},
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 409
+    assert "unknown fields" in response.json()["detail"]
+
+
+def test_cancelled_change_set_does_not_publish(workflow: tuple[TestClient, Path]) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    editable = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM_HEADERS
+    ).json()
+    spec = editable["product_specs"][0]
+    created_response = client.post(
+        f"/api/v1/projects/{project_id}/change-sets",
+        headers=_headers("cancelled-change-set"),
+        json={
+            "base_version_number": 1,
+            "reason": "取消不应发布",
+            "operations": [
+                {
+                    "op": "replace",
+                    "resource": "product_spec",
+                    "key": str(spec["row_number"]),
+                    "value": {**spec, "notes": "should-not-publish"},
+                }
+            ],
+        },
+    )
+    assert created_response.status_code == 201, created_response.json()
+    created = created_response.json()
+
+    cancelled = client.post(
+        f"/api/v1/change-sets/{created['id']}/cancel",
+        headers=_headers("cancel-change-set"),
+    )
+
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    dashboard = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM_HEADERS)
+    assert dashboard.json()["current_version_number"] == 1
+
+
+def test_change_set_atomically_removes_member_and_all_raci_references(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    editable = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM_HEADERS
+    ).json()
+    referenced_name = next(
+        name
+        for milestone in editable["milestones"]
+        for names in milestone["assignments"].values()
+        for name in names
+        if name in {member["name"] for member in editable["members"]}
+    )
+    operations = [
+        {
+            "op": "replace",
+            "resource": "raci",
+            "key": milestone["code"],
+            "value": {
+                role: [name for name in names if name != referenced_name]
+                for role, names in milestone["assignments"].items()
+            },
+        }
+        for milestone in editable["milestones"]
+        if any(referenced_name in names for names in milestone["assignments"].values())
+    ]
+    operations.append(
+        {"op": "remove", "resource": "member", "key": referenced_name}
+    )
+
+    created = client.post(
+        f"/api/v1/projects/{project_id}/change-sets",
+        headers=_headers("remove-member-and-raci"),
+        json={
+            "base_version_number": 1,
+            "reason": "成员离项并移除RACI引用",
+            "operations": operations,
+        },
+    )
+    assert created.status_code == 201, created.json()
+    published = client.post(
+        f"/api/v1/change-sets/{created.json()['id']}/publish",
+        headers=_headers("publish-remove-member-and-raci"),
+        json={"expected_project_version": 1},
+    )
+    assert published.status_code == 200
+
+    current = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM_HEADERS
+    ).json()
+    assert referenced_name not in {member["name"] for member in current["members"]}
+    assert all(
+        referenced_name not in names
+        for milestone in current["milestones"]
+        for names in milestone["assignments"].values()
+    )
+
+
+def test_change_set_adds_milestone_to_every_plan_version(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    editable = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM_HEADERS
+    ).json()
+    window = {"state": "tbd", "start_date": None, "end_date": None}
+    operations: list[dict[str, Any]] = [
+        {
+            "op": "add",
+            "resource": "milestone",
+            "key": "M99",
+            "value": {
+                "code": "M99",
+                "name": "Web验收节点",
+                "output": "验收记录",
+                "actual_completion": window,
+                "variance_days": None,
+                "variance_note": None,
+                "risk_note": None,
+                "assignments": {"R": [], "A": [], "C": [], "I": []},
+            },
+        }
+    ]
+    operations.extend(
+        {
+            "op": "replace",
+            "resource": "plan",
+            "key": plan["name"],
+            "value": {
+                **plan,
+                "milestones": {**plan["milestones"], "Web验收节点": window},
+            },
+        }
+        for plan in editable["plan_versions"]
+    )
+    created = client.post(
+        f"/api/v1/projects/{project_id}/change-sets",
+        headers=_headers("add-milestone-all-plans"),
+        json={
+            "base_version_number": 1,
+            "reason": "新增验收节点",
+            "operations": operations,
+        },
+    )
+    assert created.status_code == 201, created.json()
+    assert client.post(
+        f"/api/v1/change-sets/{created.json()['id']}/publish",
+        headers=_headers("publish-add-milestone"),
+        json={"expected_project_version": 1},
+    ).status_code == 200
+    current = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM_HEADERS
+    ).json()
+    assert "M99" in {item["code"] for item in current["milestones"]}
+    assert all(
+        "Web验收节点" in plan["milestones"] for plan in current["plan_versions"]
+    )

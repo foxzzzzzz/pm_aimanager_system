@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from project_manager_api.api.schemas import (
     InvitationAccept,
     IssueCreate,
+    IssueDelete,
     IssueUpdate,
     MemberInvitationCreate,
     MilestoneUpdateCreate,
@@ -381,6 +382,17 @@ class MobileService:
         if payload.owner_name is not None and payload.owner_name != issue.owner_name:
             raise ForbiddenError("the issue owner cannot reassign ownership")
         return ProjectService(self.session, _actor_id(self._user())).update_issue_as_member(
+            issue, payload
+        )
+
+    def delete_issue(self, issue_id: uuid.UUID, payload: IssueDelete) -> dict[str, Any]:
+        issue = self.session.get(Issue, issue_id)
+        if issue is None:
+            raise NotFoundError("issue not found")
+        _, binding, _ = self._bound_project(issue.project_id)
+        if binding.member_name != issue.owner_name:
+            raise ForbiddenError("only the issue owner can delete this issue")
+        return ProjectService(self.session, _actor_id(self._user())).delete_issue_as_member(
             issue, payload
         )
 
