@@ -1,15 +1,31 @@
 import { api } from "../../services/api";
-import type { MobileDashboard } from "../../types";
-import type { ChangeProposal } from "../../types";
+import { runtimeConfig } from "../../config";
+import {
+  buildMilestoneFilters,
+  filterMilestones,
+} from "../../services/milestone-view.js";
+import type { MilestoneFilterKey } from "../../services/milestone-view.js";
+import type { ChangeProposal, Milestone, MobileDashboard } from "../../types";
 
 interface MilestoneTapEvent { currentTarget: { dataset: { code: string } } }
 interface ProposalTapEvent { currentTarget: { dataset: { id: string; version: number } } }
+interface FilterTapEvent { currentTarget: { dataset: { key: MilestoneFilterKey } } }
+
+const localDateText = () => {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+};
 
 Page({
   data: {
     projectId: "",
     dashboard: null as MobileDashboard | null,
     proposals: [] as ChangeProposal[],
+    milestoneFilters: [] as ReturnType<typeof buildMilestoneFilters>,
+    visibleMilestones: [] as Milestone[],
+    selectedMilestoneFilter: "todo" as MilestoneFilterKey,
     loading: true,
     resolvingProposalId: "",
   },
@@ -24,13 +40,38 @@ Page({
         api.dashboard(this.data.projectId),
         api.approvableProposals(this.data.projectId),
       ]);
-      this.setData({ dashboard, proposals });
+      const today = localDateText();
+      const upcomingDays = runtimeConfig.milestoneUpcomingDays;
+      this.setData({
+        dashboard,
+        proposals,
+        milestoneFilters: buildMilestoneFilters(dashboard.milestones, today, upcomingDays),
+        visibleMilestones: filterMilestones(
+          dashboard.milestones,
+          this.data.selectedMilestoneFilter,
+          today,
+          upcomingDays,
+        ),
+      });
       wx.setStorageSync("current_member_name", dashboard.member_name);
     } catch {
       wx.showToast({ title: "看板加载失败", icon: "none" });
     } finally {
       this.setData({ loading: false });
     }
+  },
+  selectMilestoneFilter(event: FilterTapEvent) {
+    if (!this.data.dashboard) return;
+    const selectedMilestoneFilter = event.currentTarget.dataset.key;
+    this.setData({
+      selectedMilestoneFilter,
+      visibleMilestones: filterMilestones(
+        this.data.dashboard.milestones,
+        selectedMilestoneFilter,
+        localDateText(),
+        runtimeConfig.milestoneUpcomingDays,
+      ),
+    });
   },
   updateMilestone(event: MilestoneTapEvent) {
     if (!this.data.dashboard) return;

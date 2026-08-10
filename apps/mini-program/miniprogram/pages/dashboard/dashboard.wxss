@@ -6,3 +6,19 @@
 .milestone button { margin: 18rpx 0 0; color: #146c5a; }
 .proposal-actions { display: flex; gap: 16rpx; }
 .proposal-actions button { margin-right: 0; }
+.milestone-filters { width: 100%; margin-bottom: 20rpx; white-space: nowrap; }
+.milestone-filter-list { display: inline-flex; gap: 12rpx; padding: 2rpx; }
+.milestone-filter {
+  min-width: auto;
+  margin: 0;
+  padding: 0 24rpx;
+  border: 1rpx solid #c9ddd8;
+  border-radius: 30rpx;
+  background: #fff;
+  color: #53635f;
+  font-size: 24rpx;
+  line-height: 56rpx;
+}
+.milestone-filter::after { border: 0; }
+.milestone-filter.active { background: #146c5a; color: #fff; }
+.empty-state { color: #6f7b78; text-align: center; }

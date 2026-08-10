@@ -13,7 +13,19 @@
       <button size="mini" type="warn" loading="{{resolvingProposalId === item.id}}" disabled="{{resolvingProposalId !== ''}}" data-id="{{item.id}}" bindtap="rejectProposal">驳回</button>
     </view>
   </view>
-  <view wx:for="{{dashboard.milestones}}" wx:key="code" class="card milestone">
+  <scroll-view class="milestone-filters" scroll-x enhanced show-scrollbar="{{false}}">
+    <view class="milestone-filter-list">
+      <button
+        wx:for="{{milestoneFilters}}"
+        wx:key="key"
+        class="milestone-filter {{selectedMilestoneFilter === item.key ? 'active' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="selectMilestoneFilter"
+      >{{item.label}} {{item.count}}</button>
+    </view>
+  </scroll-view>
+  <view wx:if="{{visibleMilestones.length === 0}}" class="card empty-state">当前分类暂无节点</view>
+  <view wx:for="{{visibleMilestones}}" wx:key="code" class="card milestone">
     <view class="row">
       <text class="code">{{item.code}}</text>
       <text class="name">{{item.name}}</text>
