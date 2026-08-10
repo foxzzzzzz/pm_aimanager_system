@@ -1,4 +1,5 @@
 <view class="page">
+  <view wx:if="{{loading}}" class="card loading-state">正在加载项目资料…</view>
   <view wx:if="{{review}}" class="card review-summary">
     <text class="title">项目资料</text>
     <text class="muted">正式版本 v{{review.current_version_number}} · {{review.active_plan_name}}</text>
@@ -11,7 +12,8 @@
     <button class="tab {{activeTab === 'raci' ? 'active' : ''}}" data-tab="raci" bindtap="selectTab">RACI</button>
   </view>
 
-  <view wx:if="{{activeTab === 'specs'}}">
+  <view wx:if="{{review && activeTab === 'specs'}}">
+    <view wx:if="{{!loading && specs.length === 0}}" class="card empty-state">暂无产品规格</view>
     <view wx:for="{{specs}}" wx:key="row_number" class="card item-card">
       <text class="item-title">{{item.item}}</text>
       <text class="muted">{{item.major_category || item.category || '未分类'}}</text>
@@ -20,7 +22,8 @@
     </view>
   </view>
 
-  <view wx:if="{{activeTab === 'members'}}">
+  <view wx:if="{{review && activeTab === 'members'}}">
+    <view wx:if="{{!loading && members.length === 0}}" class="card empty-state">暂无团队成员</view>
     <view wx:for="{{members}}" wx:key="name" class="card item-card">
       <text class="item-title">{{item.name}}</text>
       <text class="role">{{item.role}}</text>
@@ -28,7 +31,8 @@
     </view>
   </view>
 
-  <view wx:if="{{activeTab === 'raci'}}">
+  <view wx:if="{{review && activeTab === 'raci'}}">
+    <view wx:if="{{!loading && raciRows.length === 0}}" class="card empty-state">暂无RACI数据</view>
     <view wx:for="{{raciRows}}" wx:key="code" wx:for-item="milestone" class="card item-card">
       <view class="milestone-title">
         <text class="code">{{milestone.code}}</text>

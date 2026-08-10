@@ -12,6 +12,7 @@ Page({
       wx.redirectTo({ url: "/pages/index/index" });
       return;
     }
+    this.setData({ loading: true });
     try {
       this.setData({ projects: await api.projects() });
     } catch {

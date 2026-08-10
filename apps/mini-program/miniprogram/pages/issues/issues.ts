@@ -1,10 +1,22 @@
 import { api } from "../../services/api";
 import { validateIssueCreate } from "../../services/form-validation.js";
+import { formatDate, labelSeverity } from "../../services/presentation.js";
 import type { Issue } from "../../types";
 
 interface InputEvent { detail: { value: string } }
 interface PickerEvent { detail: { value: string } }
 interface IssueTapEvent { currentTarget: { dataset: { id: string; revision: number } } }
+
+interface IssueView extends Issue {
+  severityLabel: string;
+  dueDateLabel: string;
+}
+
+const presentIssues = (issues: Issue[]): IssueView[] => issues.map((issue) => ({
+  ...issue,
+  severityLabel: labelSeverity(issue.severity),
+  dueDateLabel: formatDate(issue.due_date),
+}));
 
 Page({
   data: {
@@ -12,7 +24,7 @@ Page({
     projectCode: "",
     projectName: "",
     currentMemberName: "",
-    issues: [] as Issue[],
+    issues: [] as IssueView[],
     description: "",
     impact: "",
     ownerName: "",
@@ -26,6 +38,7 @@ Page({
     editingRevision: 0,
     creating: false,
     actionIssueId: "",
+    loading: false,
   },
   async onShow() {
     const projectId = wx.getStorageSync<string>("current_project_id");
@@ -37,12 +50,19 @@ Page({
       projectName: wx.getStorageSync<string>("current_project_name"),
       currentMemberName,
       ownerName: projectChanged ? currentMemberName : this.data.ownerName || currentMemberName,
+      issues: projectChanged ? [] : this.data.issues,
     });
-    if (!projectId) return;
+    if (!projectId) {
+      this.setData({ loading: false, issues: [] });
+      return;
+    }
+    this.setData({ loading: true });
     try {
-      this.setData({ issues: await api.issues(projectId) });
+      this.setData({ issues: presentIssues(await api.issues(projectId)) });
     } catch {
       wx.showToast({ title: "问题加载失败", icon: "none" });
+    } finally {
+      this.setData({ loading: false });
     }
   },
   onDescription(event: InputEvent) { this.setData({ description: event.detail.value }); },
@@ -107,7 +127,7 @@ Page({
         });
       }
       this.cancelEdit();
-      this.setData({ issues: await api.issues(this.data.projectId) });
+      this.setData({ issues: presentIssues(await api.issues(this.data.projectId)) });
       wx.showToast({ title: isEditing ? "问题已更新" : "问题已登记", icon: "success" });
     } catch (error) {
       wx.showToast({ title: (error as Error).message, icon: "none" });
@@ -123,7 +143,7 @@ Page({
         expected_revision: event.currentTarget.dataset.revision,
         status: "处理中",
       });
-      this.setData({ issues: await api.issues(this.data.projectId) });
+      this.setData({ issues: presentIssues(await api.issues(this.data.projectId)) });
     } catch (reason) {
       wx.showToast({ title: (reason as Error).message, icon: "none" });
     } finally {
@@ -147,7 +167,7 @@ Page({
         expected_revision: event.currentTarget.dataset.revision,
         reason,
       });
-      this.setData({ issues: await api.issues(this.data.projectId) });
+      this.setData({ issues: presentIssues(await api.issues(this.data.projectId)) });
       wx.showToast({ title: "问题已作废", icon: "success" });
     } catch (error) {
       wx.showToast({ title: (error as Error).message, icon: "none" });

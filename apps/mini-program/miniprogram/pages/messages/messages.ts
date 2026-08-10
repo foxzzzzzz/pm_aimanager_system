@@ -1,24 +1,42 @@
 import { api } from "../../services/api";
 import type { Message } from "../../types";
 import { runtimeConfig } from "../../config";
+import { formatDateTime, labelMessageType } from "../../services/presentation.js";
 
 interface MessageTapEvent { currentTarget: { dataset: { id: string } } }
 
 const subscriptionConfigured = runtimeConfig.subscriptionTemplateId !== "replace-with-template-id";
 
+interface MessageView extends Message {
+  typeLabel: string;
+  createdAtLabel: string;
+}
+
+const presentMessages = (messages: Message[]): MessageView[] => messages.map((message) => ({
+  ...message,
+  typeLabel: labelMessageType(message.type),
+  createdAtLabel: formatDateTime(
+    message.created_at,
+    runtimeConfig.presentationTimezoneOffsetMinutes,
+  ),
+}));
+
 Page({
-  data: { messages: [] as Message[], subscriptionConfigured },
+  data: { messages: [] as MessageView[], subscriptionConfigured, loading: true },
   async onShow() {
+    this.setData({ loading: true });
     try {
-      this.setData({ messages: await api.messages() });
+      this.setData({ messages: presentMessages(await api.messages()) });
     } catch {
       wx.showToast({ title: "消息加载失败", icon: "none" });
+    } finally {
+      this.setData({ loading: false });
     }
   },
   async markRead(event: MessageTapEvent) {
     try {
       await api.markMessageRead(event.currentTarget.dataset.id);
-      this.setData({ messages: await api.messages() });
+      this.setData({ messages: presentMessages(await api.messages()) });
     } catch (reason) {
       wx.showToast({ title: (reason as Error).message, icon: "none" });
     }

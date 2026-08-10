@@ -53,3 +53,14 @@ page {
   background: #dff2ec;
   font-size: 22rpx;
 }
+
+.loading-state,
+.empty-state {
+  padding: 48rpx 30rpx;
+  color: #63716d;
+  text-align: center;
+}
+
+button.primary::after {
+  border: 0;
+}

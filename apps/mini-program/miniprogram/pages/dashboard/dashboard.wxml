@@ -1,4 +1,7 @@
-<view class="page" wx:if="{{dashboard}}">
+<view class="page" wx:if="{{loading}}">
+  <view class="card loading-state">正在加载项目看板…</view>
+</view>
+<view class="page" wx:elif="{{dashboard}}">
   <view class="card summary">
     <text class="tag">{{dashboard.project.code}}</text>
     <text class="title">{{dashboard.project.name}}</text>
@@ -30,9 +33,12 @@
     <view class="row">
       <text class="code">{{item.code}}</text>
       <text class="name">{{item.name}}</text>
-      <text wx:if="{{item.actual_completion.end_date}}" class="done">已完成</text>
+      <text wx:if="{{item.statusLabel}}" class="done">{{item.statusLabel}}</text>
     </view>
-    <text class="muted">计划：{{item.plan.start_date || item.plan.state}} → {{item.plan.end_date || item.plan.state}}</text>
+    <text class="muted">计划：{{item.planLabel}}</text>
     <button wx:if="{{item.can_update}}" size="mini" data-code="{{item.code}}" bindtap="updateMilestone">更新节点</button>
   </view>
+</view>
+<view class="page" wx:else>
+  <view class="card empty-state">项目看板暂不可用，请稍后重试。</view>
 </view>

@@ -2,8 +2,8 @@
   <view class="card">
     <text class="title">{{code}} 节点更新</text>
     <view class="switches">
-      <button size="mini" class="{{kind === 'completed' ? 'selected' : ''}}" bindtap="chooseCompleted">completed 完成</button>
-      <button size="mini" class="{{kind === 'delay' ? 'selected' : ''}}" bindtap="chooseDelay">delay 延期</button>
+      <button size="mini" class="{{kind === 'completed' ? 'selected' : ''}}" bindtap="chooseCompleted">标记完成</button>
+      <button size="mini" class="{{kind === 'delay' ? 'selected' : ''}}" bindtap="chooseDelay">申请延期</button>
     </view>
     <picker wx:if="{{kind === 'completed'}}" mode="date" bindchange="onDate"><view class="field">实际完成日期：{{date || '请选择'}}</view></picker>
     <block wx:else>

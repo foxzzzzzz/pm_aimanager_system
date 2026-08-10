@@ -158,3 +158,26 @@ test("mini program accepts invitation tokens from links and mini-program code sc
   assert.match(indexSource, /options\.invitation/);
   assert.match(indexSource, /options\.scene/);
 });
+
+test("mini program pages expose loading and localized presentation states", async () => {
+  const templates = await Promise.all(
+    ["projects", "dashboard", "project-review", "issues", "messages"].map((page) =>
+      readFile(
+        new URL(`../miniprogram/pages/${page}/${page}.wxml`, import.meta.url),
+        "utf8",
+      ),
+    ),
+  );
+  const allTemplates = templates.join("\n");
+  const updateTemplate = await readFile(
+    new URL("../miniprogram/pages/milestone-update/milestone-update.wxml", import.meta.url),
+    "utf8",
+  );
+
+  for (const template of templates) assert.match(template, /loading/);
+  assert.doesNotMatch(
+    allTemplates,
+    /\{\{item\.(?:type|severity|created_at)\}\}|item\.plan\.state/,
+  );
+  assert.doesNotMatch(updateTemplate, /completed 完成|delay 延期/);
+});

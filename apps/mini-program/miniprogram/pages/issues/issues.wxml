@@ -19,11 +19,13 @@
       <button class="primary" loading="{{creating}}" disabled="{{creating}}" bindtap="createIssue">{{editingIssueId ? '保存问题修改' : '登记问题'}}</button>
       <button wx:if="{{editingIssueId}}" disabled="{{creating}}" bindtap="cancelEdit">取消编辑</button>
     </view>
-    <view wx:for="{{issues}}" wx:key="id" class="card">
+    <view wx:if="{{loading}}" class="card loading-state">正在加载问题…</view>
+    <view wx:if="{{!loading && issues.length === 0}}" class="card empty-state">当前项目暂无重难点问题</view>
+    <view wx:if="{{!loading}}" wx:for="{{issues}}" wx:key="id" class="card">
       <text class="tag">{{item.status}}</text>
       <text class="issue-title">{{item.description}}</text>
       <text class="muted">影响：{{item.impact}}</text>
-      <text class="muted">{{item.owner_name}} · {{item.severity}} · {{item.due_date}}</text>
+      <text class="muted">{{item.owner_name}} · {{item.severityLabel}} · {{item.dueDateLabel}}</text>
       <button wx:if="{{item.owner_name === currentMemberName && item.status !== '已关闭'}}" disabled="{{actionIssueId !== ''}}" size="mini" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="editIssue">编辑</button>
       <button wx:if="{{item.owner_name === currentMemberName && item.status === '待处理'}}" loading="{{actionIssueId === item.id}}" disabled="{{actionIssueId !== ''}}" size="mini" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="startIssue">开始处理</button>
       <button wx:if="{{item.owner_name === currentMemberName && item.status !== '已关闭'}}" loading="{{actionIssueId === item.id}}" disabled="{{actionIssueId !== ''}}" type="warn" size="mini" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="deleteIssue">作废问题</button>

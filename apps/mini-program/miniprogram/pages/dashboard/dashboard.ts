@@ -4,12 +4,18 @@ import {
   buildMilestoneFilters,
   filterMilestones,
 } from "../../services/milestone-view.js";
+import { labelPlanState, presentPlan } from "../../services/presentation.js";
 import type { MilestoneFilterKey } from "../../services/milestone-view.js";
 import type { ChangeProposal, Milestone, MobileDashboard } from "../../types";
 
 interface MilestoneTapEvent { currentTarget: { dataset: { code: string } } }
 interface ProposalTapEvent { currentTarget: { dataset: { id: string; version: number } } }
 interface FilterTapEvent { currentTarget: { dataset: { key: MilestoneFilterKey } } }
+
+interface MilestoneView extends Milestone {
+  planLabel: string;
+  statusLabel: string;
+}
 
 const localDateText = () => {
   const now = new Date();
@@ -18,13 +24,23 @@ const localDateText = () => {
   return `${now.getFullYear()}-${month}-${day}`;
 };
 
+const presentMilestones = (milestones: Milestone[]): MilestoneView[] => milestones.map((item) => ({
+  ...item,
+  planLabel: presentPlan(item.plan),
+  statusLabel: item.actual_completion.end_date
+    ? "已完成"
+    : item.plan && item.plan.state !== "scheduled"
+      ? labelPlanState(item.plan.state)
+      : "",
+}));
+
 Page({
   data: {
     projectId: "",
     dashboard: null as MobileDashboard | null,
     proposals: [] as ChangeProposal[],
     milestoneFilters: [] as ReturnType<typeof buildMilestoneFilters>,
-    visibleMilestones: [] as Milestone[],
+    visibleMilestones: [] as MilestoneView[],
     selectedMilestoneFilter: "todo" as MilestoneFilterKey,
     loading: true,
     resolvingProposalId: "",
@@ -46,11 +62,13 @@ Page({
         dashboard,
         proposals,
         milestoneFilters: buildMilestoneFilters(dashboard.milestones, today, upcomingDays),
-        visibleMilestones: filterMilestones(
-          dashboard.milestones,
-          this.data.selectedMilestoneFilter,
-          today,
-          upcomingDays,
+        visibleMilestones: presentMilestones(
+          filterMilestones(
+            dashboard.milestones,
+            this.data.selectedMilestoneFilter,
+            today,
+            upcomingDays,
+          ),
         ),
       });
       wx.setStorageSync("current_member_name", dashboard.member_name);
@@ -65,11 +83,13 @@ Page({
     const selectedMilestoneFilter = event.currentTarget.dataset.key;
     this.setData({
       selectedMilestoneFilter,
-      visibleMilestones: filterMilestones(
-        this.data.dashboard.milestones,
-        selectedMilestoneFilter,
-        localDateText(),
-        runtimeConfig.milestoneUpcomingDays,
+      visibleMilestones: presentMilestones(
+        filterMilestones(
+          this.data.dashboard.milestones,
+          selectedMilestoneFilter,
+          localDateText(),
+          runtimeConfig.milestoneUpcomingDays,
+        ),
       ),
     });
   },

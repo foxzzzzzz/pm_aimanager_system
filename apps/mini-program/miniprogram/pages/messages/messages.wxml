@@ -1,11 +1,12 @@
 <view class="page">
   <button type="primary" disabled="{{!subscriptionConfigured}}" bindtap="enableReminder">{{subscriptionConfigured ? '开启一次微信提醒' : '微信提醒暂未配置'}}</button>
   <text wx:if="{{!subscriptionConfigured}}" class="config-note">配置正式订阅消息模板后可启用微信提醒。</text>
-  <view wx:if="{{messages.length === 0}}" class="card muted">暂无消息</view>
-  <view wx:for="{{messages}}" wx:key="id" class="card message {{item.is_read ? 'read' : ''}}" data-id="{{item.id}}" bindtap="markRead">
-    <text class="tag">{{item.type}}</text>
+  <view wx:if="{{loading}}" class="card loading-state">正在加载消息…</view>
+  <view wx:if="{{!loading && messages.length === 0}}" class="card empty-state">暂无消息</view>
+  <view wx:if="{{!loading}}" wx:for="{{messages}}" wx:key="id" class="card message {{item.is_read ? 'read' : ''}}" data-id="{{item.id}}" bindtap="markRead">
+    <text class="tag">{{item.typeLabel}}</text>
     <text class="message-title">{{item.title}}</text>
     <text class="muted">{{item.body}}</text>
-    <text class="time">{{item.created_at}}</text>
+    <text class="time">{{item.createdAtLabel}}</text>
   </view>
 </view>
