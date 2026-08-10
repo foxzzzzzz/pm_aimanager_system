@@ -1,4 +1,9 @@
 {
   "desc": "Phase 0 sitemap",
-  "rules": []
+  "rules": [
+    {
+      "action": "allow",
+      "page": "*"
+    }
+  ]
 }

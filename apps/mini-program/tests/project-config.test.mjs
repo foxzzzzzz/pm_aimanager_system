@@ -8,9 +8,16 @@ const readJson = async (relativePath) =>
 test("mini program declares TypeScript and required pages", async () => {
   const projectConfig = await readJson("../project.config.json");
   const appConfig = await readJson("../miniprogram/app.json");
+  const sitemapConfig = await readJson("../miniprogram/sitemap.json");
+  const runtimeConfigSource = await readFile(
+    new URL("../miniprogram/config.ts", import.meta.url),
+    "utf8",
+  );
 
   assert.equal(projectConfig.compileType, "miniprogram");
-  assert.equal(projectConfig.setting.useCompilerPlugins, false);
+  assert.deepEqual(projectConfig.setting.useCompilerPlugins, ["typescript"]);
+  assert.equal(projectConfig.setting.urlCheck, false);
+  assert.doesNotMatch(runtimeConfigSource, /apiBaseUrl:\s*["']http:\/\/localhost/);
   assert.deepEqual(appConfig.pages, [
     "pages/index/index",
     "pages/projects/projects",
@@ -24,6 +31,7 @@ test("mini program declares TypeScript and required pages", async () => {
     "pages/issues/issues",
     "pages/messages/messages",
   ]);
+  assert.deepEqual(sitemapConfig.rules, [{ action: "allow", page: "*" }]);
 });
 
 test("mini program provides authenticated API and structured update flows", async () => {
@@ -32,7 +40,7 @@ test("mini program provides authenticated API and structured update flows", asyn
     "utf8",
   );
   const requestSource = await readFile(
-    new URL("../miniprogram/services/request-core.mjs", import.meta.url),
+    new URL("../miniprogram/services/request-core.js", import.meta.url),
     "utf8",
   );
   const updateSource = await readFile(
@@ -44,6 +52,8 @@ test("mini program provides authenticated API and structured update flows", asyn
     "utf8",
   );
 
+  assert.match(apiSource, /from ["']\.\/request-core\.js["']/);
+  assert.doesNotMatch(apiSource, /request-core\.mjs/);
   assert.match(requestSource, /Authorization/);
   assert.match(apiSource, /mobile\/auth\/wechat/);
   assert.match(apiSource, /mobile\/messages/);

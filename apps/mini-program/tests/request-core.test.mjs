@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createRequester } from "../miniprogram/services/request-core.mjs";
+import { createRequester } from "../miniprogram/services/request-core.js";
 
 test("requester attaches mobile bearer and idempotency headers", async () => {
   let captured;

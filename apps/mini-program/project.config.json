@@ -1,13 +1,14 @@
 {
-  "appid": "touristappid",
+  "appid": "wxea99b268a012776a",
   "compileType": "miniprogram",
   "libVersion": "trial",
   "miniprogramRoot": "miniprogram/",
   "projectname": "project-manager-mini-program",
   "setting": {
+    "urlCheck": false,
     "es6": true,
     "postcss": true,
     "minified": true,
-    "useCompilerPlugins": false
+    "useCompilerPlugins": ["typescript"]
   }
 }

@@ -1,6 +1,6 @@
 import { runtimeConfig } from "../config";
 import type { ChangeProposal, Issue, Message, MobileDashboard, ProjectSummary } from "../types";
-import { createRequester } from "./request-core.mjs";
+import { createRequester } from "./request-core.js";
 
 function requestKey(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
