@@ -1,7 +1,9 @@
 import { api } from "../../services/api";
 import type { ProjectSummary } from "../../types";
 
-interface ProjectTapEvent { currentTarget: { dataset: { id: string } } }
+interface ProjectTapEvent {
+  currentTarget: { dataset: { id: string; code: string; name: string } };
+}
 
 Page({
   data: { projects: [] as ProjectSummary[], loading: true },
@@ -19,8 +21,10 @@ Page({
     }
   },
   openProject(event: ProjectTapEvent) {
-    const projectId = event.currentTarget.dataset.id;
+    const { id: projectId, code, name } = event.currentTarget.dataset;
     wx.setStorageSync("current_project_id", projectId);
+    wx.setStorageSync("current_project_code", code);
+    wx.setStorageSync("current_project_name", name);
     wx.navigateTo({ url: `/pages/dashboard/dashboard?projectId=${projectId}` });
   },
 });

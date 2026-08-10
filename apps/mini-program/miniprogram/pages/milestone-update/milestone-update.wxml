@@ -11,12 +11,16 @@
       <picker mode="date" bindchange="onEndDate"><view class="field">新完成日期：{{endDate || '请选择'}}</view></picker>
     </block>
     <textarea class="field" value="{{reason}}" placeholder="更新原因" bindinput="onReason" />
-    <button class="primary" bindtap="submit">确认并提交审批</button>
+    <button class="primary" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">确认并提交审批</button>
   </view>
   <view class="card">
     <text>自然语言预填</text>
     <textarea class="field" value="{{naturalText}}" placeholder="例如：M23延期到2026-08-30，原因是驱动联调" bindinput="onNaturalText" />
-    <button bindtap="prefill">AI / 规则预填</button>
-    <text wx:if="{{requiresConfirmation}}" class="muted">预填结果必须由你确认后才能提交。</text>
+    <button loading="{{prefillBusy}}" disabled="{{prefillBusy}}" bindtap="prefill">AI / 规则预填</button>
+    <view wx:if="{{prefillApplied}}" class="confirmation">
+      <text wx:if="{{requiresConfirmation}}" class="warning">预填内容已写入上方表单，请核对后确认。</text>
+      <text wx:else class="success">✓ 已确认当前预填结果</text>
+      <button wx:if="{{requiresConfirmation}}" size="mini" bindtap="confirmPrefill">确认预填结果</button>
+    </view>
   </view>
 </view>

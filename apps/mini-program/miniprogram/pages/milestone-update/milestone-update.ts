@@ -1,4 +1,5 @@
 import { api } from "../../services/api";
+import { validateMilestoneUpdate } from "../../services/form-validation.js";
 
 interface InputEvent { detail: { value: string } }
 interface PickerEvent { detail: { value: string } }
@@ -14,7 +15,10 @@ Page({
     endDate: "",
     reason: "",
     naturalText: "",
+    prefillApplied: false,
     requiresConfirmation: false,
+    prefillBusy: false,
+    submitting: false,
   },
   onLoad(options: Record<string, string | undefined>) {
     this.setData({
@@ -23,25 +27,70 @@ Page({
       version: Number(options.version || 0),
     });
   },
-  chooseCompleted() { this.setData({ kind: "completed" }); },
-  chooseDelay() { this.setData({ kind: "delay" }); },
-  onDate(event: PickerEvent) { this.setData({ date: event.detail.value }); },
-  onStartDate(event: PickerEvent) { this.setData({ startDate: event.detail.value }); },
-  onEndDate(event: PickerEvent) { this.setData({ endDate: event.detail.value }); },
-  onReason(event: InputEvent) { this.setData({ reason: event.detail.value }); },
-  onNaturalText(event: InputEvent) { this.setData({ naturalText: event.detail.value }); },
-  async prefill() {
-    const result = await api.prefill(this.data.naturalText);
+  chooseCompleted() {
     this.setData({
-      code: result.milestone_code || this.data.code,
-      kind: result.kind || this.data.kind,
-      startDate: result.end_date || this.data.startDate,
-      endDate: result.end_date || this.data.endDate,
-      reason: result.reason,
-      requiresConfirmation: result.requires_confirmation,
+      kind: "completed",
+      requiresConfirmation: this.data.prefillApplied,
     });
   },
+  chooseDelay() {
+    this.setData({ kind: "delay", requiresConfirmation: this.data.prefillApplied });
+  },
+  onDate(event: PickerEvent) {
+    this.setData({ date: event.detail.value, requiresConfirmation: this.data.prefillApplied });
+  },
+  onStartDate(event: PickerEvent) {
+    this.setData({
+      startDate: event.detail.value,
+      requiresConfirmation: this.data.prefillApplied,
+    });
+  },
+  onEndDate(event: PickerEvent) {
+    this.setData({
+      endDate: event.detail.value,
+      requiresConfirmation: this.data.prefillApplied,
+    });
+  },
+  onReason(event: InputEvent) {
+    this.setData({ reason: event.detail.value, requiresConfirmation: this.data.prefillApplied });
+  },
+  onNaturalText(event: InputEvent) { this.setData({ naturalText: event.detail.value }); },
+  async prefill() {
+    if (this.data.prefillBusy) return;
+    if (!this.data.naturalText.trim()) {
+      wx.showToast({ title: "请先输入更新描述", icon: "none" });
+      return;
+    }
+    this.setData({ prefillBusy: true });
+    try {
+      const result = await api.prefill(this.data.naturalText);
+      this.setData({
+        code: result.milestone_code || this.data.code,
+        kind: result.kind || this.data.kind,
+        startDate: result.end_date || this.data.startDate,
+        endDate: result.end_date || this.data.endDate,
+        reason: result.reason,
+        prefillApplied: true,
+        requiresConfirmation: result.requires_confirmation !== false,
+      });
+    } catch (error) {
+      wx.showToast({ title: (error as Error).message, icon: "none" });
+    } finally {
+      this.setData({ prefillBusy: false });
+    }
+  },
+  confirmPrefill() {
+    this.setData({ requiresConfirmation: false });
+    wx.showToast({ title: "预填结果已确认", icon: "success" });
+  },
   async submit() {
+    if (this.data.submitting) return;
+    const validationError = validateMilestoneUpdate(this.data);
+    if (validationError) {
+      wx.showToast({ title: validationError, icon: "none" });
+      return;
+    }
+    this.setData({ submitting: true });
     try {
       await api.submitMilestone(this.data.projectId, this.data.code, {
         kind: this.data.kind,
@@ -53,8 +102,10 @@ Page({
       });
       wx.showToast({ title: "已提交审批", icon: "success" });
       wx.navigateBack();
-    } catch {
-      wx.showToast({ title: "提交失败，请检查字段", icon: "none" });
+    } catch (error) {
+      wx.showToast({ title: (error as Error).message, icon: "none" });
+    } finally {
+      this.setData({ submitting: false });
     }
   },
 });

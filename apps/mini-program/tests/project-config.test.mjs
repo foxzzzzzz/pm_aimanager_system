@@ -65,3 +65,28 @@ test("mini program provides authenticated API and structured update flows", asyn
   assert.match(apiSource, /mobile\/subscription-grants/);
   assert.match(messagesSource, /requestSubscribeMessage/);
 });
+
+test("mini program guards form submissions and shows the selected project context", async () => {
+  const projectsSource = await readFile(
+    new URL("../miniprogram/pages/projects/projects.ts", import.meta.url),
+    "utf8",
+  );
+  const issuesSource = await readFile(
+    new URL("../miniprogram/pages/issues/issues.ts", import.meta.url),
+    "utf8",
+  );
+  const issuesTemplate = await readFile(
+    new URL("../miniprogram/pages/issues/issues.wxml", import.meta.url),
+    "utf8",
+  );
+  const updateSource = await readFile(
+    new URL("../miniprogram/pages/milestone-update/milestone-update.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(projectsSource, /current_project_name/);
+  assert.match(issuesSource, /current_project_name/);
+  assert.match(issuesTemplate, /当前项目/);
+  assert.match(issuesSource, /if \(this\.data\.creating\) return/);
+  assert.match(updateSource, /if \(this\.data\.submitting\) return/);
+});

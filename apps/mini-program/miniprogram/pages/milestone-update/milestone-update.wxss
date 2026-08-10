@@ -2,3 +2,6 @@
 .switches button { margin: 0; }
 .switches .selected { color: #fff; background: #146c5a; }
 textarea.field { width: auto; min-height: 130rpx; }
+.confirmation { margin-top: 20rpx; padding: 20rpx; border-radius: 14rpx; background: #f3f8f6; }
+.confirmation text { display: block; margin-bottom: 14rpx; }
+.confirmation button { margin: 0; }
