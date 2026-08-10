@@ -309,6 +309,16 @@ def get_mobile_dashboard(
     return MobileService(session, request.app.state.settings, user).dashboard(project_id)
 
 
+@router.get("/mobile/projects/{project_id}/review")
+def get_mobile_project_review(
+    project_id: uuid.UUID,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+) -> dict[str, Any]:
+    return MobileService(session, request.app.state.settings, user).project_review(project_id)
+
+
 @router.post("/mobile/projects/{project_id}/milestones/{milestone_code}/proposals", status_code=201)
 def create_mobile_milestone_proposal(
     project_id: uuid.UUID,

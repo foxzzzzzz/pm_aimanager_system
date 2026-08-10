@@ -284,6 +284,10 @@ class MobileService:
             "milestones": milestones,
         }
 
+    def project_review(self, project_id: uuid.UUID) -> dict[str, Any]:
+        self._bound_project(project_id)
+        return ProjectService(self.session, _actor_id(self._user())).review(project_id)
+
     def create_milestone_proposal(
         self,
         project_id: uuid.UUID,

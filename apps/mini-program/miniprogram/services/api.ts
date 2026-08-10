@@ -1,5 +1,12 @@
 import { runtimeConfig } from "../config";
-import type { ChangeProposal, Issue, Message, MobileDashboard, ProjectSummary } from "../types";
+import type {
+  ChangeProposal,
+  Issue,
+  Message,
+  MobileDashboard,
+  ProjectReview,
+  ProjectSummary,
+} from "../types";
 import { createRequester } from "./request-core.js";
 
 function requestKey(): string {
@@ -28,6 +35,8 @@ export const api = {
   projects: () => request<ProjectSummary[]>("/mobile/projects"),
   dashboard: (projectId: string) =>
     request<MobileDashboard>(`/mobile/projects/${projectId}/dashboard`),
+  projectReview: (projectId: string) =>
+    request<ProjectReview>(`/mobile/projects/${projectId}/review`),
   submitMilestone: (projectId: string, code: string, data: WechatMiniprogram.IAnyObject) =>
     request(`/mobile/projects/${projectId}/milestones/${code}/proposals`, "POST", data),
   issues: (projectId: string) => request<Issue[]>(`/mobile/projects/${projectId}/issues`),

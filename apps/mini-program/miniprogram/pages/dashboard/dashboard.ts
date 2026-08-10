@@ -73,6 +73,11 @@ Page({
       ),
     });
   },
+  openProjectReview() {
+    wx.navigateTo({
+      url: `/pages/project-review/project-review?projectId=${this.data.projectId}`,
+    });
+  },
   updateMilestone(event: MilestoneTapEvent) {
     if (!this.data.dashboard) return;
     wx.navigateTo({

@@ -3,6 +3,7 @@
     "pages/index/index",
     "pages/projects/projects",
     "pages/dashboard/dashboard",
+    "pages/project-review/project-review",
     "pages/milestone-update/milestone-update",
     "pages/issues/issues",
     "pages/messages/messages"

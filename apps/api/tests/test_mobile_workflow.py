@@ -154,6 +154,45 @@ def test_unbound_user_cannot_view_project_and_bound_user_can(
         assert "13800000010" not in str(binding.__dict__)
 
 
+def test_bound_user_can_view_read_only_project_review_without_contacts(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    outsider_headers, _ = _login(client, "dev:review-outsider")
+    forbidden = client.get(
+        f"/api/v1/mobile/projects/{project_id}/review",
+        headers=outsider_headers,
+    )
+    assert forbidden.status_code == 403
+
+    invitation = _invite(client, project_id, "成员10", "invite-review-member10")
+    member_headers, _ = _login(client, "dev:review-member10")
+    accepted = client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=member_headers,
+        json={
+            "invitation_token": invitation["invitation_token"],
+            "phone_code": "dev:13800000010",
+        },
+    )
+    assert accepted.status_code == 200
+
+    review = client.get(
+        f"/api/v1/mobile/projects/{project_id}/review",
+        headers=member_headers,
+    )
+
+    assert review.status_code == 200
+    payload = review.json()
+    assert len(payload["product_specs"]) == 70
+    assert len(payload["members"]) == 22
+    assert len(payload["milestones"]) == 24
+    assert payload["milestones"][0]["assignments"].keys() == {"R", "A", "C", "I"}
+    assert "phone" not in payload["members"][0]
+    assert "email" not in payload["members"][0]
+
+
 def test_mobile_token_cannot_use_admin_project_data_change_endpoints(
     mobile_workflow: TestClient,
 ) -> None:

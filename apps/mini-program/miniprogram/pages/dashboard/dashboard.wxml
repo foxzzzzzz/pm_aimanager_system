@@ -4,6 +4,7 @@
     <text class="title">{{dashboard.project.name}}</text>
     <text class="muted">身份：{{dashboard.member_name}} · 正式版本 v{{dashboard.current_version_number}}</text>
     <text class="plan">当前计划：{{dashboard.active_plan_name}}</text>
+    <button class="review-entry" size="mini" bindtap="openProjectReview">查看项目资料</button>
   </view>
   <view wx:for="{{proposals}}" wx:key="id" class="card milestone">
     <text class="tag">待我审批</text>

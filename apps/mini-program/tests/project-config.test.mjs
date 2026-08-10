@@ -22,6 +22,7 @@ test("mini program declares TypeScript and required pages", async () => {
     "pages/index/index",
     "pages/projects/projects",
     "pages/dashboard/dashboard",
+    "pages/project-review/project-review",
     "pages/milestone-update/milestone-update",
     "pages/issues/issues",
     "pages/messages/messages",
@@ -117,4 +118,33 @@ test("mini program supports proposal rejection, issue editing, and subscription 
   assert.doesNotMatch(issuesSource, /statusOptions:\s*\[[^\]]*"已关闭"/);
   assert.match(messagesSource, /subscriptionConfigured/);
   assert.match(messagesSource, /replace-with-template-id/);
+});
+
+test("mini program exposes read-only project specs, members, and RACI", async () => {
+  const apiSource = await readFile(
+    new URL("../miniprogram/services/api.ts", import.meta.url),
+    "utf8",
+  );
+  const dashboardTemplate = await readFile(
+    new URL("../miniprogram/pages/dashboard/dashboard.wxml", import.meta.url),
+    "utf8",
+  );
+  const reviewSource = await readFile(
+    new URL("../miniprogram/pages/project-review/project-review.ts", import.meta.url),
+    "utf8",
+  );
+  const reviewTemplate = await readFile(
+    new URL("../miniprogram/pages/project-review/project-review.wxml", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(apiSource, /projectReview/);
+  assert.match(dashboardTemplate, /openProjectReview/);
+  assert.match(reviewSource, /product_specs/);
+  assert.match(reviewSource, /members/);
+  assert.match(reviewSource, /milestones/);
+  assert.match(reviewTemplate, /产品规格/);
+  assert.match(reviewTemplate, /团队成员/);
+  assert.match(reviewTemplate, /RACI/);
+  assert.doesNotMatch(reviewTemplate, /bindinput|bindchange|form/);
 });

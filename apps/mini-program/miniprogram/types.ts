@@ -23,6 +23,40 @@ export interface MobileDashboard {
   milestones: Milestone[];
 }
 
+export interface ProductSpec {
+  row_number: number;
+  major_category: string | null;
+  category: string | null;
+  item: string;
+  configuration: string | null;
+  core_information: string | null;
+  selected_model: string | null;
+  notes: string | null;
+}
+
+export interface ProjectMember {
+  name: string;
+  role: string;
+  notes: string | null;
+}
+
+export interface ReviewMilestone {
+  code: string;
+  name: string;
+  output: string | null;
+  assignments: Record<"R" | "A" | "C" | "I", string[]>;
+}
+
+export interface ProjectReview {
+  current_version_number: number;
+  document_version: string | null;
+  active_plan_name: string | null;
+  tbd_count: number;
+  product_specs: ProductSpec[];
+  members: ProjectMember[];
+  milestones: ReviewMilestone[];
+}
+
 export interface Issue {
   id: string;
   description: string;
