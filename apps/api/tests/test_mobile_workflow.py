@@ -386,6 +386,55 @@ def test_accountable_member_can_list_only_approvable_pending_proposals(
     assert [item["id"] for item in response.json()] == [proposal["id"]]
 
 
+def test_only_accountable_member_can_reject_mobile_proposal(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    responsible = _invite(client, project_id, "成员10", "invite-r-reject")
+    responsible_headers, _ = _login(client, "dev:r-reject")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=responsible_headers,
+        json={"invitation_token": responsible["invitation_token"], "phone": "13800000010"},
+    )
+    proposal = client.post(
+        f"/api/v1/mobile/projects/{project_id}/milestones/M23/proposals",
+        headers={**responsible_headers, "X-Idempotency-Key": "proposal-for-a-reject"},
+        json={
+            "kind": "delay",
+            "base_version_number": 1,
+            "start_date": "2026-11-16",
+            "end_date": "2026-11-20",
+            "reason": "联调延期",
+        },
+    ).json()
+    forbidden = client.post(
+        f"/api/v1/mobile/change-proposals/{proposal['id']}/reject",
+        headers={**responsible_headers, "X-Idempotency-Key": "r-cannot-reject"},
+        json={"reason": "执行者不能驳回"},
+    )
+    assert forbidden.status_code == 403
+
+    accountable = _invite(client, project_id, "成员09", "invite-a-reject")
+    accountable_headers, _ = _login(client, "dev:a-reject")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=accountable_headers,
+        json={"invitation_token": accountable["invitation_token"], "phone": "13800000009"},
+    )
+    rejected = client.post(
+        f"/api/v1/mobile/change-proposals/{proposal['id']}/reject",
+        headers={**accountable_headers, "X-Idempotency-Key": "a-rejects-proposal"},
+        json={"reason": "资源未落实，请重新计划"},
+    )
+
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+    dashboard = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM)
+    assert dashboard.json()["current_version_number"] == 1
+
+
 def test_mobile_issue_message_center_and_natural_language_prefill(
     mobile_workflow: TestClient,
 ) -> None:

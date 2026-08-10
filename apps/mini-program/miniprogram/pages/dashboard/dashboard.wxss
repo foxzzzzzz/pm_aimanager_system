@@ -4,3 +4,5 @@
 .name { flex: 1; font-weight: 650; }
 .done { color: #146c5a; font-size: 22rpx; }
 .milestone button { margin: 18rpx 0 0; color: #146c5a; }
+.proposal-actions { display: flex; gap: 16rpx; }
+.proposal-actions button { margin-right: 0; }

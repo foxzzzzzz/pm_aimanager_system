@@ -358,6 +358,28 @@ def approve_mobile_proposal(
     )
 
 
+@router.post("/mobile/change-proposals/{proposal_id}/reject")
+def reject_mobile_proposal(
+    proposal_id: uuid.UUID,
+    payload: RejectRequest,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    actor_id = f"mobile:{user.id}"
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        _request_hash(payload),
+        lambda: ProjectService(session, actor_id).reject_proposal(proposal_id, payload.reason),
+    )
+
+
 @router.get("/mobile/projects/{project_id}/change-proposals")
 def list_mobile_approvable_proposals(
     project_id: uuid.UUID,

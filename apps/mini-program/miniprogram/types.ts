@@ -28,6 +28,7 @@ export interface Issue {
   description: string;
   impact: string;
   owner_name: string;
+  severity: "low" | "medium" | "high" | "critical";
   due_date: string;
   status: string;
   revision: number;

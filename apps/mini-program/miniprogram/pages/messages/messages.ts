@@ -4,8 +4,10 @@ import { runtimeConfig } from "../../config";
 
 interface MessageTapEvent { currentTarget: { dataset: { id: string } } }
 
+const subscriptionConfigured = runtimeConfig.subscriptionTemplateId !== "replace-with-template-id";
+
 Page({
-  data: { messages: [] as Message[] },
+  data: { messages: [] as Message[], subscriptionConfigured },
   async onShow() {
     try {
       this.setData({ messages: await api.messages() });
@@ -22,6 +24,10 @@ Page({
     }
   },
   async enableReminder() {
+    if (!this.data.subscriptionConfigured) {
+      wx.showToast({ title: "微信提醒模板暂未配置", icon: "none" });
+      return;
+    }
     try {
       const templateId = runtimeConfig.subscriptionTemplateId;
       const result = await wx.requestSubscribeMessage({ tmplIds: [templateId] });

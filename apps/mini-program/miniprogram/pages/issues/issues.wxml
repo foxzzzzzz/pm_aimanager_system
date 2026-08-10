@@ -9,20 +9,24 @@
       <button size="mini" bindtap="selectProject">切换</button>
     </view>
     <view class="card">
-      <text class="title">登记重难点</text>
+      <text class="title">{{editingIssueId ? '编辑重难点' : '登记重难点'}}</text>
       <textarea class="field" value="{{description}}" placeholder="问题描述" bindinput="onDescription" />
       <textarea class="field" value="{{impact}}" placeholder="项目影响" bindinput="onImpact" />
-      <input class="field" value="{{ownerName}}" placeholder="责任人姓名" bindinput="onOwner" />
+      <input class="field" value="{{ownerName}}" disabled="{{editingIssueId !== ''}}" placeholder="责任人姓名" bindinput="onOwner" />
+      <picker range="{{severityLabels}}" value="{{severityIndex}}" bindchange="onSeverity"><view class="field">严重程度：{{severityLabels[severityIndex]}}</view></picker>
       <picker mode="date" bindchange="onDueDate"><view class="field">预计完成：{{dueDate || '请选择'}}</view></picker>
-      <button class="primary" loading="{{creating}}" disabled="{{creating}}" bindtap="createIssue">登记问题</button>
+      <picker wx:if="{{editingIssueId}}" range="{{statusOptions}}" value="{{statusIndex}}" bindchange="onStatus"><view class="field">问题状态：{{statusOptions[statusIndex]}}</view></picker>
+      <button class="primary" loading="{{creating}}" disabled="{{creating}}" bindtap="createIssue">{{editingIssueId ? '保存问题修改' : '登记问题'}}</button>
+      <button wx:if="{{editingIssueId}}" disabled="{{creating}}" bindtap="cancelEdit">取消编辑</button>
     </view>
     <view wx:for="{{issues}}" wx:key="id" class="card">
       <text class="tag">{{item.status}}</text>
       <text class="issue-title">{{item.description}}</text>
       <text class="muted">影响：{{item.impact}}</text>
-      <text class="muted">{{item.owner_name}} · {{item.due_date}}</text>
-      <button wx:if="{{item.status === '待处理'}}" loading="{{actionIssueId === item.id}}" disabled="{{actionIssueId !== ''}}" size="mini" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="startIssue">开始处理</button>
-      <button wx:if="{{item.status !== '已关闭'}}" loading="{{actionIssueId === item.id}}" disabled="{{actionIssueId !== ''}}" type="warn" size="mini" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="deleteIssue">作废问题</button>
+      <text class="muted">{{item.owner_name}} · {{item.severity}} · {{item.due_date}}</text>
+      <button wx:if="{{item.owner_name === currentMemberName && item.status !== '已关闭'}}" disabled="{{actionIssueId !== ''}}" size="mini" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="editIssue">编辑</button>
+      <button wx:if="{{item.owner_name === currentMemberName && item.status === '待处理'}}" loading="{{actionIssueId === item.id}}" disabled="{{actionIssueId !== ''}}" size="mini" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="startIssue">开始处理</button>
+      <button wx:if="{{item.owner_name === currentMemberName && item.status !== '已关闭'}}" loading="{{actionIssueId === item.id}}" disabled="{{actionIssueId !== ''}}" type="warn" size="mini" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="deleteIssue">作废问题</button>
     </view>
   </block>
 </view>

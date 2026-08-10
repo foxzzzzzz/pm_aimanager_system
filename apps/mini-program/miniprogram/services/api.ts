@@ -43,6 +43,8 @@ export const api = {
     request(`/mobile/change-proposals/${proposalId}/approve`, "POST", {
       expected_project_version: expectedVersion,
     }),
+  rejectProposal: (proposalId: string, reason: string) =>
+    request(`/mobile/change-proposals/${proposalId}/reject`, "POST", { reason }),
   messages: () => request<Message[]>("/mobile/messages"),
   markMessageRead: (messageId: string) =>
     request<Message>(`/mobile/messages/${messageId}/read`, "PATCH"),

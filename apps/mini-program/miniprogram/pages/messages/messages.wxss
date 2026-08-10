@@ -1,3 +1,4 @@
 .message-title { display: block; margin: 16rpx 0 10rpx; font-weight: 650; }
 .time { display: block; margin-top: 14rpx; color: #8a9692; font-size: 22rpx; }
 .read { opacity: 0.72; }
+.config-note { display: block; margin: 14rpx 0 24rpx; color: #8a9692; font-size: 22rpx; text-align: center; }

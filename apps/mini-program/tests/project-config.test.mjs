@@ -90,3 +90,31 @@ test("mini program guards form submissions and shows the selected project contex
   assert.match(issuesSource, /if \(this\.data\.creating\) return/);
   assert.match(updateSource, /if \(this\.data\.submitting\) return/);
 });
+
+test("mini program supports proposal rejection, issue editing, and subscription guards", async () => {
+  const apiSource = await readFile(
+    new URL("../miniprogram/services/api.ts", import.meta.url),
+    "utf8",
+  );
+  const dashboardSource = await readFile(
+    new URL("../miniprogram/pages/dashboard/dashboard.ts", import.meta.url),
+    "utf8",
+  );
+  const issuesSource = await readFile(
+    new URL("../miniprogram/pages/issues/issues.ts", import.meta.url),
+    "utf8",
+  );
+  const messagesSource = await readFile(
+    new URL("../miniprogram/pages/messages/messages.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(apiSource, /rejectProposal/);
+  assert.match(dashboardSource, /rejectProposal/);
+  assert.match(issuesSource, /editingIssueId/);
+  assert.match(issuesSource, /severity/);
+  assert.match(issuesSource, /due_date/);
+  assert.doesNotMatch(issuesSource, /statusOptions:\s*\[[^\]]*"已关闭"/);
+  assert.match(messagesSource, /subscriptionConfigured/);
+  assert.match(messagesSource, /replace-with-template-id/);
+});
