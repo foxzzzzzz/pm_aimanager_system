@@ -87,6 +87,15 @@ export interface MemberBinding {
   provided_phone: string | null;
 }
 
+export interface MemberInvitation extends MemberBinding {
+  invitation_token: string;
+  invitation_expires_at: string;
+  mini_program_path: string;
+  url_link: string | null;
+  mini_program_code_data_url: string | null;
+  entry_generation_error: string | null;
+}
+
 export interface ChangeProposal {
   id: string;
   milestone_code: string;

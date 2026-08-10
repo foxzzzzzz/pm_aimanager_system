@@ -100,7 +100,12 @@ def _invite(
         json={"member_name": member_name, "expected_phone": expected_phone},
     )
     assert response.status_code == 201
-    return response.json()
+    invitation = response.json()
+    assert len(invitation["invitation_token"]) <= 32
+    assert invitation["mini_program_path"] == (
+        f"pages/index/index?invitation={invitation['invitation_token']}"
+    )
+    return invitation
 
 
 def test_unbound_user_cannot_view_project_and_bound_user_can(

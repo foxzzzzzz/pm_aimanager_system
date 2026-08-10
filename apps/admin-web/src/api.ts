@@ -6,6 +6,7 @@ import type {
   ImportRecord,
   Issue,
   MemberBinding,
+  MemberInvitation,
   NotificationDelivery,
   OperationalStatus,
   Project,
@@ -179,7 +180,7 @@ export const api = {
     projectId: string,
     payload: { member_name: string; expected_phone?: string },
   ) =>
-    request<MemberBinding & { invitation_token: string }>(
+    request<MemberInvitation>(
       `/projects/${projectId}/member-invitations`,
       {
         method: "POST",

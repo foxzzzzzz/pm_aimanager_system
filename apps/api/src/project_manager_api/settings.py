@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import yaml
 from pydantic import BaseModel, Field
@@ -29,6 +29,10 @@ class AppSettings(BaseModel):
     wechat_app_id: str | None = None
     wechat_app_secret: str | None = None
     mobile_session_days: int = 30
+    mobile_invitation_days: int = Field(default=7, ge=1, le=30)
+    wechat_invitation_page: str = Field(default="pages/index/index", min_length=1, pattern=r"^[^/]")
+    wechat_invitation_env_version: Literal["release", "trial", "develop"] = "release"
+    wechat_invitation_code_width: int = Field(default=430, ge=280, le=1280)
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str | None = None
     llm_model: str = "provider-model-name"
@@ -131,6 +135,29 @@ class AppSettings(BaseModel):
             wechat_app_id=os.environ.get("WECHAT_APP_ID", wechat.get("app_id")),
             wechat_app_secret=os.environ.get("WECHAT_APP_SECRET"),
             mobile_session_days=int(wechat.get("session_days", 30)),
+            mobile_invitation_days=int(
+                os.environ.get(
+                    "WECHAT_INVITATION_DAYS",
+                    str(wechat.get("invitation_days", 7)),
+                )
+            ),
+            wechat_invitation_page=os.environ.get(
+                "WECHAT_INVITATION_PAGE",
+                str(wechat.get("invitation_page", "pages/index/index")),
+            ),
+            wechat_invitation_env_version=cast(
+                Literal["release", "trial", "develop"],
+                os.environ.get(
+                    "WECHAT_INVITATION_ENV_VERSION",
+                    str(wechat.get("invitation_env_version", "release")),
+                ),
+            ),
+            wechat_invitation_code_width=int(
+                os.environ.get(
+                    "WECHAT_INVITATION_CODE_WIDTH",
+                    str(wechat.get("invitation_code_width", 430)),
+                )
+            ),
             llm_base_url=os.environ.get("LLM_BASE_URL", str(llm["base_url"])),
             llm_api_key=os.environ.get("LLM_API_KEY"),
             llm_model=os.environ.get("LLM_MODEL", str(llm["model"])),

@@ -99,6 +99,14 @@ wechat:
   app_id: replace-with-wechat-app-id
   # Opaque mobile login session validity.
   session_days: 30
+  # One-time member invitation and generated URL Link validity in days.
+  invitation_days: 7
+  # Mini-program page opened by invitation links and codes, without a leading slash.
+  invitation_page: pages/index/index
+  # Invitation target version: release, trial, or develop.
+  invitation_env_version: release
+  # Width in pixels requested from the unlimited mini-program code API.
+  invitation_code_width: 430
   # Subscription-message template identifier.
   subscription_template_id: replace-with-template-id
   # Keyword field carrying the notification title in the approved template.

@@ -15,7 +15,7 @@ Page({
   onLoad(options: Record<string, string | undefined>) {
     this.setData({
       loggedIn: Boolean(wx.getStorageSync("access_token")),
-      invitationToken: options.invitation || "",
+      invitationToken: options.invitation || options.scene || "",
     });
   },
   async login() {

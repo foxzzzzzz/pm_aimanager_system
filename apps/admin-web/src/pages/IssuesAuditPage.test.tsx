@@ -13,7 +13,13 @@ const mocks = vi.hoisted(() => ({
     },
   ]),
   approveMemberBinding: vi.fn().mockResolvedValue({}),
-  createMemberInvitation: vi.fn().mockResolvedValue({ invitation_token: "invite-token" }),
+  createMemberInvitation: vi.fn().mockResolvedValue({
+    invitation_token: "invite-token",
+    mini_program_path: "pages/index/index?invitation=invite-token",
+    url_link: "https://wxaurl.cn/invite",
+    mini_program_code_data_url: "data:image/png;base64,aW52aXRl",
+    entry_generation_error: null,
+  }),
   createIssue: vi.fn().mockResolvedValue({}),
   updateIssue: vi.fn().mockResolvedValue({}),
   deleteIssue: vi.fn().mockResolvedValue({}),
@@ -100,7 +106,8 @@ describe("IssuesAuditPage", () => {
         expected_phone: undefined,
       }),
     );
-    expect(await screen.findByDisplayValue("invite-token")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("https://wxaurl.cn/invite")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "成员邀请小程序码" })).toBeInTheDocument();
   });
 
   it("updates and deletes an issue from the admin table", async () => {

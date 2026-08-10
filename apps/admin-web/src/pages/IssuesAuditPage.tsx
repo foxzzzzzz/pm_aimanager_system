@@ -1,9 +1,9 @@
-import { Alert, Button, DatePicker, Empty, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Typography } from "antd";
+import { Alert, Button, DatePicker, Empty, Form, Image, Input, Modal, Select, Space, Table, Tabs, Tag, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "../api";
-import type { AuditLog, ChangeProposal, Issue, MemberBinding, Project } from "../types";
+import type { AuditLog, ChangeProposal, Issue, MemberBinding, MemberInvitation, Project } from "../types";
 
 interface Props {
   project?: Project;
@@ -30,7 +30,7 @@ export default function IssuesAuditPage({ project }: Props) {
   const [deletingIssue, setDeletingIssue] = useState<Issue>();
   const [deleteReason, setDeleteReason] = useState("");
   const [invitationOpen, setInvitationOpen] = useState(false);
-  const [invitationToken, setInvitationToken] = useState("");
+  const [invitation, setInvitation] = useState<MemberInvitation>();
   const [error, setError] = useState<string>();
   const [form] = Form.useForm<IssueForm>();
   const [invitationForm] = Form.useForm<InvitationForm>();
@@ -120,7 +120,7 @@ export default function IssuesAuditPage({ project }: Props) {
     const values = await invitationForm.validateFields();
     try {
       const result = await api.createMemberInvitation(project.id, values);
-      setInvitationToken(result.invitation_token);
+      setInvitation(result);
       await reload();
     } catch (reason) {
       setError((reason as Error).message);
@@ -172,7 +172,7 @@ export default function IssuesAuditPage({ project }: Props) {
             label: `成员绑定 ${bindings.length}`,
             children: (
               <Space direction="vertical" style={{ width: "100%" }}>
-              <Button onClick={() => { invitationForm.resetFields(); setInvitationToken(""); setInvitationOpen(true); }}>生成邀请</Button>
+              <Button onClick={() => { invitationForm.resetFields(); setInvitation(undefined); setInvitationOpen(true); }}>生成邀请</Button>
               <Table
                 rowKey="id"
                 dataSource={bindings}
@@ -285,10 +285,10 @@ export default function IssuesAuditPage({ project }: Props) {
         title="生成成员邀请"
         open={invitationOpen}
         onCancel={() => setInvitationOpen(false)}
-        onOk={() => invitationToken ? setInvitationOpen(false) : void createInvitation()}
-        okText={invitationToken ? "关闭" : "确认生成"}
+        onOk={() => invitation ? setInvitationOpen(false) : void createInvitation()}
+        okText={invitation ? "关闭" : "确认生成"}
       >
-        <Form form={invitationForm} layout="vertical">
+        <Form form={invitationForm} layout="vertical" hidden={Boolean(invitation)}>
           <Form.Item name="member_name" label="成员姓名" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
@@ -296,7 +296,32 @@ export default function IssuesAuditPage({ project }: Props) {
             <Input />
           </Form.Item>
         </Form>
-        {invitationToken && <Input readOnly value={invitationToken} />}
+        {invitation && (
+          <Space direction="vertical" style={{ width: "100%" }}>
+            <Typography.Text strong>邀请入口（请在有效期内使用）</Typography.Text>
+            <Input
+              aria-label="邀请链接"
+              readOnly
+              value={invitation.url_link ?? invitation.mini_program_path}
+            />
+            {invitation.mini_program_code_data_url && (
+              <Image
+                width={220}
+                src={invitation.mini_program_code_data_url}
+                alt="成员邀请小程序码"
+                preview={false}
+              />
+            )}
+            {invitation.entry_generation_error && (
+              <Alert
+                type="warning"
+                showIcon
+                message="正式邀请链接或小程序码暂不可用"
+                description={`${invitation.entry_generation_error}；可在开发者工具中使用上述小程序路径调试。`}
+              />
+            )}
+          </Space>
+        )}
       </Modal>
     </div>
   );

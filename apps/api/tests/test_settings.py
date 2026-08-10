@@ -22,6 +22,10 @@ def test_example_config_contains_required_external_parameters() -> None:
     assert config["object_storage"]["backend"] == "s3"
     assert config["object_storage"]["bucket"] == "project-manager"
     assert config["notifications"]["due_soon_days"] == 3
+    assert config["wechat"]["invitation_days"] == 7
+    assert config["wechat"]["invitation_page"] == "pages/index/index"
+    assert config["wechat"]["invitation_env_version"] == "release"
+    assert config["wechat"]["invitation_code_width"] == 430
     assert config["llm"]["base_url"]
     assert config["llm"]["model"]
     assert config["llm"]["max_retries"] == 2
@@ -46,6 +50,10 @@ def test_production_channel_and_cors_settings_can_be_overridden_by_environment(
 ) -> None:
     monkeypatch.setenv("PROJECT_MANAGER_CORS_ORIGINS", "https://pm.example.com,https://ops.example.com")
     monkeypatch.setenv("WECHAT_SUBSCRIPTION_TEMPLATE_ID", "wechat-template")
+    monkeypatch.setenv("WECHAT_INVITATION_DAYS", "14")
+    monkeypatch.setenv("WECHAT_INVITATION_PAGE", "pages/index/index")
+    monkeypatch.setenv("WECHAT_INVITATION_ENV_VERSION", "trial")
+    monkeypatch.setenv("WECHAT_INVITATION_CODE_WIDTH", "500")
     monkeypatch.setenv("WECHAT_SUBSCRIPTION_TITLE_FIELD", "thing5")
     monkeypatch.setenv("WECHAT_SUBSCRIPTION_BODY_FIELD", "thing8")
     monkeypatch.setenv("TENCENT_SMS_REGION", "ap-shanghai")
@@ -57,6 +65,10 @@ def test_production_channel_and_cors_settings_can_be_overridden_by_environment(
 
     assert settings.cors_origins == ["https://pm.example.com", "https://ops.example.com"]
     assert settings.wechat_subscription_template_id == "wechat-template"
+    assert settings.mobile_invitation_days == 14
+    assert settings.wechat_invitation_page == "pages/index/index"
+    assert settings.wechat_invitation_env_version == "trial"
+    assert settings.wechat_invitation_code_width == 500
     assert settings.wechat_subscription_title_field == "thing5"
     assert settings.wechat_subscription_body_field == "thing8"
     assert settings.sms_region == "ap-shanghai"

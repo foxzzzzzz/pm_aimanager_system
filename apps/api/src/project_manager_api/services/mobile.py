@@ -45,7 +45,11 @@ from project_manager_api.services.errors import (
 )
 from project_manager_api.services.llm import OpenAICompatibleClient
 from project_manager_api.services.projects import ProjectService
-from project_manager_api.services.wechat import exchange_wechat_code, exchange_wechat_phone
+from project_manager_api.services.wechat import (
+    exchange_wechat_code,
+    exchange_wechat_phone,
+    generate_invitation_entries,
+)
 from project_manager_api.settings import AppSettings
 
 DATE_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -113,7 +117,7 @@ class MobileService:
         )
         if existing is not None and existing.status == BindingStatus.BOUND:
             raise ConflictError("member is already bound")
-        token = secrets.token_urlsafe(32)
+        token = secrets.token_urlsafe(24)
         if existing is None:
             binding = MemberBinding(
                 project_id=project.id,
@@ -122,7 +126,8 @@ class MobileService:
                 expected_phone_hash=self._phone_hash(payload.expected_phone),
                 expected_phone_masked=_mask_phone(payload.expected_phone),
                 status=BindingStatus.INVITED,
-                invitation_expires_at=datetime.now(UTC) + timedelta(days=7),
+                invitation_expires_at=datetime.now(UTC)
+                + timedelta(days=self.settings.mobile_invitation_days),
             )
             self.session.add(binding)
         else:
@@ -131,7 +136,9 @@ class MobileService:
             binding.expected_phone_hash = self._phone_hash(payload.expected_phone)
             binding.expected_phone_masked = _mask_phone(payload.expected_phone)
             binding.status = BindingStatus.INVITED
-            binding.invitation_expires_at = datetime.now(UTC) + timedelta(days=7)
+            binding.invitation_expires_at = datetime.now(UTC) + timedelta(
+                days=self.settings.mobile_invitation_days
+            )
         self.session.flush()
         self._audit(
             project.id,
@@ -140,7 +147,12 @@ class MobileService:
             "member_binding",
             str(binding.id),
         )
-        return {**_binding_dict(binding), "invitation_token": token}
+        return {
+            **_binding_dict(binding),
+            "invitation_token": token,
+            "invitation_expires_at": binding.invitation_expires_at.isoformat(),
+            **generate_invitation_entries(token, self.settings),
+        }
 
     def accept_invitation(self, payload: InvitationAccept) -> dict[str, Any]:
         user = self._user()

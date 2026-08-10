@@ -148,3 +148,13 @@ test("mini program exposes read-only project specs, members, and RACI", async ()
   assert.match(reviewTemplate, /RACI/);
   assert.doesNotMatch(reviewTemplate, /bindinput|bindchange|form/);
 });
+
+test("mini program accepts invitation tokens from links and mini-program code scenes", async () => {
+  const indexSource = await readFile(
+    new URL("../miniprogram/pages/index/index.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(indexSource, /options\.invitation/);
+  assert.match(indexSource, /options\.scene/);
+});
