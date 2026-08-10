@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from project_manager_api.api.schemas import (
@@ -602,14 +602,21 @@ class ProjectService:
     def delete_issue_as_member(
         self, issue: Issue, payload: IssueDelete
     ) -> dict[str, Any]:
-        if issue.revision != payload.expected_revision:
-            raise ConflictError("issue revision is stale")
         before = _issue_dict(issue)
-        issue.status = IssueStatus.CLOSED
-        issue.revision += 1
-        issue.updated_at = datetime.now(UTC)
-        self.session.flush()
-        after = _issue_dict(issue)
+        updated_issue = self.session.scalar(
+            update(Issue)
+            .where(Issue.id == issue.id, Issue.revision == payload.expected_revision)
+            .values(
+                status=IssueStatus.CLOSED,
+                revision=payload.expected_revision + 1,
+                updated_at=datetime.now(UTC),
+            )
+            .returning(Issue)
+            .execution_options(populate_existing=True)
+        )
+        if updated_issue is None:
+            raise ConflictError("issue revision is stale")
+        after = _issue_dict(updated_issue)
         self._audit(
             issue.project_id,
             "issue.deleted",
@@ -622,16 +629,22 @@ class ProjectService:
         return after
 
     def update_issue_as_member(self, issue: Issue, payload: IssueUpdate) -> dict[str, Any]:
-        if issue.revision != payload.expected_revision:
-            raise ConflictError("issue revision is stale")
         before = _issue_dict(issue)
         changes = payload.model_dump(exclude={"expected_revision"}, exclude_none=True)
-        for field, value in changes.items():
-            setattr(issue, field, value)
-        issue.revision += 1
-        issue.updated_at = datetime.now(UTC)
-        self.session.flush()
-        after = _issue_dict(issue)
+        updated_issue = self.session.scalar(
+            update(Issue)
+            .where(Issue.id == issue.id, Issue.revision == payload.expected_revision)
+            .values(
+                **changes,
+                revision=payload.expected_revision + 1,
+                updated_at=datetime.now(UTC),
+            )
+            .returning(Issue)
+            .execution_options(populate_existing=True)
+        )
+        if updated_issue is None:
+            raise ConflictError("issue revision is stale")
+        after = _issue_dict(updated_issue)
         self._audit(
             issue.project_id,
             "issue.updated",

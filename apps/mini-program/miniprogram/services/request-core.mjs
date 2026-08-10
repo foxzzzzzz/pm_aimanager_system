@@ -16,7 +16,11 @@ export function createRequester({ baseUrl, getToken, requestKey, transport }) {
             return;
           }
           const detail = response.data && response.data.detail;
-          const message = typeof detail === "string" ? detail : `请求失败：${response.statusCode}`;
+          const message = typeof detail === "string"
+            ? detail
+            : detail && typeof detail === "object" && typeof detail.message === "string"
+              ? detail.message
+              : `请求失败：${response.statusCode}`;
           reject(new Error(message));
         },
         fail: reject,

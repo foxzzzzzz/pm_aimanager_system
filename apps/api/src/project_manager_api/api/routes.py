@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import hmac
+import json
 import uuid
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Header, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from project_manager_api.api.schemas import (
@@ -49,7 +54,7 @@ from project_manager_api.services.notification_adapters import (
     WechatSubscriptionSender,
 )
 from project_manager_api.services.notifications import NotificationService
-from project_manager_api.services.operations import build_operational_status
+from project_manager_api.services.operations import build_operational_status, current_business_date
 from project_manager_api.services.projects import ProjectService
 
 router = APIRouter(prefix="/api/v1")
@@ -80,7 +85,7 @@ def get_admin_actor(
     return request.app.state.settings.admin_actor_id
 
 
-def get_idempotency_key(x_idempotency_key: str = Header(min_length=1)) -> str:
+def get_idempotency_key(x_idempotency_key: str = Header(min_length=1, max_length=128)) -> str:
     return x_idempotency_key
 
 
@@ -138,6 +143,7 @@ def create_member_invitation(
         request.method,
         request.url.path,
         201,
+        _request_hash(payload),
         lambda: MobileService(session, request.app.state.settings).create_invitation(
             project_id, actor_id, payload
         ),
@@ -180,8 +186,6 @@ def run_notification_scan(
     session: SessionDependency,
     actor_id: ActorDependency,
 ) -> dict[str, int]:
-    from datetime import date
-
     if scan_kind not in {"daily", "weekly"}:
         raise NotFoundError("unsupported notification scan")
     service = NotificationService(
@@ -191,7 +195,8 @@ def run_notification_scan(
         sms=TencentSmsSender(request.app.state.settings),
     )
     operation = service.scan_daily if scan_kind == "daily" else service.scan_weekly
-    result = operation(payload.business_date or date.today())
+    business_date = payload.business_date or current_business_date(request.app.state.settings)
+    result = operation(business_date)
     return {"created": result.created, "skipped": result.skipped}
 
 
@@ -268,6 +273,7 @@ def approve_member_binding(
         request.method,
         request.url.path,
         200,
+        _request_hash(None),
         lambda: MobileService(session, request.app.state.settings).approve_binding(
             binding_id, actor_id
         ),
@@ -321,6 +327,7 @@ def create_mobile_milestone_proposal(
         request.method,
         request.url.path,
         201,
+        _request_hash(payload),
         lambda: MobileService(session, request.app.state.settings, user).create_milestone_proposal(
             project_id, milestone_code, payload
         ),
@@ -344,6 +351,7 @@ def approve_mobile_proposal(
         request.method,
         request.url.path,
         200,
+        _request_hash(payload),
         lambda: ProjectService(session, actor_id).approve_proposal(
             proposal_id, payload.expected_project_version
         ),
@@ -379,6 +387,7 @@ def create_mobile_issue(
         request.method,
         request.url.path,
         201,
+        _request_hash(payload),
         lambda: MobileService(session, request.app.state.settings, user).create_issue(
             project_id, payload
         ),
@@ -414,6 +423,7 @@ def update_mobile_issue(
         request.method,
         request.url.path,
         200,
+        _request_hash(payload),
         lambda: MobileService(session, request.app.state.settings, user).update_issue(
             issue_id, payload
         ),
@@ -437,6 +447,7 @@ def delete_mobile_issue(
         request.method,
         request.url.path,
         200,
+        _request_hash(payload),
         lambda: MobileService(session, request.app.state.settings, user).delete_issue(
             issue_id, payload
         ),
@@ -491,6 +502,7 @@ def create_project(
         request.method,
         request.url.path,
         201,
+        _request_hash(payload),
         lambda: ProjectService(session, actor_id).create_project(payload.code, payload.name),
     )
 
@@ -504,17 +516,33 @@ async def create_import(
     actor_id: ActorDependency,
     request_key: IdempotencyDependency,
 ) -> JSONResponse:
-    cached = _cached_response(session, actor_id, request_key, request.method, request.url.path)
-    if cached is not None:
-        return cached
     content = await file.read(request.app.state.settings.max_import_size_bytes + 1)
     if len(content) > request.app.state.settings.max_import_size_bytes:
         raise ServiceError("uploaded workbook exceeds configured size limit")
+    filename = file.filename or "upload.xlsx"
+    if Path(filename).suffix.lower() not in request.app.state.settings.allowed_import_extensions:
+        raise ServiceError("uploaded workbook extension is not allowed")
+    request_hash = _request_hash(
+        {"filename": filename, "sha256": hashlib.sha256(content).hexdigest()}
+    )
+    cached = _cached_response(
+        session, actor_id, request_key, request.method, request.url.path, request_hash
+    )
+    if cached is not None:
+        return cached
     object_key, stored_path = request.app.state.import_storage.put(
-        file.filename or "upload.xlsx", content
+        filename, content
     )
     try:
-        parsed = request.app.state.parser_registry.parse(stored_path)
+        parsed = await asyncio.to_thread(
+            request.app.state.parser_registry.parse_isolated,
+            stored_path,
+            timeout_seconds=request.app.state.settings.import_timeout_seconds,
+            max_uncompressed_size_bytes=(
+                request.app.state.settings.max_import_uncompressed_size_bytes
+            ),
+            max_archive_entries=request.app.state.settings.max_import_archive_entries,
+        )
     except ImportErrorBase as exc:
         request.app.state.import_storage.delete(object_key)
         request.app.state.import_storage.release(stored_path)
@@ -527,11 +555,15 @@ async def create_import(
             request.method,
             request.url.path,
             201,
+            request_hash,
             lambda: ProjectService(session, actor_id).create_import(
                 project_id,
-                file.filename or "upload.xlsx",
+                filename,
                 object_key,
                 parsed,
+            ),
+            on_concurrent_replay=lambda: request.app.state.import_storage.delete(
+                object_key
             ),
         )
     except Exception:
@@ -575,6 +607,7 @@ def publish_import(
         request.method,
         request.url.path,
         200,
+        _request_hash(payload),
         lambda: ProjectService(session, actor_id).publish_import(
             import_id, payload.expected_project_version
         ),
@@ -596,6 +629,7 @@ def cancel_import(
         request.method,
         request.url.path,
         200,
+        _request_hash(None),
         lambda: ProjectService(session, actor_id).cancel_import(import_id),
     )
 
@@ -652,6 +686,7 @@ def create_project_change_set(
         request.method,
         request.url.path,
         201,
+        _request_hash(payload),
         lambda: ProjectService(session, actor_id).create_change_set(project_id, payload),
     )
 
@@ -690,6 +725,7 @@ def publish_project_change_set(
         request.method,
         request.url.path,
         200,
+        _request_hash(payload),
         lambda: ProjectService(session, actor_id).publish_change_set(
             change_set_id, payload.expected_project_version
         ),
@@ -711,6 +747,7 @@ def cancel_project_change_set(
         request.method,
         request.url.path,
         200,
+        _request_hash(None),
         lambda: ProjectService(session, actor_id).cancel_change_set(change_set_id),
     )
 
@@ -734,6 +771,7 @@ def create_progress_proposal(
         request.method,
         request.url.path,
         201,
+        _request_hash(payload),
         lambda: ProjectService(session, actor_id).create_progress_proposal(
             project_id, milestone_code, payload
         ),
@@ -756,6 +794,7 @@ def approve_proposal(
         request.method,
         request.url.path,
         200,
+        _request_hash(payload),
         lambda: ProjectService(session, actor_id).approve_proposal(
             proposal_id, payload.expected_project_version
         ),
@@ -787,6 +826,7 @@ def reject_proposal(
         request.method,
         request.url.path,
         200,
+        _request_hash(payload),
         lambda: ProjectService(session, actor_id).reject_proposal(proposal_id, payload.reason),
     )
 
@@ -807,6 +847,7 @@ def create_issue(
         request.method,
         request.url.path,
         201,
+        _request_hash(payload),
         lambda: ProjectService(session, actor_id).create_issue(project_id, payload),
     )
 
@@ -827,6 +868,7 @@ def update_issue(
         request.method,
         request.url.path,
         200,
+        _request_hash(payload),
         lambda: ProjectService(session, actor_id).update_issue(issue_id, payload),
     )
 
@@ -847,6 +889,7 @@ def delete_issue(
         request.method,
         request.url.path,
         200,
+        _request_hash(payload),
         lambda: ProjectService(session, actor_id).delete_issue(issue_id, payload),
     )
 
@@ -875,6 +918,7 @@ def _cached_response(
     request_key: str,
     method: str,
     path: str,
+    request_hash: str,
 ) -> JSONResponse | None:
     record = session.scalar(
         select(IdempotencyRecord).where(
@@ -886,6 +930,8 @@ def _cached_response(
         return None
     if record.method != method or record.path != path:
         raise ConflictError("idempotency key was already used for another request")
+    if record.request_hash is not None and record.request_hash != request_hash:
+        raise ConflictError("idempotency key was already used with another request")
     return JSONResponse(status_code=record.response_status, content=record.response_body)
 
 
@@ -896,9 +942,11 @@ def _execute_idempotent(
     method: str,
     path: str,
     status_code: int,
+    request_hash: str,
     operation: Callable[[], dict[str, Any]],
+    on_concurrent_replay: Callable[[], None] | None = None,
 ) -> JSONResponse:
-    cached = _cached_response(session, actor_id, request_key, method, path)
+    cached = _cached_response(session, actor_id, request_key, method, path, request_hash)
     if cached is not None:
         return cached
     try:
@@ -909,6 +957,7 @@ def _execute_idempotent(
                 request_key=request_key,
                 method=method,
                 path=path,
+                request_hash=request_hash,
                 response_status=status_code,
                 response_body=body,
             )
@@ -917,6 +966,14 @@ def _execute_idempotent(
     except PersistedConflictError:
         session.commit()
         raise
+    except IntegrityError as exc:
+        session.rollback()
+        cached = _cached_response(session, actor_id, request_key, method, path, request_hash)
+        if cached is not None:
+            if on_concurrent_replay is not None:
+                on_concurrent_replay()
+            return cached
+        raise exc
     except Exception:
         session.rollback()
         raise
@@ -934,3 +991,13 @@ def _execute_transaction(
         session.rollback()
         raise
     return body
+
+
+def _request_hash(payload: Any) -> str:
+    encoded = json.dumps(
+        jsonable_encoder(payload),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

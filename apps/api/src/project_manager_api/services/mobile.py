@@ -514,6 +514,8 @@ def natural_language_prefill(text: str, settings: AppSettings) -> dict[str, Any]
                 settings.llm_timeout_seconds,
                 settings.llm_max_retries,
                 settings.llm_structured_output_mode,
+                settings.llm_retry_base_delay_seconds,
+                settings.llm_retry_max_delay_seconds,
             ).generate_structured(text, _prefill_schema())
             return {
                 **result,

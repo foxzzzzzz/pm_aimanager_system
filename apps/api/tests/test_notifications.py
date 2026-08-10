@@ -46,6 +46,12 @@ class FakeSms:
         self.sent.append({"phone": phone, **payload})
 
 
+class CrashAfterWechatAcceptance:
+    def send(self, openid: str, payload: dict[str, object]) -> None:
+        del openid, payload
+        raise SystemExit("worker terminated after provider acceptance")
+
+
 def _settings(tmp_path: Path) -> AppSettings:
     return AppSettings(
         database_url=f"sqlite:///{tmp_path / 'notifications.sqlite'}",
@@ -250,6 +256,33 @@ def test_wechat_failure_is_recorded_and_critical_alert_falls_back_to_sms(
     assert wechat is not None and wechat.status == "failed_fallback_sent"
     assert wechat.attempts == 1
     assert len(sms.sent) == 1
+
+
+def test_external_delivery_is_durable_before_the_provider_call(notification_context) -> None:
+    session, settings, users = notification_context
+    session.add(
+        WechatSubscriptionGrant(
+            user_id=users["Rita"].id,
+            template_id="template-1",
+            remaining_uses=1,
+        )
+    )
+    session.commit()
+
+    with pytest.raises(SystemExit):
+        NotificationService(
+            session,
+            settings,
+            wechat=CrashAfterWechatAcceptance(),
+            sms=FakeSms(),
+        ).scan_daily(date(2026, 8, 10))
+    session.rollback()
+
+    delivery = session.scalar(
+        select(NotificationDelivery).where(NotificationDelivery.channel == "wechat")
+    )
+    assert delivery is not None
+    assert delivery.status == "pending"
 
 
 def test_failed_noncritical_wechat_delivery_can_be_retried(notification_context) -> None:

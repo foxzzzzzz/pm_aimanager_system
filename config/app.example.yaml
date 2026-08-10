@@ -32,6 +32,10 @@ imports:
     - .xlsx
   # Maximum upload size in mebibytes.
   max_file_size_mb: 20
+  # Maximum total uncompressed size of all files inside an uploaded workbook.
+  max_uncompressed_size_mb: 100
+  # Maximum number of ZIP entries allowed in an uploaded workbook.
+  max_archive_entries: 2000
   # Identifier used by the parser registry.
   template_id: lyra_project_spec
   # Structural version of the Lyra-PRO baseline workbook.
@@ -52,6 +56,10 @@ llm:
   timeout_seconds: 60
   # Retry count for transient failures and invalid structured output.
   max_retries: 2
+  # Initial retry delay for transient HTTP and transport failures.
+  retry_base_delay_seconds: 0.5
+  # Upper bound for exponential retry delays.
+  retry_max_delay_seconds: 8
   # Prefer strict JSON Schema and fall back to validated JSON when unsupported.
   structured_output_mode: auto
 

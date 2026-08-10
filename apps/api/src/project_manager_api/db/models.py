@@ -240,6 +240,7 @@ class IdempotencyRecord(Base):
     request_key: Mapped[str] = mapped_column(String(128), nullable=False)
     method: Mapped[str] = mapped_column(String(16), nullable=False)
     path: Mapped[str] = mapped_column(String(512), nullable=False)
+    request_hash: Mapped[str | None] = mapped_column(String(64))
     response_status: Mapped[int] = mapped_column(Integer, nullable=False)
     response_body: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

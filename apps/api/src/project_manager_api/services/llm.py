@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import random
 import re
+from time import sleep
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -20,6 +22,8 @@ class OpenAICompatibleClient:
         timeout_seconds: int,
         max_retries: int = 2,
         structured_output_mode: str = "auto",
+        retry_base_delay_seconds: float = 0.5,
+        retry_max_delay_seconds: float = 8,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -27,6 +31,8 @@ class OpenAICompatibleClient:
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
         self.structured_output_mode = structured_output_mode
+        self.retry_base_delay_seconds = retry_base_delay_seconds
+        self.retry_max_delay_seconds = retry_max_delay_seconds
 
     def generate_structured(self, text: str, schema: dict[str, Any]) -> dict[str, Any]:
         sanitized_text = re.sub(r"(?<!\d)1[3-9]\d{9}(?!\d)", "[PHONE]", text)
@@ -93,18 +99,26 @@ class OpenAICompatibleClient:
                     response_payload = json.load(response)
                 content = response_payload["choices"][0]["message"]["content"]
                 result = json.loads(content)
-            except HTTPError:
-                raise
+            except HTTPError as exc:
+                if exc.code not in {408, 429, 500, 502, 503, 504}:
+                    raise
+                if attempt == self.max_retries:
+                    raise ServiceError("LLM structured output request failed") from exc
+                retry_after = exc.headers.get("Retry-After") if exc.headers is not None else None
+                self._wait_before_retry(attempt, retry_after)
             except OSError as exc:
                 if attempt == self.max_retries:
                     raise ServiceError("LLM structured output request failed") from exc
+                self._wait_before_retry(attempt)
             except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
                 if attempt == self.max_retries:
                     raise ServiceError("LLM structured output request failed") from exc
+                self._wait_before_retry(attempt)
             else:
                 if not isinstance(result, dict):
                     if attempt == self.max_retries:
                         raise ServiceError("LLM structured output must be an object")
+                    self._wait_before_retry(attempt)
                     continue
                 try:
                     validate(instance=result, schema=schema)
@@ -113,6 +127,24 @@ class OpenAICompatibleClient:
                         raise ServiceError(
                             "LLM structured output violates JSON Schema"
                         ) from exc
+                    self._wait_before_retry(attempt)
                     continue
                 return result
         raise ServiceError("LLM structured output request failed")
+
+    def _wait_before_retry(self, attempt: int, retry_after: str | None = None) -> None:
+        if retry_after is not None:
+            try:
+                delay = min(float(retry_after), self.retry_max_delay_seconds)
+            except ValueError:
+                delay = self._jittered_delay(attempt)
+        else:
+            delay = self._jittered_delay(attempt)
+        sleep(max(0, delay))
+
+    def _jittered_delay(self, attempt: int) -> float:
+        ceiling = min(
+            self.retry_base_delay_seconds * (2**attempt),
+            self.retry_max_delay_seconds,
+        )
+        return random.uniform(ceiling * 0.5, ceiling)

@@ -206,3 +206,50 @@ def test_openai_compatible_client_retries_invalid_structured_output(
 
     assert result == {"milestone_code": "M23"}
     assert attempts == 2
+
+
+def test_openai_compatible_client_retries_rate_limits_with_backoff(monkeypatch: Any) -> None:
+    attempts = 0
+    delays: list[float] = []
+
+    def fake_urlopen(request: Request, timeout: int) -> io.BytesIO:
+        nonlocal attempts
+        del timeout
+        attempts += 1
+        if attempts == 1:
+            raise HTTPError(
+                request.full_url,
+                429,
+                "rate limited",
+                {"Retry-After": "2"},
+                io.BytesIO(b"{}"),
+            )
+        response = {"choices": [{"message": {"content": '{"milestone_code":"M23"}'}}]}
+        return io.BytesIO(json.dumps(response).encode())
+
+    monkeypatch.setattr("project_manager_api.services.llm.urlopen", fake_urlopen)
+    monkeypatch.setattr("project_manager_api.services.llm.sleep", delays.append)
+    client = OpenAICompatibleClient(
+        base_url="https://llm.example/v1",
+        api_key="test-key",
+        model="test-model",
+        timeout_seconds=12,
+        max_retries=1,
+        structured_output_mode="strict",
+        retry_base_delay_seconds=0.1,
+        retry_max_delay_seconds=5,
+    )
+
+    result = client.generate_structured(
+        "M23延期",
+        {
+            "type": "object",
+            "properties": {"milestone_code": {"type": "string"}},
+            "required": ["milestone_code"],
+            "additionalProperties": False,
+        },
+    )
+
+    assert result == {"milestone_code": "M23"}
+    assert attempts == 2
+    assert delays == [2.0]

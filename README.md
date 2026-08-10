@@ -15,6 +15,7 @@
 - MinIO API/管理台：`http://localhost:19000` / `http://localhost:19001`
 - PostgreSQL、Redis和MinIO由Docker Compose启动。
 - 所有宿主机端口均可在 `.env` 中覆盖，默认使用项目专用端口以避免与本机现有服务冲突。
+- 管理端容器使用Nginx提供生产构建产物；非本机部署时通过`ADMIN_WEB_API_BASE_URL`设置浏览器可访问的API地址。
 - 微信小程序使用微信开发者工具打开 `apps/mini-program`。
 
 ## Phase 1 固定模板解析
@@ -29,7 +30,7 @@ $env:PROJECT_MANAGER_DATABASE_URL="postgresql+psycopg://project_manager:change-m
 .\.venv\Scripts\python.exe -m alembic -c apps/api/alembic.ini upgrade head
 ```
 
-解析器只接受 `.xlsx`。未知模板、伪装文件、缺少必要Sheet/表头、非法日期或未知RACI成员都会明确失败，不会产生正式项目版本。
+解析器只接受配置允许的 `.xlsx`，并在可超时终止的隔离进程中校验ZIP条目数与解压后总大小。未知模板、伪装文件、缺少必要Sheet/表头、非法日期或未知RACI成员都会明确失败，不会产生正式项目版本。
 
 ## Phase 2 后台核心闭环
 

@@ -169,14 +169,17 @@ services:
       dockerfile: apps/admin-web/Dockerfile
       args:
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+        VITE_API_BASE_URL: ${ADMIN_WEB_API_BASE_URL:-http://localhost:18000/api/v1}
     ports:
-      - "${ADMIN_WEB_HOST_PORT:-15173}:5173"
+      - "${ADMIN_WEB_HOST_PORT:-15173}:80"
     healthcheck:
       test:
         - CMD
-        - node
-        - -e
-        - "fetch('http://127.0.0.1:5173').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+        - wget
+        - --quiet
+        - --tries=1
+        - --spider
+        - http://127.0.0.1/
       interval: 5s
       timeout: 3s
       retries: 10

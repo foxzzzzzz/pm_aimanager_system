@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -9,6 +10,13 @@ from sqlalchemy.orm import Session
 from project_manager_api.db.models import NotificationDelivery
 from project_manager_api.services.crypto import PhoneCipher
 from project_manager_api.settings import AppSettings
+
+
+def current_business_date(settings: AppSettings, *, now: datetime | None = None) -> date:
+    current = now or datetime.now(UTC)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=UTC)
+    return current.astimezone(ZoneInfo(settings.app_timezone)).date()
 
 
 def production_configuration_issues(settings: AppSettings) -> list[str]:

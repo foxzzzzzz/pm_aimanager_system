@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Protocol
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -69,27 +70,26 @@ class NotificationService:
         self.phone_cipher = (
             PhoneCipher(settings.phone_encryption_key) if settings.phone_encryption_key else None
         )
+        self._manager_names_cache: dict[Any, list[str]] = {}
+        self._external_sent_counts: dict[Any, int] | None = None
+        self._grants: dict[Any, WechatSubscriptionGrant] | None = None
 
     def scan_daily(self, business_date: date) -> ScanResult:
         if business_date.isoweekday() > 5:
             return ScanResult(created=0, skipped=0)
         reminders: list[Reminder] = []
-        for project in self.session.scalars(
-            select(Project).where(
-                Project.status == "active", Project.current_version_number.is_not(None)
+        project_versions = self._active_project_versions()
+        issues_by_project: dict[Any, list[Issue]] = defaultdict(list)
+        project_ids = [project.id for project, _version in project_versions]
+        if project_ids:
+            issue_query = select(Issue).where(Issue.project_id.in_(project_ids))
+            for issue in self.session.scalars(issue_query):
+                issues_by_project[issue.project_id].append(issue)
+        for project, version in project_versions:
+            reminders.extend(self._milestone_reminders(project, version.snapshot, business_date))
+            reminders.extend(
+                self._issue_reminders(project, business_date, issues_by_project[project.id])
             )
-        ):
-            version = self.session.scalar(
-                select(ProjectVersion).where(
-                    ProjectVersion.project_id == project.id,
-                    ProjectVersion.version_number == project.current_version_number,
-                )
-            )
-            if version is not None:
-                reminders.extend(
-                    self._milestone_reminders(project, version.snapshot, business_date)
-                )
-            reminders.extend(self._issue_reminders(project, business_date))
         result = self._deliver(reminders, business_date)
         self.session.commit()
         return result
@@ -99,19 +99,11 @@ class NotificationService:
             return ScanResult(created=0, skipped=0)
         reminders: list[Reminder] = []
         until = business_date + timedelta(days=self.settings.notification_weekly_days)
-        for project in self.session.scalars(
-            select(Project).where(
-                Project.status == "active", Project.current_version_number.is_not(None)
-            )
-        ):
-            version = self.session.scalar(
-                select(ProjectVersion).where(
-                    ProjectVersion.project_id == project.id,
-                    ProjectVersion.version_number == project.current_version_number,
-                )
-            )
-            if version is None:
-                continue
+        project_versions = self._active_project_versions()
+        recipient_names = self._bound_names_by_project(
+            [project.id for project, _version in project_versions]
+        )
+        for project, version in project_versions:
             items = self._scheduled_milestones(version.snapshot)
             upcoming = [
                 (milestone, window)
@@ -121,7 +113,7 @@ class NotificationService:
             ]
             if not upcoming:
                 continue
-            names = tuple(self._project_recipient_names(project.id))
+            names = tuple(recipient_names.get(project.id, []))
             summary = "; ".join(
                 f"{milestone['code']} {milestone['name']} ({window['end_date']})"
                 for milestone, window in upcoming
@@ -153,6 +145,8 @@ class NotificationService:
             raise NotFoundError("notification recipient no longer exists")
         delivery.attempts += 1
         delivery.error_message = None
+        delivery.status = "pending"
+        self.session.commit()
         try:
             if delivery.channel == "wechat":
                 grant = self.session.scalar(
@@ -172,6 +166,7 @@ class NotificationService:
                     raise RuntimeError("encrypted recipient phone is unavailable")
                 self.sms.send(self.phone_cipher.decrypt(user.phone_ciphertext), delivery.payload)
         except Exception as exc:
+            delivery.status = "failed"
             delivery.error_message = str(exc)[:2000]
             self.session.commit()
             return self._delivery_result(delivery)
@@ -218,10 +213,12 @@ class NotificationService:
             )
         return reminders
 
-    def _issue_reminders(self, project: Project, business_date: date) -> list[Reminder]:
+    def _issue_reminders(
+        self, project: Project, business_date: date, issues: list[Issue]
+    ) -> list[Reminder]:
         reminders: list[Reminder] = []
         closed = {"resolved", "closed", "已解决", "已关闭"}
-        for issue in self.session.scalars(select(Issue).where(Issue.project_id == project.id)):
+        for issue in issues:
             if issue.status in closed:
                 continue
             delta = (issue.due_date - business_date).days
@@ -250,8 +247,34 @@ class NotificationService:
     def _deliver(self, reminders: list[Reminder], business_date: date) -> ScanResult:
         created = 0
         skipped = 0
+        bindings_by_recipient: dict[tuple[Any, str], list[MemberBinding]] = defaultdict(list)
+        project_ids = {reminder.project.id for reminder in reminders}
+        if project_ids:
+            for binding in self.session.scalars(
+                select(MemberBinding).where(
+                    MemberBinding.project_id.in_(project_ids),
+                    MemberBinding.status == BindingStatus.BOUND,
+                    MemberBinding.user_id.is_not(None),
+                )
+            ):
+                bindings_by_recipient[(binding.project_id, binding.member_name)].append(binding)
+        user_ids = {
+            binding.user_id
+            for bindings in bindings_by_recipient.values()
+            for binding in bindings
+            if binding.user_id is not None
+        }
+        users = {
+            user.id: user
+            for user in self.session.scalars(select(MobileUser).where(MobileUser.id.in_(user_ids)))
+        } if user_ids else {}
+        self._prepare_external_state(user_ids, business_date)
         for reminder in reminders:
-            bindings = self._bindings(reminder.project.id, reminder.recipient_names)
+            bindings = [
+                binding
+                for name in reminder.recipient_names
+                for binding in bindings_by_recipient.get((reminder.project.id, name), [])
+            ]
             bound_names = {binding.member_name for binding in bindings}
             for missing_name in set(reminder.recipient_names) - bound_names:
                 if self._create_unbound_delivery(
@@ -259,7 +282,10 @@ class NotificationService:
                 ):
                     skipped += 1
             for binding in bindings:
-                user = self.session.get(MobileUser, binding.user_id)
+                if binding.user_id is None:
+                    skipped += 1
+                    continue
+                user = users.get(binding.user_id)
                 if user is None:
                     skipped += 1
                     continue
@@ -280,6 +306,7 @@ class NotificationService:
                 delivery.status = "sent"
                 delivery.attempts = 1
                 delivery.sent_at = datetime.now(UTC)
+                self.session.commit()
                 created += 1
                 external_sent = self._try_wechat(reminder, user, business_date)
                 if reminder.critical and not external_sent:
@@ -323,6 +350,7 @@ class NotificationService:
                 error_message="recipient has no bound mobile identity",
             )
         )
+        self.session.commit()
         return True
 
     def _try_wechat(self, reminder: Reminder, user: MobileUser, business_date: date) -> bool:
@@ -332,13 +360,7 @@ class NotificationService:
         if self._external_limit_reached(user.id, business_date):
             self._skip_external(reminder, user, business_date, "wechat", "daily limit reached")
             return False
-        grant = self.session.scalar(
-            select(WechatSubscriptionGrant).where(
-                WechatSubscriptionGrant.user_id == user.id,
-                WechatSubscriptionGrant.template_id == template_id,
-                WechatSubscriptionGrant.remaining_uses > 0,
-            )
-        )
+        grant = self._grant_for(user.id, template_id)
         if grant is None:
             self._skip_external(
                 reminder, user, business_date, "wechat", "subscription grant is unavailable"
@@ -348,15 +370,19 @@ class NotificationService:
         if delivery is None:
             return False
         delivery.attempts = 1
+        self.session.commit()
         try:
             self.wechat.send(user.openid, delivery.payload)
         except Exception as exc:  # adapters normalize provider failures here
             delivery.status = "failed"
             delivery.error_message = str(exc)[:2000]
+            self.session.commit()
             return False
         grant.remaining_uses -= 1
         delivery.status = "sent"
         delivery.sent_at = datetime.now(UTC)
+        self._record_external_send(user.id)
+        self.session.commit()
         return True
 
     def _try_sms(self, reminder: Reminder, user: MobileUser, business_date: date) -> bool:
@@ -374,15 +400,19 @@ class NotificationService:
         if delivery is None:
             return False
         delivery.attempts = 1
+        self.session.commit()
         try:
             phone = self.phone_cipher.decrypt(user.phone_ciphertext)
             self.sms.send(phone, delivery.payload)
         except Exception as exc:
             delivery.status = "failed"
             delivery.error_message = str(exc)[:2000]
+            self.session.commit()
             return False
         delivery.status = "sent"
         delivery.sent_at = datetime.now(UTC)
+        self._record_external_send(user.id)
+        self.session.commit()
         failed_wechat = self.session.scalar(
             select(NotificationDelivery).where(
                 NotificationDelivery.project_id == reminder.project.id,
@@ -397,6 +427,7 @@ class NotificationService:
         )
         if failed_wechat is not None:
             failed_wechat.status = "failed_fallback_sent"
+            self.session.commit()
         return True
 
     def _skip_external(
@@ -411,6 +442,7 @@ class NotificationService:
         if delivery is not None:
             delivery.status = "skipped"
             delivery.error_message = reason
+            self.session.commit()
 
     def _create_delivery(
         self, reminder: Reminder, user: MobileUser, business_date: date, channel: str
@@ -460,6 +492,10 @@ class NotificationService:
         }
 
     def _external_limit_reached(self, user_id: Any, business_date: date) -> bool:
+        if self._external_sent_counts is not None:
+            return self._external_sent_counts.get(user_id, 0) >= (
+                self.settings.notification_daily_external_limit
+            )
         count = self.session.scalar(
             select(func.count(NotificationDelivery.id)).where(
                 NotificationDelivery.user_id == user_id,
@@ -470,31 +506,53 @@ class NotificationService:
         )
         return int(count or 0) >= self.settings.notification_daily_external_limit
 
-    def _bindings(self, project_id: Any, names: tuple[str, ...]) -> list[MemberBinding]:
-        if not names:
-            return []
-        return list(
-            self.session.scalars(
-                select(MemberBinding).where(
-                    MemberBinding.project_id == project_id,
-                    MemberBinding.member_name.in_(names),
-                    MemberBinding.status == BindingStatus.BOUND,
-                    MemberBinding.user_id.is_not(None),
+    def _prepare_external_state(self, user_ids: set[Any], business_date: date) -> None:
+        self._external_sent_counts = {user_id: 0 for user_id in user_ids}
+        if user_ids:
+            rows = self.session.execute(
+                select(NotificationDelivery.user_id, func.count(NotificationDelivery.id))
+                .where(
+                    NotificationDelivery.user_id.in_(user_ids),
+                    NotificationDelivery.business_date == business_date,
+                    NotificationDelivery.channel.in_(("wechat", "sms")),
+                    NotificationDelivery.status == "sent",
                 )
+                .group_by(NotificationDelivery.user_id)
             )
-        )
-
-    def _project_recipient_names(self, project_id: Any) -> list[str]:
-        return list(
-            self.session.scalars(
-                select(MemberBinding.member_name).where(
-                    MemberBinding.project_id == project_id,
-                    MemberBinding.status == BindingStatus.BOUND,
+            for user_id, count in rows:
+                self._external_sent_counts[user_id] = int(count)
+        template_id = self.settings.wechat_subscription_template_id
+        self._grants = {}
+        if user_ids and template_id:
+            self._grants = {
+                grant.user_id: grant
+                for grant in self.session.scalars(
+                    select(WechatSubscriptionGrant).where(
+                        WechatSubscriptionGrant.user_id.in_(user_ids),
+                        WechatSubscriptionGrant.template_id == template_id,
+                    )
                 )
+            }
+
+    def _record_external_send(self, user_id: Any) -> None:
+        if self._external_sent_counts is not None:
+            self._external_sent_counts[user_id] = self._external_sent_counts.get(user_id, 0) + 1
+
+    def _grant_for(self, user_id: Any, template_id: str) -> WechatSubscriptionGrant | None:
+        if self._grants is not None:
+            grant = self._grants.get(user_id)
+            return grant if grant is not None and grant.remaining_uses > 0 else None
+        return self.session.scalar(
+            select(WechatSubscriptionGrant).where(
+                WechatSubscriptionGrant.user_id == user_id,
+                WechatSubscriptionGrant.template_id == template_id,
+                WechatSubscriptionGrant.remaining_uses > 0,
             )
         )
 
     def _manager_names(self, project_id: Any) -> list[str]:
+        if project_id in self._manager_names_cache:
+            return self._manager_names_cache[project_id]
         actor_ids = set(
             self.session.scalars(
                 select(ProjectMembership.actor_id).where(
@@ -524,7 +582,35 @@ class NotificationService:
             )
         )
         names.extend(f"manager:{actor_id}" for actor_id in actor_ids - bound_actors)
+        self._manager_names_cache[project_id] = names
         return names
+
+    def _active_project_versions(self) -> list[tuple[Project, ProjectVersion]]:
+        query = (
+            select(Project, ProjectVersion)
+            .join(
+                ProjectVersion,
+                and_(
+                    ProjectVersion.project_id == Project.id,
+                    ProjectVersion.version_number == Project.current_version_number,
+                ),
+            )
+            .where(Project.status == "active")
+        )
+        return [(project, version) for project, version in self.session.execute(query)]
+
+    def _bound_names_by_project(self, project_ids: list[Any]) -> dict[Any, list[str]]:
+        result: dict[Any, list[str]] = defaultdict(list)
+        if not project_ids:
+            return result
+        for project_id, member_name in self.session.execute(
+            select(MemberBinding.project_id, MemberBinding.member_name).where(
+                MemberBinding.project_id.in_(project_ids),
+                MemberBinding.status == BindingStatus.BOUND,
+            )
+        ):
+            result[project_id].append(member_name)
+        return result
 
     @staticmethod
     def _scheduled_milestones(

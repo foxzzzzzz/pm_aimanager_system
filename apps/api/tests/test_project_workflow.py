@@ -11,7 +11,10 @@ from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
 from project_manager_api.api.app import create_app
+from project_manager_api.api.schemas import IssueUpdate
 from project_manager_api.db.base import Base
+from project_manager_api.db.models import Issue
+from project_manager_api.services.errors import ConflictError
 from project_manager_api.services.projects import ProjectService
 from project_manager_api.settings import AppSettings
 
@@ -55,7 +58,7 @@ def _create_project(client: TestClient, key: str = "create-lyra") -> dict[str, A
         headers=_headers(key),
         json={"code": "ZPD1322", "name": "Lyra Pro"},
     )
-    assert response.status_code == 201
+    assert response.status_code == 201, response.json()
     return response.json()
 
 
@@ -77,7 +80,7 @@ def _upload(
                 )
             },
         )
-    assert response.status_code == 201
+    assert response.status_code == 201, response.json()
     return response.json()
 
 
@@ -129,6 +132,22 @@ def test_project_creation_is_idempotent_and_scoped_to_creator(
         headers=_headers(actor="outsider"),
     )
     assert forbidden.status_code == 403
+
+
+def test_idempotency_key_rejects_a_different_request_body(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    _create_project(client, key="same-key")
+
+    response = client.post(
+        "/api/v1/projects",
+        headers=_headers("same-key"),
+        json={"code": "OTHER", "name": "Different request"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "idempotency key was already used with another request"
 
 
 def test_admin_api_rejects_spoofed_actor_header_and_invalid_bearer(
@@ -506,6 +525,44 @@ def test_issue_updates_require_current_revision_and_create_audit(
     assert deleted.json()["revision"] == 3
     audit = client.get(f"/api/v1/projects/{project_id}/audit-logs", headers=PM_HEADERS)
     assert "issue.deleted" in [item["action"] for item in audit.json()]
+
+
+def test_issue_revision_check_uses_the_current_database_value(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    created = client.post(
+        f"/api/v1/projects/{project_id}/issues",
+        headers=_headers("issue-atomic-create"),
+        json={
+            "description": "并发更新验证",
+            "impact": "验证乐观锁",
+            "owner_name": "成员10",
+            "severity": "high",
+            "due_date": "2026-08-20",
+        },
+    )
+    issue_id = uuid.UUID(created.json()["id"])
+    stale_session = client.app.state.session_factory()
+    try:
+        stale_issue = stale_session.get(Issue, issue_id)
+        assert stale_issue is not None and stale_issue.revision == 1
+        updated = client.patch(
+            f"/api/v1/issues/{issue_id}",
+            headers=_headers("issue-atomic-first"),
+            json={"expected_revision": 1, "status": "处理中"},
+        )
+        assert updated.status_code == 200
+
+        with pytest.raises(ConflictError, match="revision is stale"):
+            ProjectService(stale_session, "pm-001").update_issue_as_member(
+                stale_issue,
+                IssueUpdate(expected_revision=1, status="已解决"),
+            )
+    finally:
+        stale_session.rollback()
+        stale_session.close()
 
 
 def test_admin_change_set_crud_publishes_one_immutable_version(

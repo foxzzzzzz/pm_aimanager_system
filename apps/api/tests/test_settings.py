@@ -13,6 +13,9 @@ def test_example_config_contains_required_external_parameters() -> None:
 
     assert config["app"]["timezone"] == "Asia/Shanghai"
     assert config["imports"]["allowed_extensions"] == [".xlsx"]
+    assert config["imports"]["max_uncompressed_size_mb"] > config["imports"]["max_file_size_mb"]
+    assert config["imports"]["max_archive_entries"] > 0
+    assert config["imports"]["timeout_seconds"] > 0
     assert config["imports"]["template_id"] == "lyra_project_spec"
     assert config["imports"]["template_version"] == "1.0"
     assert config["imports"]["manifest_paths"] == ["config/templates/lyra_project_spec-v1.0.yaml"]
@@ -22,6 +25,8 @@ def test_example_config_contains_required_external_parameters() -> None:
     assert config["llm"]["base_url"]
     assert config["llm"]["model"]
     assert config["llm"]["max_retries"] == 2
+    assert config["llm"]["retry_base_delay_seconds"] > 0
+    assert config["llm"]["retry_max_delay_seconds"] >= config["llm"]["retry_base_delay_seconds"]
     assert config["llm"]["structured_output_mode"] == "auto"
     assert config["security"]["admin_actor_id"] == "pm-001"
     assert config["security"]["admin_api_token_env"] == "ADMIN_API_TOKEN"

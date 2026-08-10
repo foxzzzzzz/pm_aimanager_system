@@ -27,6 +27,7 @@ def test_phase0_required_files_exist() -> None:
 
 def test_docker_build_uses_locked_runtime_dependencies_and_explicit_indexes() -> None:
     api_dockerfile = (ROOT / "apps" / "api" / "Dockerfile").read_text(encoding="utf-8")
+    admin_dockerfile = (ROOT / "apps" / "admin-web" / "Dockerfile").read_text(encoding="utf-8")
     compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
 
     assert "requirements.runtime.lock" in api_dockerfile
@@ -36,6 +37,10 @@ def test_docker_build_uses_locked_runtime_dependencies_and_explicit_indexes() ->
     assert "--retries 10" in api_dockerfile
     assert "PYPI_INDEX_URL" in compose["services"]["api"]["build"]["args"]
     assert "NPM_REGISTRY" in compose["services"]["admin-web"]["build"]["args"]
+    assert "pnpm --filter @project-manager/admin-web build" in admin_dockerfile
+    assert "FROM nginx:" in admin_dockerfile
+    assert 'CMD ["pnpm", "--filter", "@project-manager/admin-web", "dev"]' not in admin_dockerfile
+    assert compose["services"]["admin-web"]["ports"] == ["${ADMIN_WEB_HOST_PORT:-15173}:80"]
     assert "PROJECT_MANAGER_DATABASE_URL" in compose["services"]["api"]["environment"]
     assert (
         compose["services"]["api"]["environment"]["PROJECT_MANAGER_IMPORT_STORAGE_PATH"]

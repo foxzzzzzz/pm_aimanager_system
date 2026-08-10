@@ -15,6 +15,10 @@ class AppSettings(BaseModel):
     manifest_paths: list[Path]
     import_storage_path: Path
     max_import_size_bytes: int
+    allowed_import_extensions: list[str] = Field(default_factory=lambda: [".xlsx"])
+    max_import_uncompressed_size_bytes: int = 100 * 1024 * 1024
+    max_import_archive_entries: int = 2000
+    import_timeout_seconds: float = 30
     storage_backend: Literal["local", "s3"] = "local"
     object_storage_endpoint: str | None = None
     object_storage_bucket: str | None = None
@@ -30,6 +34,8 @@ class AppSettings(BaseModel):
     llm_model: str = "provider-model-name"
     llm_timeout_seconds: int = 60
     llm_max_retries: int = 2
+    llm_retry_base_delay_seconds: float = 0.5
+    llm_retry_max_delay_seconds: float = 8
     llm_structured_output_mode: Literal["auto", "strict", "json"] = "auto"
     admin_api_token: str | None = None
     admin_actor_id: str = "pm-001"
@@ -79,6 +85,9 @@ class AppSettings(BaseModel):
             )
         )
         max_size = int(config["imports"]["max_file_size_mb"]) * 1024 * 1024
+        max_uncompressed_size = (
+            int(config["imports"]["max_uncompressed_size_mb"]) * 1024 * 1024
+        )
         object_storage = config["object_storage"]
         wechat = config["wechat"]
         llm = config["llm"]
@@ -97,6 +106,12 @@ class AppSettings(BaseModel):
             manifest_paths=manifest_paths,
             import_storage_path=storage_path,
             max_import_size_bytes=max_size,
+            allowed_import_extensions=[
+                str(value).lower() for value in config["imports"]["allowed_extensions"]
+            ],
+            max_import_uncompressed_size_bytes=max_uncompressed_size,
+            max_import_archive_entries=int(config["imports"]["max_archive_entries"]),
+            import_timeout_seconds=float(config["imports"]["timeout_seconds"]),
             storage_backend=os.environ.get(
                 "PROJECT_MANAGER_STORAGE_BACKEND", object_storage["backend"]
             ),
@@ -121,6 +136,8 @@ class AppSettings(BaseModel):
             llm_model=os.environ.get("LLM_MODEL", str(llm["model"])),
             llm_timeout_seconds=int(llm["timeout_seconds"]),
             llm_max_retries=int(llm["max_retries"]),
+            llm_retry_base_delay_seconds=float(llm["retry_base_delay_seconds"]),
+            llm_retry_max_delay_seconds=float(llm["retry_max_delay_seconds"]),
             llm_structured_output_mode=llm["structured_output_mode"],
             admin_api_token=os.environ.get(str(security["admin_api_token_env"])),
             admin_actor_id=str(security["admin_actor_id"]),

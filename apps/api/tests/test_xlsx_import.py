@@ -1,5 +1,6 @@
 import json
 import shutil
+import zipfile
 from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
@@ -149,6 +150,32 @@ def test_xlsx_07_rejects_xls_and_disguised_files(
 
     with pytest.raises(InvalidWorkbookError):
         registry.parse(invalid)
+
+
+def test_xlsx_rejects_archives_that_expand_beyond_the_configured_limit(
+    registry: ParserRegistry,
+    phase1_tmp_path: Path,
+) -> None:
+    oversized = phase1_tmp_path / "oversized.xlsx"
+    with zipfile.ZipFile(oversized, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("xl/worksheets/sheet1.xml", "x" * 2048)
+
+    with pytest.raises(InvalidWorkbookError, match="expanded size limit"):
+        registry.parse(
+            oversized,
+            max_uncompressed_size_bytes=1024,
+            max_archive_entries=10,
+        )
+
+
+def test_xlsx_isolated_parser_enforces_execution_timeout(registry: ParserRegistry) -> None:
+    with pytest.raises(InvalidWorkbookError, match="timed out"):
+        registry.parse_isolated(
+            WORKBOOK,
+            timeout_seconds=0.001,
+            max_uncompressed_size_bytes=50 * 1024 * 1024,
+            max_archive_entries=1000,
+        )
 
 
 def test_xlsx_08_rejects_unknown_template_and_lists_supported_versions(

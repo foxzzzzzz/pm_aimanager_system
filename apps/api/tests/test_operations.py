@@ -11,6 +11,7 @@ from project_manager_api.db.base import Base
 from project_manager_api.db.models import NotificationDelivery
 from project_manager_api.services.operations import (
     build_operational_status,
+    current_business_date,
     production_configuration_issues,
 )
 from project_manager_api.settings import AppSettings
@@ -58,6 +59,17 @@ def test_production_configuration_rejects_development_and_placeholder_values(
     assert "a production WeChat AppID is required" in issues
     assert "a production WeChat subscription template is required" in issues
     assert "localhost CORS origins are not allowed in production" in issues
+
+
+def test_business_date_uses_the_configured_timezone(tmp_path: Path) -> None:
+    settings = _settings(tmp_path, app_timezone="Asia/Shanghai")
+
+    result = current_business_date(
+        settings,
+        now=datetime(2026, 8, 9, 17, 0, tzinfo=UTC),
+    )
+
+    assert result == date(2026, 8, 10)
 
 
 def test_production_configuration_requires_complete_sms_credentials_when_enabled(

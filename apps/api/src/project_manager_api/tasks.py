@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
 from celery import Celery  # type: ignore[import-untyped]
 from celery.schedules import crontab  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session
@@ -13,6 +10,7 @@ from project_manager_api.services.notification_adapters import (
     WechatSubscriptionSender,
 )
 from project_manager_api.services.notifications import NotificationService
+from project_manager_api.services.operations import current_business_date
 from project_manager_api.settings import AppSettings
 
 settings = AppSettings.from_environment()
@@ -64,7 +62,7 @@ def _service() -> tuple[NotificationService, Session]:
 def scan_daily() -> dict[str, int]:
     service, session = _service()
     try:
-        business_date = datetime.now(ZoneInfo(settings.app_timezone)).date()
+        business_date = current_business_date(settings)
         result = service.scan_daily(business_date)
         return {"created": result.created, "skipped": result.skipped}
     finally:
@@ -75,7 +73,7 @@ def scan_daily() -> dict[str, int]:
 def scan_weekly() -> dict[str, int]:
     service, session = _service()
     try:
-        business_date = datetime.now(ZoneInfo(settings.app_timezone)).date()
+        business_date = current_business_date(settings)
         result = service.scan_weekly(business_date)
         return {"created": result.created, "skipped": result.skipped}
     finally:
