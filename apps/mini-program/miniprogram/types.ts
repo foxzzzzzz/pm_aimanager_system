@@ -18,6 +18,7 @@ export interface Milestone {
 export interface MobileDashboard {
   project: { id: string; code: string; name: string };
   current_version_number: number;
+  business_date: string;
   active_plan_name: string;
   member_name: string;
   milestones: Milestone[];

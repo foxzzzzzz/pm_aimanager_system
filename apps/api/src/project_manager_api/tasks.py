@@ -58,7 +58,7 @@ def _service() -> tuple[NotificationService, Session]:
     )
 
 
-@celery_app.task(name="project_manager.notifications.daily")
+@celery_app.task(name="project_manager.notifications.daily")  # type: ignore[untyped-decorator]
 def scan_daily() -> dict[str, int]:
     service, session = _service()
     try:
@@ -69,7 +69,7 @@ def scan_daily() -> dict[str, int]:
         session.close()
 
 
-@celery_app.task(name="project_manager.notifications.weekly")
+@celery_app.task(name="project_manager.notifications.weekly")  # type: ignore[untyped-decorator]
 def scan_weekly() -> dict[str, int]:
     service, session = _service()
     try:

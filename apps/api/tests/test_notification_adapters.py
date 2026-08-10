@@ -4,11 +4,13 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request
 
+from project_manager_api.services import wechat
 from project_manager_api.services.notification_adapters import WechatSubscriptionSender
 from project_manager_api.settings import AppSettings
 
 
 def test_wechat_sender_reuses_a_valid_access_token(monkeypatch: Any, tmp_path: Path) -> None:
+    wechat._access_token_cache.clear()
     token_requests = 0
     message_requests = 0
 
@@ -21,10 +23,8 @@ def test_wechat_sender_reuses_a_valid_access_token(monkeypatch: Any, tmp_path: P
         message_requests += 1
         return io.BytesIO(json.dumps({"errcode": 0}).encode())
 
-    monkeypatch.setattr(
-        "project_manager_api.services.notification_adapters.urlopen",
-        fake_urlopen,
-    )
+    monkeypatch.setattr("project_manager_api.services.notification_adapters.urlopen", fake_urlopen)
+    monkeypatch.setattr("project_manager_api.services.wechat.urlopen", fake_urlopen)
     settings = AppSettings(
         database_url="sqlite://",
         manifest_paths=[],

@@ -17,6 +17,7 @@ const request = createRequester({
   baseUrl: runtimeConfig.apiBaseUrl,
   getToken: () => wx.getStorageSync<string>("access_token"),
   requestKey,
+  retryAttempts: runtimeConfig.requestRetryAttempts,
   transport: (options: WechatMiniprogram.RequestOption) => { wx.request(options); },
 });
 
@@ -67,6 +68,7 @@ export const api = {
     request<{
       milestone_code: string | null;
       kind: "delay" | null;
+      start_date: string | null;
       end_date: string | null;
       reason: string;
       requires_confirmation: boolean;

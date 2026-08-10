@@ -3,5 +3,6 @@ export function createRequester(options: {
   baseUrl: string;
   getToken: () => string;
   requestKey: () => string;
+  retryAttempts?: number;
   transport: (options: WechatMiniprogram.RequestOption) => void;
 }): <T>(path: string, method?: RequestMethod, data?: WechatMiniprogram.IAnyObject) => Promise<T>;

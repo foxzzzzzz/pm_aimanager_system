@@ -33,7 +33,9 @@ export const formatDate = (value) => value ? value.slice(0, 10) : "—";
 export const formatDateTime = (value, timezoneOffsetMinutes) => {
   if (!value) return "—";
   const normalized = value.replace(/\.(\d{3})\d+/, ".$1");
-  const timestamp = Date.parse(normalized);
+  const timestamp = Date.parse(
+    /(?:Z|[+-]\d{2}:\d{2})$/.test(normalized) ? normalized : `${normalized}Z`,
+  );
   if (Number.isNaN(timestamp)) return value;
   const shifted = new Date(timestamp + timezoneOffsetMinutes * 60 * 1000);
   const year = shifted.getUTCFullYear();

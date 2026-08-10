@@ -23,4 +23,5 @@
 .raci-row { display: flex; margin-top: 14rpx; }
 .raci-key { width: 54rpx; color: #146c5a; font-weight: 700; }
 .raci-names { flex: 1; color: #53635f; }
+.load-more { margin: 20rpx 0 30rpx; }
 .empty-state { color: #6f7b78; text-align: center; }

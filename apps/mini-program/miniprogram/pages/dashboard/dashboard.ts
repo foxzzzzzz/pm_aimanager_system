@@ -17,13 +17,6 @@ interface MilestoneView extends Milestone {
   statusLabel: string;
 }
 
-const localDateText = () => {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-};
-
 const presentMilestones = (milestones: Milestone[]): MilestoneView[] => milestones.map((item) => ({
   ...item,
   planLabel: presentPlan(item.plan),
@@ -45,18 +38,25 @@ Page({
     loading: true,
     resolvingProposalId: "",
   },
-  async onLoad(options: Record<string, string | undefined>) {
+  onLoad(options: Record<string, string | undefined>) {
     const projectId = options.projectId || wx.getStorageSync<string>("current_project_id");
     this.setData({ projectId });
-    await this.loadDashboard();
   },
-  async loadDashboard() {
+  async onShow() {
+    if (this.data.projectId) await this.loadDashboard();
+  },
+  async onPullDownRefresh() {
+    await this.loadDashboard();
+    wx.stopPullDownRefresh();
+  },
+  async loadDashboard(showError = true): Promise<boolean> {
+    if (!this.data.dashboard) this.setData({ loading: true });
     try {
       const [dashboard, proposals] = await Promise.all([
         api.dashboard(this.data.projectId),
         api.approvableProposals(this.data.projectId),
       ]);
-      const today = localDateText();
+      const today = dashboard.business_date;
       const upcomingDays = runtimeConfig.milestoneUpcomingDays;
       this.setData({
         dashboard,
@@ -72,8 +72,10 @@ Page({
         ),
       });
       wx.setStorageSync("current_member_name", dashboard.member_name);
+      return true;
     } catch {
-      wx.showToast({ title: "看板加载失败", icon: "none" });
+      if (showError) wx.showToast({ title: "看板加载失败", icon: "none" });
+      return false;
     } finally {
       this.setData({ loading: false });
     }
@@ -87,7 +89,7 @@ Page({
         filterMilestones(
           this.data.dashboard.milestones,
           selectedMilestoneFilter,
-          localDateText(),
+          this.data.dashboard.business_date,
           runtimeConfig.milestoneUpcomingDays,
         ),
       ),
@@ -109,14 +111,28 @@ Page({
   },
   async approveProposal(event: ProposalTapEvent) {
     if (this.data.resolvingProposalId) return;
+    const confirmation = await wx.showModal({
+      title: "批准节点变更",
+      content: "批准后将发布新的正式项目版本，是否继续？",
+      confirmText: "确认批准",
+    });
+    if (!confirmation.confirm) return;
     this.setData({ resolvingProposalId: event.currentTarget.dataset.id });
     try {
       await api.approveProposal(
         event.currentTarget.dataset.id,
         event.currentTarget.dataset.version,
       );
-      await this.loadDashboard();
-      wx.showToast({ title: "已批准", icon: "success" });
+      this.setData({
+        proposals: this.data.proposals.filter(
+          (item) => item.id !== event.currentTarget.dataset.id,
+        ),
+      });
+      const refreshed = await this.loadDashboard(false);
+      wx.showToast({
+        title: refreshed ? "已批准" : "已批准，请稍后刷新",
+        icon: refreshed ? "success" : "none",
+      });
     } catch (reason) {
       wx.showToast({ title: (reason as Error).message, icon: "none" });
     } finally {
@@ -138,8 +154,16 @@ Page({
     this.setData({ resolvingProposalId: event.currentTarget.dataset.id });
     try {
       await api.rejectProposal(event.currentTarget.dataset.id, reason);
-      await this.loadDashboard();
-      wx.showToast({ title: "已驳回", icon: "success" });
+      this.setData({
+        proposals: this.data.proposals.filter(
+          (item) => item.id !== event.currentTarget.dataset.id,
+        ),
+      });
+      const refreshed = await this.loadDashboard(false);
+      wx.showToast({
+        title: refreshed ? "已驳回" : "已驳回，请稍后刷新",
+        icon: refreshed ? "success" : "none",
+      });
     } catch (error) {
       wx.showToast({ title: (error as Error).message, icon: "none" });
     } finally {

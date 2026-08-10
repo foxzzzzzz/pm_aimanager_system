@@ -484,6 +484,7 @@ class ProjectService:
         if proposal is None:
             raise NotFoundError("change proposal not found")
         project = self._require_project(proposal.project_id, lock=True)
+        self.session.refresh(proposal)
         self._require_approval_permission(project, proposal.milestone_code)
         if proposal.status != ProposalStatus.PENDING:
             raise ConflictError("change proposal is already resolved")
@@ -544,7 +545,8 @@ class ProjectService:
         proposal = self.session.get(ChangeProposal, proposal_id)
         if proposal is None:
             raise NotFoundError("change proposal not found")
-        project = self._require_project(proposal.project_id)
+        project = self._require_project(proposal.project_id, lock=True)
+        self.session.refresh(proposal)
         self._require_approval_permission(project, proposal.milestone_code)
         if proposal.status != ProposalStatus.PENDING:
             raise ConflictError("change proposal is already resolved")

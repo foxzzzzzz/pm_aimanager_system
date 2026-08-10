@@ -44,11 +44,12 @@ from project_manager_api.services.errors import (
     ServiceError,
 )
 from project_manager_api.services.llm import OpenAICompatibleClient
+from project_manager_api.services.operations import current_business_date
 from project_manager_api.services.projects import ProjectService
 from project_manager_api.services.wechat import (
+    build_invitation_path,
     exchange_wechat_code,
     exchange_wechat_phone,
-    generate_invitation_entries,
 )
 from project_manager_api.settings import AppSettings
 
@@ -151,7 +152,7 @@ class MobileService:
             **_binding_dict(binding),
             "invitation_token": token,
             "invitation_expires_at": binding.invitation_expires_at.isoformat(),
-            **generate_invitation_entries(token, self.settings),
+            "mini_program_path": build_invitation_path(token, self.settings),
         }
 
     def accept_invitation(self, payload: InvitationAccept) -> dict[str, Any]:
@@ -291,6 +292,7 @@ class MobileService:
         return {
             "project": {"id": str(project.id), "code": project.code, "name": project.name},
             "current_version_number": project.current_version_number or 0,
+            "business_date": current_business_date(self.settings).isoformat(),
             "active_plan_name": active_name,
             "member_name": binding.member_name,
             "milestones": milestones,
@@ -298,7 +300,24 @@ class MobileService:
 
     def project_review(self, project_id: uuid.UUID) -> dict[str, Any]:
         self._bound_project(project_id)
-        return ProjectService(self.session, _actor_id(self._user())).review(project_id)
+        review = ProjectService(self.session, _actor_id(self._user())).review(project_id)
+        review["product_specs"] = [
+            {
+                key: item.get(key)
+                for key in (
+                    "row_number",
+                    "major_category",
+                    "category",
+                    "item",
+                    "configuration",
+                    "core_information",
+                    "selected_model",
+                    "notes",
+                )
+            }
+            for item in review["product_specs"]
+        ]
+        return review
 
     def create_milestone_proposal(
         self,
@@ -356,7 +375,9 @@ class MobileService:
         return _proposal_dict(proposal)
 
     def create_issue(self, project_id: uuid.UUID, payload: IssueCreate) -> dict[str, Any]:
-        self._bound_project(project_id)
+        _, binding, _ = self._bound_project(project_id)
+        if payload.owner_name != binding.member_name:
+            raise ForbiddenError("mobile users can create only their own issues")
         return ProjectService(self.session, _actor_id(self._user())).create_issue(
             project_id, payload
         )
@@ -601,7 +622,7 @@ def _milestone(snapshot: dict[str, Any], milestone_code: str) -> dict[str, Any]:
     )
     if milestone is None:
         raise NotFoundError("milestone not found")
-    return milestone
+    return dict(milestone)
 
 
 def _active_window(snapshot: dict[str, Any], milestone_name: str) -> dict[str, Any]:
@@ -612,7 +633,7 @@ def _active_window(snapshot: dict[str, Any], milestone_name: str) -> dict[str, A
     )
     if plan is None or milestone_name not in plan["milestones"]:
         raise NotFoundError("active milestone plan not found")
-    return plan["milestones"][milestone_name]
+    return dict(plan["milestones"][milestone_name])
 
 
 def _user_dict(user: MobileUser) -> dict[str, Any]:
@@ -660,5 +681,10 @@ def _message_dict(message: InAppMessage) -> dict[str, Any]:
         "title": message.title,
         "body": message.body,
         "is_read": message.is_read,
-        "created_at": message.created_at.isoformat(),
+        "created_at": _utc_isoformat(message.created_at),
     }
+
+
+def _utc_isoformat(value: datetime) -> str:
+    aware = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    return aware.astimezone(UTC).isoformat()

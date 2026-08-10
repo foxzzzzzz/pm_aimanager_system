@@ -14,12 +14,13 @@
 
   <view wx:if="{{review && activeTab === 'specs'}}">
     <view wx:if="{{!loading && specs.length === 0}}" class="card empty-state">暂无产品规格</view>
-    <view wx:for="{{specs}}" wx:key="row_number" class="card item-card">
+    <view wx:for="{{visibleSpecs}}" wx:key="row_number" class="card item-card">
       <text class="item-title">{{item.item}}</text>
       <text class="muted">{{item.major_category || item.category || '未分类'}}</text>
       <text class="detail">{{item.detail}}</text>
       <text wx:if="{{item.notes}}" class="note">备注：{{item.notes}}</text>
     </view>
+    <button wx:if="{{visibleSpecs.length < specs.length}}" class="load-more" bindtap="showMoreSpecs">查看更多规格</button>
   </view>
 
   <view wx:if="{{review && activeTab === 'members'}}">
@@ -33,7 +34,7 @@
 
   <view wx:if="{{review && activeTab === 'raci'}}">
     <view wx:if="{{!loading && raciRows.length === 0}}" class="card empty-state">暂无RACI数据</view>
-    <view wx:for="{{raciRows}}" wx:key="code" wx:for-item="milestone" class="card item-card">
+    <view wx:for="{{visibleRaciRows}}" wx:key="code" wx:for-item="milestone" class="card item-card">
       <view class="milestone-title">
         <text class="code">{{milestone.code}}</text>
         <text class="item-title">{{milestone.name}}</text>
@@ -44,6 +45,7 @@
         <text class="raci-names">{{role.names}}</text>
       </view>
     </view>
+    <button wx:if="{{visibleRaciRows.length < raciRows.length}}" class="load-more" bindtap="showMoreRaci">查看更多RACI</button>
   </view>
 
   <view wx:if="{{!loading && !review}}" class="card empty-state">项目资料暂不可用</view>

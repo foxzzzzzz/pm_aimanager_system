@@ -67,7 +67,6 @@ Page({
   },
   onDescription(event: InputEvent) { this.setData({ description: event.detail.value }); },
   onImpact(event: InputEvent) { this.setData({ impact: event.detail.value }); },
-  onOwner(event: InputEvent) { this.setData({ ownerName: event.detail.value }); },
   onDueDate(event: PickerEvent) { this.setData({ dueDate: event.detail.value }); },
   onSeverity(event: PickerEvent) { this.setData({ severityIndex: Number(event.detail.value) }); },
   onStatus(event: PickerEvent) { this.setData({ statusIndex: Number(event.detail.value) }); },
@@ -108,8 +107,9 @@ Page({
     const isEditing = Boolean(this.data.editingIssueId);
     this.setData({ creating: true });
     try {
+      let saved: Issue;
       if (isEditing) {
-        await api.updateIssue(this.data.editingIssueId, {
+        saved = await api.updateIssue(this.data.editingIssueId, {
           expected_revision: this.data.editingRevision,
           description: this.data.description,
           impact: this.data.impact,
@@ -118,7 +118,7 @@ Page({
           status: this.data.statusOptions[this.data.statusIndex],
         });
       } else {
-        await api.createIssue(this.data.projectId, {
+        saved = await api.createIssue(this.data.projectId, {
           description: this.data.description,
           impact: this.data.impact,
           owner_name: this.data.ownerName,
@@ -126,8 +126,11 @@ Page({
           due_date: this.data.dueDate,
         });
       }
+      const issues = this.data.issues.some((item) => item.id === saved.id)
+        ? this.data.issues.map((item) => item.id === saved.id ? saved : item)
+        : [saved, ...this.data.issues];
       this.cancelEdit();
-      this.setData({ issues: presentIssues(await api.issues(this.data.projectId)) });
+      this.setData({ issues: presentIssues(issues) });
       wx.showToast({ title: isEditing ? "问题已更新" : "问题已登记", icon: "success" });
     } catch (error) {
       wx.showToast({ title: (error as Error).message, icon: "none" });
@@ -139,11 +142,15 @@ Page({
     if (this.data.actionIssueId) return;
     this.setData({ actionIssueId: event.currentTarget.dataset.id });
     try {
-      await api.updateIssue(event.currentTarget.dataset.id, {
+      const saved = await api.updateIssue(event.currentTarget.dataset.id, {
         expected_revision: event.currentTarget.dataset.revision,
         status: "处理中",
       });
-      this.setData({ issues: presentIssues(await api.issues(this.data.projectId)) });
+      this.setData({
+        issues: presentIssues(
+          this.data.issues.map((item) => item.id === saved.id ? saved : item),
+        ),
+      });
     } catch (reason) {
       wx.showToast({ title: (reason as Error).message, icon: "none" });
     } finally {
@@ -163,11 +170,15 @@ Page({
     if (!confirmation.confirm || !reason) return;
     this.setData({ actionIssueId: event.currentTarget.dataset.id });
     try {
-      await api.deleteIssue(event.currentTarget.dataset.id, {
+      const saved = await api.deleteIssue(event.currentTarget.dataset.id, {
         expected_revision: event.currentTarget.dataset.revision,
         reason,
       });
-      this.setData({ issues: presentIssues(await api.issues(this.data.projectId)) });
+      this.setData({
+        issues: presentIssues(
+          this.data.issues.map((item) => item.id === saved.id ? saved : item),
+        ),
+      });
       wx.showToast({ title: "问题已作废", icon: "success" });
     } catch (error) {
       wx.showToast({ title: (error as Error).message, icon: "none" });

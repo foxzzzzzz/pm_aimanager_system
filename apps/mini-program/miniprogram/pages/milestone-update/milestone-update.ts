@@ -1,5 +1,6 @@
 import { api } from "../../services/api";
 import { validateMilestoneUpdate } from "../../services/form-validation.js";
+import { mergeMilestonePrefill } from "../../services/milestone-prefill.js";
 
 interface InputEvent { detail: { value: string } }
 interface PickerEvent { detail: { value: string } }
@@ -64,15 +65,7 @@ Page({
     this.setData({ prefillBusy: true });
     try {
       const result = await api.prefill(this.data.naturalText);
-      this.setData({
-        code: result.milestone_code || this.data.code,
-        kind: result.kind || this.data.kind,
-        startDate: result.end_date || this.data.startDate,
-        endDate: result.end_date || this.data.endDate,
-        reason: result.reason,
-        prefillApplied: true,
-        requiresConfirmation: result.requires_confirmation !== false,
-      });
+      this.setData(mergeMilestonePrefill(this.data, result));
     } catch (error) {
       wx.showToast({ title: (error as Error).message, icon: "none" });
     } finally {

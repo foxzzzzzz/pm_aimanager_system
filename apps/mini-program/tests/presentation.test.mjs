@@ -22,6 +22,7 @@ test("presentation formats dates consistently for the configured timezone", () =
   assert.equal(formatDate("2026-08-10"), "2026-08-10");
   assert.equal(formatDate(null), "—");
   assert.equal(formatDateTime("2026-08-10T07:35:27.450502+00:00", 480), "2026-08-10 15:35");
+  assert.equal(formatDateTime("2026-08-10T07:35:27", 480), "2026-08-10 15:35");
   assert.equal(formatDateTime("", 480), "—");
 });
 

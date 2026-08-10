@@ -12,7 +12,7 @@
       <text class="title">{{editingIssueId ? '编辑重难点' : '登记重难点'}}</text>
       <textarea class="field" value="{{description}}" placeholder="问题描述" bindinput="onDescription" />
       <textarea class="field" value="{{impact}}" placeholder="项目影响" bindinput="onImpact" />
-      <input class="field" value="{{ownerName}}" disabled="{{editingIssueId !== ''}}" placeholder="责任人姓名" bindinput="onOwner" />
+      <input class="field" value="{{ownerName}}" disabled placeholder="责任人姓名" />
       <picker range="{{severityLabels}}" value="{{severityIndex}}" bindchange="onSeverity"><view class="field">严重程度：{{severityLabels[severityIndex]}}</view></picker>
       <picker mode="date" bindchange="onDueDate"><view class="field">预计完成：{{dueDate || '请选择'}}</view></picker>
       <picker wx:if="{{editingIssueId}}" range="{{statusOptions}}" value="{{statusIndex}}" bindchange="onStatus"><view class="field">问题状态：{{statusOptions[statusIndex]}}</view></picker>

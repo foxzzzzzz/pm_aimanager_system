@@ -1,4 +1,6 @@
 import { api } from "../../services/api";
+import { runtimeConfig } from "../../config";
+import { visiblePage } from "../../services/pagination.js";
 import type { ProductSpec, ProjectMember, ProjectReview } from "../../types";
 
 type ReviewTab = "specs" | "members" | "raci";
@@ -25,8 +27,12 @@ Page({
     projectId: "",
     review: null as ProjectReview | null,
     specs: [] as SpecView[],
+    visibleSpecs: [] as SpecView[],
     members: [] as ProjectMember[],
     raciRows: [] as RaciView[],
+    visibleRaciRows: [] as RaciView[],
+    specPage: 1,
+    raciPage: 1,
     activeTab: "specs" as ReviewTab,
     loading: true,
   },
@@ -51,7 +57,16 @@ Page({
           names: milestone.assignments[key]?.join("、") || "—",
         })),
       }));
-      this.setData({ review, specs, members: review.members, raciRows });
+      this.setData({
+        review,
+        specs,
+        visibleSpecs: visiblePage(specs, 1, runtimeConfig.projectReviewPageSize),
+        members: review.members,
+        raciRows,
+        visibleRaciRows: visiblePage(raciRows, 1, runtimeConfig.projectReviewPageSize),
+        specPage: 1,
+        raciPage: 1,
+      });
     } catch (error) {
       wx.showToast({ title: (error as Error).message || "项目资料加载失败", icon: "none" });
     } finally {
@@ -60,5 +75,27 @@ Page({
   },
   selectTab(event: TabTapEvent) {
     this.setData({ activeTab: event.currentTarget.dataset.tab });
+  },
+  showMoreSpecs() {
+    const specPage = this.data.specPage + 1;
+    this.setData({
+      specPage,
+      visibleSpecs: visiblePage(
+        this.data.specs,
+        specPage,
+        runtimeConfig.projectReviewPageSize,
+      ),
+    });
+  },
+  showMoreRaci() {
+    const raciPage = this.data.raciPage + 1;
+    this.setData({
+      raciPage,
+      visibleRaciRows: visiblePage(
+        this.data.raciRows,
+        raciPage,
+        runtimeConfig.projectReviewPageSize,
+      ),
+    });
   },
 });

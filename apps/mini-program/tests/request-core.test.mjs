@@ -45,3 +45,28 @@ test("requester exposes structured conflict messages", async () => {
 
   await assert.rejects(request("/mobile/projects/1"), /项目版本已变化/);
 });
+
+test("requester retries an ambiguous transport failure with the same idempotency key", async () => {
+  const keys = [];
+  let attempts = 0;
+  const request = createRequester({
+    baseUrl: "https://api.example/api/v1",
+    getToken: () => "mobile-token",
+    requestKey: () => `request-key-${attempts}`,
+    retryAttempts: 1,
+    transport: (options) => {
+      attempts += 1;
+      keys.push(options.header["X-Idempotency-Key"]);
+      if (attempts === 1) {
+        options.fail(new Error("network disconnected"));
+        return;
+      }
+      options.success({ statusCode: 201, data: { id: "issue-1" } });
+    },
+  });
+
+  assert.deepEqual(await request("/mobile/projects/1/issues", "POST", { description: "阻塞" }), {
+    id: "issue-1",
+  });
+  assert.deepEqual(keys, ["request-key-0", "request-key-0"]);
+});

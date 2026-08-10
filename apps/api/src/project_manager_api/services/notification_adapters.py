@@ -4,23 +4,21 @@ import hashlib
 import hmac
 import json
 from datetime import UTC, datetime
-from time import monotonic
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from project_manager_api.services.wechat import wechat_access_token
 from project_manager_api.settings import AppSettings
 
 
 class WechatSubscriptionSender:
     def __init__(self, settings: AppSettings):
         self.settings = settings
-        self._access_token: str | None = None
-        self._access_token_expires_at = 0.0
 
     def send(self, openid: str, payload: dict[str, object]) -> None:
         if not self.settings.wechat_app_id or not self.settings.wechat_app_secret:
             raise RuntimeError("WeChat subscription delivery is not configured")
-        token = self._get_access_token()
+        token = wechat_access_token(self.settings)
         message = {
             "touser": openid,
             "template_id": self.settings.wechat_subscription_template_id,
@@ -45,34 +43,6 @@ class WechatSubscriptionSender:
             result = json.load(response)
         if result.get("errcode") != 0:
             raise RuntimeError(f"WeChat send error: {result.get('errcode', 'unknown')}")
-
-    def _get_access_token(self) -> str:
-        now = monotonic()
-        if self._access_token and now < self._access_token_expires_at:
-            return self._access_token
-        token_request = Request(
-            "https://api.weixin.qq.com/cgi-bin/stable_token",
-            data=json.dumps(
-                {
-                    "grant_type": "client_credential",
-                    "appid": self.settings.wechat_app_id,
-                    "secret": self.settings.wechat_app_secret,
-                    "force_refresh": False,
-                }
-            ).encode(),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urlopen(token_request, timeout=10) as response:
-            token_payload = json.load(response)
-        token = token_payload.get("access_token")
-        if not token:
-            raise RuntimeError(f"WeChat token error: {token_payload.get('errcode', 'unknown')}")
-        expires_in = max(0, int(token_payload.get("expires_in", 7200)) - 60)
-        self._access_token = str(token)
-        self._access_token_expires_at = now + expires_in
-        return self._access_token
-
 
 class TencentSmsSender:
     def __init__(self, settings: AppSettings):

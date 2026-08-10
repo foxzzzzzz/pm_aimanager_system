@@ -56,6 +56,7 @@ from project_manager_api.services.notification_adapters import (
 from project_manager_api.services.notifications import NotificationService
 from project_manager_api.services.operations import build_operational_status, current_business_date
 from project_manager_api.services.projects import ProjectService
+from project_manager_api.services.wechat import generate_invitation_entries
 
 router = APIRouter(prefix="/api/v1")
 
@@ -82,7 +83,7 @@ def get_admin_actor(
         raise UnauthorizedError("administrator bearer token is required")
     if not hmac.compare_digest(token, configured_token):
         raise ForbiddenError("invalid administrator bearer token")
-    return request.app.state.settings.admin_actor_id
+    return str(request.app.state.settings.admin_actor_id)
 
 
 def get_idempotency_key(x_idempotency_key: str = Header(min_length=1, max_length=128)) -> str:
@@ -136,7 +137,7 @@ def create_member_invitation(
     actor_id: ActorDependency,
     request_key: IdempotencyDependency,
 ) -> JSONResponse:
-    return _execute_idempotent(
+    response = _execute_idempotent(
         session,
         actor_id,
         request_key,
@@ -148,6 +149,9 @@ def create_member_invitation(
             project_id, actor_id, payload
         ),
     )
+    body: dict[str, Any] = json.loads(bytes(response.body))
+    entries = generate_invitation_entries(body["invitation_token"], request.app.state.settings)
+    return JSONResponse(status_code=response.status_code, content={**body, **entries})
 
 
 @router.post("/mobile/invitations/accept")

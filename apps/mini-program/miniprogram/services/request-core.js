@@ -1,14 +1,16 @@
-export function createRequester({ baseUrl, getToken, requestKey, transport }) {
+export function createRequester({ baseUrl, getToken, requestKey, retryAttempts = 0, transport }) {
   return (path, method = "GET", data) => {
     const accessToken = getToken();
+    const idempotencyKey = method !== "GET" ? requestKey() : "";
     return new Promise((resolve, reject) => {
-      transport({
+      let retriesRemaining = retryAttempts;
+      const send = () => transport({
         url: `${baseUrl}${path}`,
         method,
         data,
         header: {
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          ...(method !== "GET" ? { "X-Idempotency-Key": requestKey() } : {}),
+          ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
         },
         success: (response) => {
           if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -23,8 +25,16 @@ export function createRequester({ baseUrl, getToken, requestKey, transport }) {
               : `请求失败：${response.statusCode}`;
           reject(new Error(message));
         },
-        fail: reject,
+        fail: (reason) => {
+          if (retriesRemaining > 0) {
+            retriesRemaining -= 1;
+            send();
+            return;
+          }
+          reject(reason);
+        },
       });
+      send();
     });
   };
 }

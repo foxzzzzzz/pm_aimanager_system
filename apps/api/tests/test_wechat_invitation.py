@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 from urllib.request import Request
 
+from project_manager_api.services import wechat
 from project_manager_api.services.wechat import generate_invitation_entries
 from project_manager_api.settings import AppSettings
 
@@ -33,6 +34,7 @@ def _settings(tmp_path: Path) -> AppSettings:
 
 
 def test_generates_url_link_and_unlimited_code_for_invitation(monkeypatch, tmp_path: Path) -> None:
+    wechat._access_token_cache.clear()
     requests: list[tuple[str, dict[str, object] | None]] = []
     responses = iter(
         [
@@ -82,3 +84,48 @@ def test_returns_copyable_path_when_wechat_credentials_are_unavailable(tmp_path:
     assert result["url_link"] is None
     assert result["mini_program_code_data_url"] is None
     assert result["entry_generation_error"] == "WeChat invitation links are not configured"
+
+
+def test_rejects_non_image_mini_program_code_responses(monkeypatch, tmp_path: Path) -> None:
+    wechat._access_token_cache.clear()
+    responses = iter(
+        [
+            json.dumps({"access_token": "access-token", "expires_in": 7200}).encode(),
+            json.dumps({"url_link": "https://wxaurl.cn/invite"}).encode(),
+            b"<html>bad gateway</html>",
+        ]
+    )
+    monkeypatch.setattr(
+        "project_manager_api.services.wechat.urlopen",
+        lambda _request, timeout: _Response(next(responses)),
+    )
+
+    result = generate_invitation_entries("a" * 32, _settings(tmp_path))
+
+    assert result["mini_program_code_data_url"] is None
+    assert "invalid image" in result["entry_generation_error"]
+
+
+def test_reuses_access_token_between_invitation_generations(monkeypatch, tmp_path: Path) -> None:
+    wechat._access_token_cache.clear()
+    responses = iter(
+        [
+            json.dumps({"access_token": "access-token", "expires_in": 7200}).encode(),
+            json.dumps({"url_link": "https://wxaurl.cn/first"}).encode(),
+            b"\xff\xd8\xfffirst",
+            json.dumps({"url_link": "https://wxaurl.cn/second"}).encode(),
+            b"\xff\xd8\xffsecond",
+        ]
+    )
+    calls: list[str] = []
+
+    def fake_urlopen(request: Request, timeout: int) -> _Response:
+        calls.append(request.full_url)
+        return _Response(next(responses))
+
+    monkeypatch.setattr("project_manager_api.services.wechat.urlopen", fake_urlopen)
+
+    generate_invitation_entries("a" * 32, _settings(tmp_path))
+    generate_invitation_entries("b" * 32, _settings(tmp_path))
+
+    assert sum("stable_token" in url for url in calls) == 1

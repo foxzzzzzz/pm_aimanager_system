@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from project_manager_api.api.app import create_app
 from project_manager_api.db.base import Base
-from project_manager_api.db.models import MemberBinding, MobileUser
+from project_manager_api.db.models import IdempotencyRecord, MemberBinding, MobileUser
 from project_manager_api.settings import AppSettings
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -122,6 +122,14 @@ def test_unbound_user_cannot_view_project_and_bound_user_can(
     assert forbidden.status_code == 403
 
     invitation = _invite(client, project_id, "成员10", "invite-member10")
+    with client.app.state.session_factory() as session:
+        invitation_record = session.scalar(
+            select(IdempotencyRecord).where(
+                IdempotencyRecord.request_key == "invite-member10"
+            )
+        )
+        assert invitation_record is not None
+        assert "mini_program_code_data_url" not in invitation_record.response_body
     member_headers, _ = _login(client, "dev:member10")
     accepted = client.post(
         "/api/v1/mobile/invitations/accept",
@@ -140,6 +148,7 @@ def test_unbound_user_cannot_view_project_and_bound_user_can(
         f"/api/v1/mobile/projects/{project_id}/dashboard", headers=member_headers
     )
     assert dashboard.json()["current_version_number"] == 1
+    assert dashboard.json()["business_date"]
     assert len(dashboard.json()["milestones"]) == 24
 
     with client.app.state.session_factory() as session:
@@ -191,6 +200,8 @@ def test_bound_user_can_view_read_only_project_review_without_contacts(
     assert review.status_code == 200
     payload = review.json()
     assert len(payload["product_specs"]) == 70
+    assert "check_confirmation" not in payload["product_specs"][0]
+    assert "check_content" not in payload["product_specs"][0]
     assert len(payload["members"]) == 22
     assert len(payload["milestones"]) == 24
     assert payload["milestones"][0]["assignments"].keys() == {"R", "A", "C", "I"}
@@ -504,6 +515,18 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
         },
     )
     assert issue.status_code == 201
+    forged_owner = client.post(
+        f"/api/v1/mobile/projects/{project_id}/issues",
+        headers={**member_headers, "X-Idempotency-Key": "mobile-forged-owner"},
+        json={
+            "description": "伪造责任人",
+            "impact": "错误通知",
+            "owner_name": "成员11",
+            "severity": "high",
+            "due_date": "2026-08-21",
+        },
+    )
+    assert forged_owner.status_code == 403
     updated = client.patch(
         f"/api/v1/mobile/issues/{issue.json()['id']}",
         headers={**member_headers, "X-Idempotency-Key": "mobile-issue-update"},
@@ -548,6 +571,7 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
     messages = client.get("/api/v1/mobile/messages", headers=member_headers)
     assert messages.status_code == 200
     assert any(item["type"] == "binding_approved" for item in messages.json())
+    assert all(item["created_at"].endswith("+00:00") for item in messages.json())
     message = messages.json()[0]
     marked = client.patch(
         f"/api/v1/mobile/messages/{message['id']}/read",

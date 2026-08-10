@@ -90,6 +90,11 @@ describe("IssuesAuditPage", () => {
   });
 
   it("creates a member invitation from the binding tab", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
     render(
       <IssuesAuditPage
         project={{ id: "project-1", code: "ZPD1322", name: "Lyra Pro", status: "active", current_version_number: 1 }}
@@ -108,6 +113,8 @@ describe("IssuesAuditPage", () => {
     );
     expect(await screen.findByDisplayValue("https://wxaurl.cn/invite")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "成员邀请小程序码" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "复制邀请入口" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("https://wxaurl.cn/invite"));
   });
 
   it("updates and deletes an issue from the admin table", async () => {

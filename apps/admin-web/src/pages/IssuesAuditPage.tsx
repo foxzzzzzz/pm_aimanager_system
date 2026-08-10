@@ -127,6 +127,15 @@ export default function IssuesAuditPage({ project }: Props) {
     }
   };
 
+  const copyInvitation = async () => {
+    if (!invitation) return;
+    try {
+      await navigator.clipboard.writeText(invitation.url_link ?? invitation.mini_program_path);
+    } catch (reason) {
+      setError((reason as Error).message || "复制邀请入口失败");
+    }
+  };
+
   return (
     <div className="page-stack">
       {error && <Alert type="error" message={error} showIcon closable onClose={() => setError(undefined)} />}
@@ -299,11 +308,14 @@ export default function IssuesAuditPage({ project }: Props) {
         {invitation && (
           <Space direction="vertical" style={{ width: "100%" }}>
             <Typography.Text strong>邀请入口（请在有效期内使用）</Typography.Text>
-            <Input
-              aria-label="邀请链接"
-              readOnly
-              value={invitation.url_link ?? invitation.mini_program_path}
-            />
+            <Space.Compact block>
+              <Input
+                aria-label="邀请链接"
+                readOnly
+                value={invitation.url_link ?? invitation.mini_program_path}
+              />
+              <Button aria-label="复制邀请入口" onClick={() => void copyInvitation()}>复制</Button>
+            </Space.Compact>
             {invitation.mini_program_code_data_url && (
               <Image
                 width={220}

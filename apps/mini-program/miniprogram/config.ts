@@ -9,4 +9,8 @@ export const runtimeConfig = {
   milestoneUpcomingDays: 3,
   // API 时间戳展示使用的业务时区偏移量，当前为 UTC+8。
   presentationTimezoneOffsetMinutes: 480,
+  // 网络层在没有收到响应时自动重试的次数，重试复用同一个幂等键。
+  requestRetryAttempts: 1,
+  // 项目资料每次增量展示的记录数。
+  projectReviewPageSize: 10,
 };

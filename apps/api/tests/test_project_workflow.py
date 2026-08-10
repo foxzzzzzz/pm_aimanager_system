@@ -210,6 +210,8 @@ def test_project_review_exposes_specs_roles_raci_and_tbd_without_contacts(
     assert review["current_version_number"] == 1
     assert len(review["product_specs"]) == 70
     assert review["product_specs"][0]["item"]
+    assert "check_confirmation" in review["product_specs"][0]
+    assert "check_content" in review["product_specs"][0]
     assert len(review["members"]) == 22
     assert review["members"][0]["role"] == "项目经理"
     assert "phone" not in review["members"][0]

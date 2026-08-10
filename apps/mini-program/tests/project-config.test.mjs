@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 const readJson = async (relativePath) =>
@@ -35,6 +35,13 @@ test("mini program declares TypeScript and required pages", async () => {
   assert.deepEqual(sitemapConfig.rules, [{ action: "allow", page: "*" }]);
 });
 
+test("mini program has one canonical developer-tools project root", async () => {
+  const config = JSON.parse(await readFile(new URL("../project.config.json", import.meta.url), "utf8"));
+  assert.equal(config.miniprogramRoot, "miniprogram/");
+  assert.deepEqual(config.setting.useCompilerPlugins, ["typescript"]);
+  await assert.rejects(access(new URL("../miniprogram/project.config.json", import.meta.url)));
+});
+
 test("mini program provides authenticated API and structured update flows", async () => {
   const apiSource = await readFile(
     new URL("../miniprogram/services/api.ts", import.meta.url),
@@ -62,7 +69,7 @@ test("mini program provides authenticated API and structured update flows", asyn
   assert.match(apiSource, /messages\/\$\{messageId\}\/read/);
   assert.match(updateSource, /completed/);
   assert.match(updateSource, /delay/);
-  assert.match(updateSource, /requires_confirmation/);
+  assert.match(apiSource, /requires_confirmation/);
   assert.match(apiSource, /mobile\/subscription-grants/);
   assert.match(messagesSource, /requestSubscribeMessage/);
 });

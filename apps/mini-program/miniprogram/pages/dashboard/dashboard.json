@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "项目看板" }
+{ "navigationBarTitleText": "项目看板", "enablePullDownRefresh": true }
