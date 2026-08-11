@@ -16,6 +16,7 @@ Page({
     endDate: "",
     reason: "",
     naturalText: "",
+    assistantVisible: false,
     prefillApplied: false,
     requiresConfirmation: false,
     prefillBusy: false,
@@ -56,6 +57,9 @@ Page({
     this.setData({ reason: event.detail.value, requiresConfirmation: this.data.prefillApplied });
   },
   onNaturalText(event: InputEvent) { this.setData({ naturalText: event.detail.value }); },
+  toggleAssistant() {
+    this.setData({ assistantVisible: !this.data.assistantVisible });
+  },
   async prefill() {
     if (this.data.prefillBusy) return;
     if (!this.data.naturalText.trim()) {
@@ -65,7 +69,11 @@ Page({
     this.setData({ prefillBusy: true });
     try {
       const result = await api.prefill(this.data.naturalText);
-      this.setData(mergeMilestonePrefill(this.data, result));
+      this.setData({
+        ...mergeMilestonePrefill(this.data, result),
+        assistantVisible: false,
+      });
+      wx.pageScrollTo({ selector: "#primary-form", duration: 250 });
     } catch (error) {
       wx.showToast({ title: (error as Error).message, icon: "none" });
     } finally {

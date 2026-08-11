@@ -1,26 +1,52 @@
 <view class="page">
-  <view class="card">
-    <text class="title">{{code}} 节点更新</text>
-    <view class="switches">
-      <button size="mini" class="{{kind === 'completed' ? 'selected' : ''}}" bindtap="chooseCompleted">标记完成</button>
-      <button size="mini" class="{{kind === 'delay' ? 'selected' : ''}}" bindtap="chooseDelay">申请延期</button>
+  <view id="primary-form" class="card update-card">
+    <view class="update-heading">
+      <text class="node-code">{{code}}</text>
+      <text class="section-heading">更新节点进度</text>
     </view>
-    <picker wx:if="{{kind === 'completed'}}" mode="date" bindchange="onDate"><view class="field">实际完成日期：{{date || '请选择'}}</view></picker>
+    <view class="field-block">
+      <text class="field-label">更新类型 <text class="required">*</text></text>
+      <view class="update-options">
+        <button class="update-option {{kind === 'completed' ? 'selected' : ''}}" bindtap="chooseCompleted">标记完成</button>
+        <button class="update-option {{kind === 'delay' ? 'selected' : ''}}" bindtap="chooseDelay">申请延期</button>
+      </view>
+    </view>
+    <view wx:if="{{kind === 'completed'}}" class="field-block">
+      <text class="field-label">实际完成日期 <text class="required">*</text></text>
+      <picker mode="date" bindchange="onDate"><view class="field picker-field">{{date || '请选择日期'}} <text>›</text></view></picker>
+    </view>
     <block wx:else>
-      <picker mode="date" bindchange="onStartDate"><view class="field">新开始日期：{{startDate || '请选择'}}</view></picker>
-      <picker mode="date" bindchange="onEndDate"><view class="field">新完成日期：{{endDate || '请选择'}}</view></picker>
+      <view class="field-block">
+        <text class="field-label">新开始日期 <text class="required">*</text></text>
+        <picker mode="date" bindchange="onStartDate"><view class="field picker-field">{{startDate || '请选择日期'}} <text>›</text></view></picker>
+      </view>
+      <view class="field-block">
+        <text class="field-label">新完成日期 <text class="required">*</text></text>
+        <picker mode="date" bindchange="onEndDate"><view class="field picker-field">{{endDate || '请选择日期'}} <text>›</text></view></picker>
+      </view>
     </block>
-    <textarea class="field" value="{{reason}}" placeholder="更新原因" bindinput="onReason" />
+    <view class="field-block">
+      <text class="field-label">更新原因 <text class="required">*</text></text>
+      <textarea class="field" value="{{reason}}" placeholder="请说明完成情况或延期原因" bindinput="onReason" />
+    </view>
+    <view wx:if="{{prefillApplied}}" class="confirmation {{requiresConfirmation ? 'needs-confirmation' : ''}}">
+      <text wx:if="{{requiresConfirmation}}" class="warning">辅助填写内容已写入，请核对日期和原因。</text>
+      <text wx:else class="success">✓ 已确认当前辅助填写结果</text>
+      <button wx:if="{{requiresConfirmation}}" class="confirm-prefill" bindtap="confirmPrefill">确认填写结果</button>
+    </view>
     <button class="primary" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">确认并提交审批</button>
   </view>
-  <view class="card">
-    <text>自然语言预填</text>
-    <textarea class="field" value="{{naturalText}}" placeholder="例如：M23延期到2026-08-30，原因是驱动联调" bindinput="onNaturalText" />
-    <button loading="{{prefillBusy}}" disabled="{{prefillBusy}}" bindtap="prefill">AI / 规则预填</button>
-    <view wx:if="{{prefillApplied}}" class="confirmation">
-      <text wx:if="{{requiresConfirmation}}" class="warning">预填内容已写入上方表单，请核对后确认。</text>
-      <text wx:else class="success">✓ 已确认当前预填结果</text>
-      <button wx:if="{{requiresConfirmation}}" size="mini" bindtap="confirmPrefill">确认预填结果</button>
+  <view class="card assistant-card">
+    <button class="assistant-toggle" bindtap="toggleAssistant">
+      <view>
+        <text class="assistant-title">一句话快速填写</text>
+        <text class="assistant-description">通过 AI / 规则识别日期和原因</text>
+      </view>
+      <text class="assistant-arrow">{{assistantVisible ? '⌃' : '⌄'}}</text>
+    </button>
+    <view wx:if="{{assistantVisible}}" class="assistant-content">
+      <textarea class="field" value="{{naturalText}}" placeholder="例如：M23 延期到 2026-08-30，原因是驱动联调" bindinput="onNaturalText" />
+      <button class="secondary-action" loading="{{prefillBusy}}" disabled="{{prefillBusy}}" bindtap="prefill">识别并填入表单</button>
     </view>
   </view>
 </view>
