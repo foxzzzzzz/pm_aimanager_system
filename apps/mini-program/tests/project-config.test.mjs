@@ -153,7 +153,8 @@ test("mini program exposes read-only project specs, members, and RACI", async ()
   assert.match(reviewTemplate, /产品规格/);
   assert.match(reviewTemplate, /团队成员/);
   assert.match(reviewTemplate, /RACI/);
-  assert.doesNotMatch(reviewTemplate, /bindinput|bindchange|form/);
+  assert.match(reviewTemplate, /bindinput="onSpecKeywordInput"/);
+  assert.doesNotMatch(reviewTemplate, /<form|bindsubmit|保存|删除/);
 });
 
 test("mini program accepts invitation tokens from links and mini-program code scenes", async () => {

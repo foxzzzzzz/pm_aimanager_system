@@ -13,14 +13,28 @@
   </view>
 
   <view wx:if="{{review && activeTab === 'specs'}}">
+    <view wx:if="{{specs.length > 0}}" class="spec-search">
+      <view class="search-row">
+        <input
+          class="search-input"
+          value="{{specKeyword}}"
+          placeholder="搜索规格、分类、配置或型号"
+          confirm-type="search"
+          bindinput="onSpecKeywordInput"
+        />
+        <button wx:if="{{specKeyword}}" class="search-clear" size="mini" bindtap="clearSpecKeyword">清空</button>
+      </view>
+      <text class="search-result">{{specKeyword ? '找到' : '共'}} {{filteredSpecs.length}} 条规格</text>
+    </view>
     <view wx:if="{{!loading && specs.length === 0}}" class="card empty-state">暂无产品规格</view>
+    <view wx:if="{{!loading && specs.length > 0 && filteredSpecs.length === 0}}" class="card empty-state">未找到匹配的产品规格</view>
     <view wx:for="{{visibleSpecs}}" wx:key="row_number" class="card item-card">
       <text class="item-title">{{item.item}}</text>
       <text class="muted">{{item.major_category || item.category || '未分类'}}</text>
       <text class="detail">{{item.detail}}</text>
       <text wx:if="{{item.notes}}" class="note">备注：{{item.notes}}</text>
     </view>
-    <button wx:if="{{visibleSpecs.length < specs.length}}" class="load-more" bindtap="showMoreSpecs">查看更多规格</button>
+    <button wx:if="{{visibleSpecs.length < filteredSpecs.length}}" class="load-more" bindtap="showMoreSpecs">查看更多规格</button>
   </view>
 
   <view wx:if="{{review && activeTab === 'members'}}">

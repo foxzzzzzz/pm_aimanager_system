@@ -1,6 +1,7 @@
 import { api } from "../../services/api";
 import { runtimeConfig } from "../../config";
 import { visiblePage } from "../../services/pagination.js";
+import { filterProductSpecs } from "../../services/project-review-filter.js";
 import type { ProductSpec, ProjectMember, ProjectReview } from "../../types";
 
 type ReviewTab = "specs" | "members" | "raci";
@@ -8,6 +9,8 @@ type ReviewTab = "specs" | "members" | "raci";
 interface TabTapEvent {
   currentTarget: { dataset: { tab: ReviewTab } };
 }
+
+interface SearchInputEvent { detail: { value: string } }
 
 interface SpecView extends ProductSpec {
   detail: string;
@@ -27,7 +30,9 @@ Page({
     projectId: "",
     review: null as ProjectReview | null,
     specs: [] as SpecView[],
+    filteredSpecs: [] as SpecView[],
     visibleSpecs: [] as SpecView[],
+    specKeyword: "",
     members: [] as ProjectMember[],
     raciRows: [] as RaciView[],
     visibleRaciRows: [] as RaciView[],
@@ -60,6 +65,7 @@ Page({
       this.setData({
         review,
         specs,
+        filteredSpecs: specs,
         visibleSpecs: visiblePage(specs, 1, runtimeConfig.projectReviewPageSize),
         members: review.members,
         raciRows,
@@ -76,12 +82,31 @@ Page({
   selectTab(event: TabTapEvent) {
     this.setData({ activeTab: event.currentTarget.dataset.tab });
   },
+  onSpecKeywordInput(event: SearchInputEvent) {
+    const specKeyword = event.detail.value;
+    const filteredSpecs = filterProductSpecs(this.data.specs, specKeyword);
+    this.setData({
+      specKeyword,
+      filteredSpecs,
+      visibleSpecs: visiblePage(filteredSpecs, 1, runtimeConfig.projectReviewPageSize),
+      specPage: 1,
+    });
+  },
+  clearSpecKeyword() {
+    const filteredSpecs = this.data.specs;
+    this.setData({
+      specKeyword: "",
+      filteredSpecs,
+      visibleSpecs: visiblePage(filteredSpecs, 1, runtimeConfig.projectReviewPageSize),
+      specPage: 1,
+    });
+  },
   showMoreSpecs() {
     const specPage = this.data.specPage + 1;
     this.setData({
       specPage,
       visibleSpecs: visiblePage(
-        this.data.specs,
+        this.data.filteredSpecs,
         specPage,
         runtimeConfig.projectReviewPageSize,
       ),

@@ -14,6 +14,24 @@
 }
 .tab::after { border: 0; }
 .tab.active { background: #146c5a; color: #fff; }
+.spec-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: 24rpx;
+  padding: 14rpx 0;
+  background: #edf4f1;
+}
+.search-row { display: flex; align-items: center; gap: 12rpx; }
+.search-input {
+  flex: 1;
+  padding: 18rpx 22rpx;
+  border: 1rpx solid #c9ddd8;
+  border-radius: 14rpx;
+  background: #fff;
+}
+.search-clear { flex: none; margin: 0; color: #146c5a; background: #fff; }
+.search-result { display: block; margin-top: 10rpx; color: #63716d; font-size: 22rpx; }
 .item-title { display: block; font-size: 30rpx; font-weight: 650; }
 .detail, .note, .role { display: block; margin-top: 12rpx; }
 .note { color: #63716d; font-size: 24rpx; }
