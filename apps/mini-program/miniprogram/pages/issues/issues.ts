@@ -40,6 +40,7 @@ Page({
     creating: false,
     actionIssueId: "",
     loading: false,
+    loadError: false,
   },
   async onShow() {
     const projectId = wx.getStorageSync<string>("current_project_id");
@@ -64,14 +65,21 @@ Page({
       } : {}),
     });
     if (!projectId) {
-      this.setData({ loading: false, issues: [] });
+      this.setData({ loading: false, loadError: false, issues: [] });
       return;
     }
-    this.setData({ loading: true });
+    await this.loadIssues();
+  },
+  async loadIssues() {
+    if (!this.data.projectId) return;
+    this.setData({ loading: true, loadError: false });
     try {
-      this.setData({ issues: presentIssues(await api.issues(projectId)) });
+      this.setData({
+        issues: presentIssues(await api.issues(this.data.projectId)),
+        loadError: false,
+      });
     } catch {
-      wx.showToast({ title: "问题加载失败", icon: "none" });
+      this.setData({ loadError: true });
     } finally {
       this.setData({ loading: false });
     }

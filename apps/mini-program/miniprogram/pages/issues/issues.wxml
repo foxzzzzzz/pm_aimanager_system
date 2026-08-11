@@ -50,8 +50,13 @@
       </view>
     </view>
     <view wx:if="{{loading}}" class="card loading-state">正在加载问题…</view>
-    <view wx:if="{{!loading && issues.length === 0}}" class="card empty-state">当前项目暂无重难点问题</view>
-    <view wx:if="{{!loading}}" wx:for="{{issues}}" wx:key="id" class="card issue-card">
+    <view wx:if="{{!loading && loadError}}" class="card error-state">
+      <text class="error-title">问题加载失败</text>
+      <text class="error-detail">请检查网络连接后重新加载。</text>
+      <button class="retry-action" bindtap="loadIssues">重新加载</button>
+    </view>
+    <view wx:if="{{!loading && !loadError && issues.length === 0}}" class="card empty-state">当前项目暂无重难点问题</view>
+    <view wx:if="{{!loading && !loadError}}" wx:for="{{issues}}" wx:key="id" class="card issue-card">
       <text class="tag">{{item.status}}</text>
       <text class="issue-title">{{item.description}}</text>
       <text class="muted">影响：{{item.impact}}</text>

@@ -3,7 +3,7 @@ import type { Message } from "../../types";
 import { runtimeConfig } from "../../config";
 import { formatDateTime, labelMessageType } from "../../services/presentation.js";
 
-interface MessageTapEvent { currentTarget: { dataset: { id: string } } }
+interface MessageTapEvent { currentTarget: { dataset: { id: string; read: boolean } } }
 
 const subscriptionConfigured = runtimeConfig.subscriptionTemplateId !== "replace-with-template-id";
 
@@ -22,21 +22,34 @@ const presentMessages = (messages: Message[]): MessageView[] => messages.map((me
 }));
 
 Page({
-  data: { messages: [] as MessageView[], subscriptionConfigured, loading: true },
+  data: {
+    messages: [] as MessageView[],
+    subscriptionConfigured,
+    loading: true,
+    loadError: false,
+  },
   async onShow() {
-    this.setData({ loading: true });
+    await this.loadMessages();
+  },
+  async loadMessages() {
+    this.setData({ loading: true, loadError: false });
     try {
-      this.setData({ messages: presentMessages(await api.messages()) });
+      this.setData({ messages: presentMessages(await api.messages()), loadError: false });
     } catch {
-      wx.showToast({ title: "消息加载失败", icon: "none" });
+      this.setData({ loadError: true });
     } finally {
       this.setData({ loading: false });
     }
   },
   async markRead(event: MessageTapEvent) {
+    if (event.currentTarget.dataset.read) return;
     try {
-      await api.markMessageRead(event.currentTarget.dataset.id);
-      this.setData({ messages: presentMessages(await api.messages()) });
+      const saved = await api.markMessageRead(event.currentTarget.dataset.id);
+      this.setData({
+        messages: this.data.messages.map((message) => message.id === saved.id
+          ? presentMessages([saved])[0]
+          : message),
+      });
     } catch (reason) {
       wx.showToast({ title: (reason as Error).message, icon: "none" });
     }

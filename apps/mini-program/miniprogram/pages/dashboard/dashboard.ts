@@ -36,6 +36,7 @@ Page({
     visibleMilestones: [] as MilestoneView[],
     selectedMilestoneFilter: "todo" as MilestoneFilterKey,
     loading: true,
+    loadError: false,
     resolvingProposalId: "",
   },
   onLoad(options: Record<string, string | undefined>) {
@@ -50,7 +51,7 @@ Page({
     wx.stopPullDownRefresh();
   },
   async loadDashboard(showError = true): Promise<boolean> {
-    if (!this.data.dashboard) this.setData({ loading: true });
+    if (!this.data.dashboard) this.setData({ loading: true, loadError: false });
     try {
       const [dashboard, proposals] = await Promise.all([
         api.dashboard(this.data.projectId),
@@ -70,10 +71,12 @@ Page({
             upcomingDays,
           ),
         ),
+        loadError: false,
       });
       wx.setStorageSync("current_member_name", dashboard.member_name);
       return true;
     } catch {
+      this.setData({ loadError: true });
       if (showError) wx.showToast({ title: "看板加载失败", icon: "none" });
       return false;
     } finally {

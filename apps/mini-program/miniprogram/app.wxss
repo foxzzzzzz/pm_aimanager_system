@@ -65,6 +65,43 @@ page {
   text-align: center;
 }
 
+.error-state {
+  padding: 48rpx 30rpx;
+  text-align: center;
+}
+
+.error-title,
+.error-detail {
+  display: block;
+}
+
+.error-title {
+  color: #17322d;
+  font-size: 30rpx;
+  font-weight: 650;
+}
+
+.error-detail {
+  margin-top: 12rpx;
+  color: #63716d;
+  font-size: 24rpx;
+}
+
+.retry-action {
+  width: 240rpx;
+  margin: 24rpx auto 0;
+  border: 1rpx solid #a9c9bf;
+  border-radius: 999rpx;
+  color: #146c5a;
+  background: #f4faf8;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.retry-action::after {
+  border: 0;
+}
+
 button.primary::after {
   border: 0;
 }

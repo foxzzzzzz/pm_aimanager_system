@@ -20,9 +20,24 @@
     "selectedColor": "#146c5a",
     "backgroundColor": "#ffffff",
     "list": [
-      { "pagePath": "pages/projects/projects", "text": "项目" },
-      { "pagePath": "pages/issues/issues", "text": "问题" },
-      { "pagePath": "pages/messages/messages", "text": "消息" }
+      {
+        "pagePath": "pages/projects/projects",
+        "text": "项目",
+        "iconPath": "assets/tabbar/project.png",
+        "selectedIconPath": "assets/tabbar/project-active.png"
+      },
+      {
+        "pagePath": "pages/issues/issues",
+        "text": "问题",
+        "iconPath": "assets/tabbar/issue.png",
+        "selectedIconPath": "assets/tabbar/issue-active.png"
+      },
+      {
+        "pagePath": "pages/messages/messages",
+        "text": "消息",
+        "iconPath": "assets/tabbar/message.png",
+        "selectedIconPath": "assets/tabbar/message-active.png"
+      }
     ]
   },
   "sitemapLocation": "sitemap.json"

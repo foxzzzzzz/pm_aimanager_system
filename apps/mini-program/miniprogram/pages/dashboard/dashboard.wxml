@@ -46,5 +46,9 @@
   </view>
 </view>
 <view class="page" wx:else>
-  <view class="card empty-state">项目看板暂不可用，请稍后重试。</view>
+  <view class="card error-state">
+    <text class="error-title">项目看板加载失败</text>
+    <text class="error-detail">请检查网络连接后重新加载。</text>
+    <button class="retry-action" bindtap="loadDashboard">重新加载</button>
+  </view>
 </view>

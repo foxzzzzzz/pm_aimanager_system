@@ -1,10 +1,18 @@
 <view class="page">
-  <button type="primary" disabled="{{!subscriptionConfigured}}" bindtap="enableReminder">{{subscriptionConfigured ? '开启一次微信提醒' : '微信提醒暂未配置'}}</button>
+  <button class="primary" disabled="{{!subscriptionConfigured}}" bindtap="enableReminder">{{subscriptionConfigured ? '开启一次微信提醒' : '微信提醒暂未配置'}}</button>
   <text wx:if="{{!subscriptionConfigured}}" class="config-note">配置正式订阅消息模板后可启用微信提醒。</text>
   <view wx:if="{{loading}}" class="card loading-state">正在加载消息…</view>
-  <view wx:if="{{!loading && messages.length === 0}}" class="card empty-state">暂无消息</view>
-  <view wx:if="{{!loading}}" wx:for="{{messages}}" wx:key="id" class="card message {{item.is_read ? 'read' : ''}}" data-id="{{item.id}}" bindtap="markRead">
-    <text class="tag">{{item.typeLabel}}</text>
+  <view wx:if="{{!loading && loadError}}" class="card error-state">
+    <text class="error-title">消息加载失败</text>
+    <text class="error-detail">请检查网络连接后重新加载。</text>
+    <button class="retry-action" bindtap="loadMessages">重新加载</button>
+  </view>
+  <view wx:if="{{!loading && !loadError && messages.length === 0}}" class="card empty-state">暂无消息</view>
+  <view wx:if="{{!loading && !loadError}}" wx:for="{{messages}}" wx:key="id" class="card message {{item.is_read ? 'read' : ''}}" data-id="{{item.id}}" data-read="{{item.is_read}}" bindtap="markRead">
+    <view class="message-meta">
+      <text class="tag">{{item.typeLabel}}</text>
+      <view wx:if="{{!item.is_read}}" class="unread-state"><text class="unread-dot"></text><text>未读</text></view>
+    </view>
     <text class="message-title">{{item.title}}</text>
     <text class="muted">{{item.body}}</text>
     <text class="time">{{item.createdAtLabel}}</text>

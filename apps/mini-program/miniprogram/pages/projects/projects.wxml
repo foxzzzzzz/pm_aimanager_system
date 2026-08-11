@@ -3,8 +3,13 @@
     <text class="muted">仅显示已完成身份绑定的项目</text>
   </view>
   <view wx:if="{{loading}}" class="card loading-state">正在加载项目…</view>
-  <view wx:if="{{!loading && projects.length === 0}}" class="card empty">暂无已绑定项目，请从邀请链接进入。</view>
-  <view wx:if="{{!loading}}" wx:for="{{projects}}" wx:key="id" class="card project" data-id="{{item.id}}" data-code="{{item.code}}" data-name="{{item.name}}" bindtap="openProject">
+  <view wx:if="{{!loading && loadError}}" class="card error-state">
+    <text class="error-title">项目加载失败</text>
+    <text class="error-detail">请检查网络连接后重新加载。</text>
+    <button class="retry-action" bindtap="loadProjects">重新加载</button>
+  </view>
+  <view wx:if="{{!loading && !loadError && projects.length === 0}}" class="card empty">暂无已绑定项目，请从邀请链接进入。</view>
+  <view wx:if="{{!loading && !loadError}}" wx:for="{{projects}}" wx:key="id" class="card project" data-id="{{item.id}}" data-code="{{item.code}}" data-name="{{item.name}}" bindtap="openProject">
     <text class="tag">{{item.code}}</text>
     <text class="project-name">{{item.name}}</text>
     <text class="muted">当前正式版本 v{{item.current_version_number}}</text>

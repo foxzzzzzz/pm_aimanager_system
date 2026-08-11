@@ -52,10 +52,16 @@ Page({
     raciPage: 1,
     activeTab: "specs" as ReviewTab,
     loading: true,
+    loadError: false,
   },
   async onLoad(options: Record<string, string | undefined>) {
     const projectId = options.projectId || wx.getStorageSync<string>("current_project_id");
     this.setData({ projectId });
+    await this.loadReview();
+  },
+  async loadReview() {
+    const projectId = this.data.projectId;
+    this.setData({ loading: true, loadError: false });
     try {
       const review = await api.projectReview(projectId);
       const specs = review.product_specs.map((spec) => {
@@ -94,9 +100,10 @@ Page({
         visibleRaciRows: visiblePage(raciRows, 1, runtimeConfig.projectReviewPageSize),
         specPage: 1,
         raciPage: 1,
+        loadError: false,
       });
-    } catch (error) {
-      wx.showToast({ title: (error as Error).message || "项目资料加载失败", icon: "none" });
+    } catch {
+      this.setData({ loadError: true });
     } finally {
       this.setData({ loading: false });
     }

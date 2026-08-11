@@ -80,5 +80,9 @@
     <button wx:if="{{visibleRaciRows.length < filteredRaciRows.length}}" class="load-more" bindtap="showMoreRaci">查看更多RACI</button>
   </view>
 
-  <view wx:if="{{!loading && !review}}" class="card empty-state">项目资料暂不可用</view>
+  <view wx:if="{{!loading && loadError}}" class="card error-state">
+    <text class="error-title">项目资料加载失败</text>
+    <text class="error-detail">请检查网络连接后重新加载。</text>
+    <button class="retry-action" bindtap="loadReview">重新加载</button>
+  </view>
 </view>

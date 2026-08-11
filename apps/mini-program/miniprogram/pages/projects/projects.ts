@@ -6,17 +6,20 @@ interface ProjectTapEvent {
 }
 
 Page({
-  data: { projects: [] as ProjectSummary[], loading: true },
+  data: { projects: [] as ProjectSummary[], loading: true, loadError: false },
   async onShow() {
     if (!wx.getStorageSync("access_token")) {
       wx.redirectTo({ url: "/pages/index/index" });
       return;
     }
-    this.setData({ loading: true });
+    await this.loadProjects();
+  },
+  async loadProjects() {
+    this.setData({ loading: true, loadError: false });
     try {
-      this.setData({ projects: await api.projects() });
+      this.setData({ projects: await api.projects(), loadError: false });
     } catch {
-      wx.showToast({ title: "项目加载失败", icon: "none" });
+      this.setData({ loadError: true });
     } finally {
       this.setData({ loading: false });
     }
