@@ -1,5 +1,10 @@
 import { runtimeConfig } from "../../config";
 import { api } from "../../services/api";
+import {
+  INVALID_INVITATION_MESSAGE,
+  invitationErrorMessage,
+  projectAccessState,
+} from "../../services/login-page.js";
 
 interface InputEvent { detail: { value: string } }
 interface PhoneEvent { detail: { code?: string } }
@@ -11,12 +16,17 @@ Page({
     phone: "",
     bindingStatus: "",
     busy: false,
+    checkingProjects: false,
+    hasProjects: false,
+    projectCount: 0,
   },
   onLoad(options: Record<string, string | undefined>) {
+    const loggedIn = Boolean(wx.getStorageSync("access_token"));
     this.setData({
-      loggedIn: Boolean(wx.getStorageSync("access_token")),
+      loggedIn,
       invitationToken: options.invitation || options.scene || "",
     });
+    if (loggedIn) void this.refreshProjectAccess();
   },
   async login() {
     this.setData({ busy: true });
@@ -27,7 +37,7 @@ Page({
       const result = await api.login(code);
       wx.setStorageSync("access_token", result.access_token);
       this.setData({ loggedIn: true });
-      if (!this.data.invitationToken) wx.switchTab({ url: "/pages/projects/projects" });
+      await this.refreshProjectAccess();
     } catch (error) {
       this.showError(error);
     } finally {
@@ -60,8 +70,30 @@ Page({
       this.setData({ bindingStatus: result.status });
       if (result.status === "bound") wx.switchTab({ url: "/pages/projects/projects" });
     } catch (error) {
+      const message = invitationErrorMessage(error);
+      if (message === INVALID_INVITATION_MESSAGE) {
+        wx.showModal({
+          title: "邀请码无效",
+          content: message,
+          showCancel: false,
+        });
+        return;
+      }
       this.showError(error);
     }
+  },
+  async refreshProjectAccess() {
+    this.setData({ checkingProjects: true });
+    try {
+      this.setData(projectAccessState(await api.projects()));
+    } catch (error) {
+      this.showError(error);
+    } finally {
+      this.setData({ checkingProjects: false });
+    }
+  },
+  openProjects() {
+    wx.switchTab({ url: "/pages/projects/projects" });
   },
   showError(error: unknown) {
     wx.showToast({ title: error instanceof Error ? error.message : "操作失败", icon: "none" });

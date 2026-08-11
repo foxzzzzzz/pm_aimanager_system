@@ -2,5 +2,7 @@
 .eyebrow { color: #146c5a; font-size: 22rpx; letter-spacing: 4rpx; }
 .section-title { display: block; font-size: 30rpx; font-weight: 700; }
 .success { margin-top: 20rpx; color: #146c5a; }
+.project-checking { display: block; margin-top: 20rpx; color: #8a9692; }
+.project-entry { margin-top: 24rpx; }
 .warning { display: block; margin-top: 20rpx; color: #a46116; line-height: 1.5; }
 .divider { margin: 26rpx 0 10rpx; color: #8a9692; font-size: 22rpx; text-align: center; }

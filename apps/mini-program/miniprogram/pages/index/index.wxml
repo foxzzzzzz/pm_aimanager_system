@@ -5,8 +5,10 @@
     <text class="muted">微信身份只用于项目授权和通知，未绑定成员无法查看项目。</text>
     <button wx:if="{{!loggedIn}}" class="primary" loading="{{busy}}" bindtap="login">微信登录</button>
     <text wx:else class="success">✓ 已完成微信登录</text>
+    <text wx:if="{{loggedIn && checkingProjects}}" class="project-checking">正在检查项目权限…</text>
+    <button wx:if="{{loggedIn && hasProjects}}" class="primary project-entry" bindtap="openProjects">进入我的项目（{{projectCount}}）</button>
   </view>
-  <view wx:if="{{loggedIn}}" class="card">
+  <view wx:if="{{loggedIn && (!hasProjects || invitationToken)}}" class="card">
     <text class="section-title">绑定项目成员</text>
     <input class="field" value="{{invitationToken}}" placeholder="邀请令牌" bindinput="onTokenInput" />
     <button class="primary" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber">授权手机号并绑定</button>
