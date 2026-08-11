@@ -10,6 +10,18 @@
 .\scripts\dev.ps1
 ```
 
+Docker 容器已经创建或正在运行时，可使用后台启动脚本；它会等待服务健康并执行数据库迁移：
+
+```powershell
+.\scripts\start-backend.ps1
+```
+
+Linux 环境使用对应的 Shell 脚本：
+
+```bash
+bash ./scripts/start-backend.sh
+```
+
 - API健康检查：`http://localhost:18000/health`
 - 管理端：`http://localhost:15173`
 - MinIO API/管理台：`http://localhost:19000` / `http://localhost:19001`

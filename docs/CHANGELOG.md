@@ -1,5 +1,13 @@
 # 变更记录与里程碑
 
+## 2026-08-11
+
+### 后台启动脚本
+
+- 新增 `scripts/start-backend.ps1`，支持在 Docker 环境中后台拉起完整 Compose 服务、等待健康检查、执行数据库迁移并输出管理端与 API 访问地址。
+- 新增功能一致的 Linux Shell 启动脚本 `scripts/start-backend.sh`。
+- 新增 PowerShell 与 Linux 脚本的启动顺序和动态端口解析回归测试。
+
 ## 2026-08-10
 
 ### 小程序 Phase 1–6 审查修复
