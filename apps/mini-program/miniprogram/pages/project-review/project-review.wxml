@@ -12,7 +12,7 @@
   </view>
 
   <view wx:if="{{review && activeTab === 'specs'}}">
-    <view wx:if="{{specs.length > 0}}" class="spec-search">
+    <view wx:if="{{specs.length > 0}}" class="data-search">
       <view class="search-row">
         <input
           class="search-input"
@@ -30,15 +30,26 @@
     <view wx:for="{{visibleSpecs}}" wx:key="row_number" class="card item-card">
       <text class="item-title">{{item.item}}</text>
       <text class="muted">{{item.major_category || item.category || '未分类'}}</text>
-      <text class="detail">{{item.detail}}</text>
-      <text wx:if="{{item.notes}}" class="note">备注：{{item.notes}}</text>
+      <view class="detail-content {{item.expandable && !item.expanded ? 'clamped' : ''}}">
+        <text class="detail">{{item.detail}}</text>
+        <text wx:if="{{item.notes}}" class="note">备注：{{item.notes}}</text>
+      </view>
+      <button wx:if="{{item.expandable}}" class="detail-toggle" data-row="{{item.row_number}}" bindtap="toggleSpecDetail">{{item.expanded ? '收起详情' : '展开详情'}}</button>
     </view>
     <button wx:if="{{visibleSpecs.length < filteredSpecs.length}}" class="load-more" bindtap="showMoreSpecs">查看更多规格</button>
   </view>
 
   <view wx:if="{{review && activeTab === 'members'}}">
+    <view wx:if="{{members.length > 0}}" class="data-search">
+      <view class="search-row">
+        <input class="search-input" value="{{memberKeyword}}" placeholder="搜索姓名、角色或备注" confirm-type="search" bindinput="onMemberKeywordInput" />
+        <button wx:if="{{memberKeyword}}" class="search-clear" size="mini" bindtap="clearMemberKeyword">清空</button>
+      </view>
+      <text class="search-result">{{memberKeyword ? '找到' : '共'}} {{filteredMembers.length}} 名成员</text>
+    </view>
     <view wx:if="{{!loading && members.length === 0}}" class="card empty-state">暂无团队成员</view>
-    <view wx:for="{{members}}" wx:key="name" class="card item-card">
+    <view wx:if="{{!loading && members.length > 0 && filteredMembers.length === 0}}" class="card empty-state">未找到匹配的团队成员</view>
+    <view wx:for="{{filteredMembers}}" wx:key="name" class="card item-card">
       <text class="item-title">{{item.name}}</text>
       <text class="role">{{item.role}}</text>
       <text wx:if="{{item.notes}}" class="muted">{{item.notes}}</text>
@@ -46,7 +57,15 @@
   </view>
 
   <view wx:if="{{review && activeTab === 'raci'}}">
+    <view wx:if="{{raciRows.length > 0}}" class="data-search">
+      <view class="search-row">
+        <input class="search-input" value="{{raciKeyword}}" placeholder="搜索节点、输出或成员" confirm-type="search" bindinput="onRaciKeywordInput" />
+        <button wx:if="{{raciKeyword}}" class="search-clear" size="mini" bindtap="clearRaciKeyword">清空</button>
+      </view>
+      <text class="search-result">{{raciKeyword ? '找到' : '共'}} {{filteredRaciRows.length}} 个节点</text>
+    </view>
     <view wx:if="{{!loading && raciRows.length === 0}}" class="card empty-state">暂无RACI数据</view>
+    <view wx:if="{{!loading && raciRows.length > 0 && filteredRaciRows.length === 0}}" class="card empty-state">未找到匹配的RACI节点</view>
     <view wx:for="{{visibleRaciRows}}" wx:key="code" wx:for-item="milestone" class="card item-card">
       <view class="milestone-title">
         <text class="code">{{milestone.code}}</text>
@@ -58,7 +77,7 @@
         <text class="raci-names">{{role.names}}</text>
       </view>
     </view>
-    <button wx:if="{{visibleRaciRows.length < raciRows.length}}" class="load-more" bindtap="showMoreRaci">查看更多RACI</button>
+    <button wx:if="{{visibleRaciRows.length < filteredRaciRows.length}}" class="load-more" bindtap="showMoreRaci">查看更多RACI</button>
   </view>
 
   <view wx:if="{{!loading && !review}}" class="card empty-state">项目资料暂不可用</view>

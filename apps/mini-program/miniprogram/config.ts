@@ -13,4 +13,6 @@ export const runtimeConfig = {
   requestRetryAttempts: 1,
   // 项目资料每次增量展示的记录数。
   projectReviewPageSize: 10,
+  // 产品规格详情与备注超过该字符数时默认折叠，用户可按需展开。
+  projectReviewCollapseLength: 90,
 };

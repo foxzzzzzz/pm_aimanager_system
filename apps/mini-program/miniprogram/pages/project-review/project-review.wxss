@@ -14,7 +14,7 @@
 }
 .tab::after { border: 0; }
 .tab.active { background: #146c5a; color: #fff; }
-.spec-search {
+.data-search {
   position: sticky;
   top: 0;
   z-index: 2;
@@ -34,6 +34,9 @@
 .search-result { display: block; margin-top: 10rpx; color: #63716d; font-size: 22rpx; }
 .item-title { display: block; font-size: 30rpx; font-weight: 650; }
 .detail, .note, .role { display: block; margin-top: 12rpx; }
+.detail-content.clamped { max-height: 132rpx; overflow: hidden; }
+.detail-toggle { margin: 12rpx 0 0; padding: 0; border-radius: 0; color: #146c5a; background: transparent; font-size: 23rpx; line-height: 52rpx; text-align: left; }
+.detail-toggle::after { border: 0; }
 .note { color: #63716d; font-size: 24rpx; }
 .role { color: #146c5a; }
 .milestone-title { display: flex; gap: 14rpx; align-items: center; margin-bottom: 12rpx; }

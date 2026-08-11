@@ -1,7 +1,12 @@
 import { api } from "../../services/api";
 import { runtimeConfig } from "../../config";
 import { visiblePage } from "../../services/pagination.js";
-import { filterProductSpecs } from "../../services/project-review-filter.js";
+import {
+  filterProductSpecs,
+  filterProjectMembers,
+  filterRaciRows,
+  hasLongSpecContent,
+} from "../../services/project-review-filter.js";
 import type { ProductSpec, ProjectMember, ProjectReview } from "../../types";
 
 type ReviewTab = "specs" | "members" | "raci";
@@ -11,9 +16,12 @@ interface TabTapEvent {
 }
 
 interface SearchInputEvent { detail: { value: string } }
+interface SpecTapEvent { currentTarget: { dataset: { row: number } } }
 
 interface SpecView extends ProductSpec {
   detail: string;
+  expandable: boolean;
+  expanded: boolean;
 }
 
 interface RaciView {
@@ -34,8 +42,12 @@ Page({
     visibleSpecs: [] as SpecView[],
     specKeyword: "",
     members: [] as ProjectMember[],
+    filteredMembers: [] as ProjectMember[],
+    memberKeyword: "",
     raciRows: [] as RaciView[],
+    filteredRaciRows: [] as RaciView[],
     visibleRaciRows: [] as RaciView[],
+    raciKeyword: "",
     specPage: 1,
     raciPage: 1,
     activeTab: "specs" as ReviewTab,
@@ -46,13 +58,21 @@ Page({
     this.setData({ projectId });
     try {
       const review = await api.projectReview(projectId);
-      const specs = review.product_specs.map((spec) => ({
-        ...spec,
-        detail: [spec.configuration, spec.core_information, spec.selected_model]
+      const specs = review.product_specs.map((spec) => {
+        const detail = [spec.configuration, spec.core_information, spec.selected_model]
           .map(valueOrEmpty)
           .filter(Boolean)
-          .join(" · ") || "—",
-      }));
+          .join(" · ") || "—";
+        return {
+          ...spec,
+          detail,
+          expandable: hasLongSpecContent(
+            { detail, notes: spec.notes },
+            runtimeConfig.projectReviewCollapseLength,
+          ),
+          expanded: false,
+        };
+      });
       const raciRows = review.milestones.map((milestone) => ({
         code: milestone.code,
         name: milestone.name,
@@ -68,7 +88,9 @@ Page({
         filteredSpecs: specs,
         visibleSpecs: visiblePage(specs, 1, runtimeConfig.projectReviewPageSize),
         members: review.members,
+        filteredMembers: review.members,
         raciRows,
+        filteredRaciRows: raciRows,
         visibleRaciRows: visiblePage(raciRows, 1, runtimeConfig.projectReviewPageSize),
         specPage: 1,
         raciPage: 1,
@@ -101,6 +123,51 @@ Page({
       specPage: 1,
     });
   },
+  toggleSpecDetail(event: SpecTapEvent) {
+    const rowNumber = event.currentTarget.dataset.row;
+    const specs = this.data.specs.map((spec) => spec.row_number === rowNumber
+      ? { ...spec, expanded: !spec.expanded }
+      : spec);
+    const filteredSpecs = filterProductSpecs(specs, this.data.specKeyword);
+    this.setData({
+      specs,
+      filteredSpecs,
+      visibleSpecs: visiblePage(
+        filteredSpecs,
+        this.data.specPage,
+        runtimeConfig.projectReviewPageSize,
+      ),
+    });
+  },
+  onMemberKeywordInput(event: SearchInputEvent) {
+    const memberKeyword = event.detail.value;
+    this.setData({
+      memberKeyword,
+      filteredMembers: filterProjectMembers(this.data.members, memberKeyword),
+    });
+  },
+  clearMemberKeyword() {
+    this.setData({ memberKeyword: "", filteredMembers: this.data.members });
+  },
+  onRaciKeywordInput(event: SearchInputEvent) {
+    const raciKeyword = event.detail.value;
+    const filteredRaciRows = filterRaciRows(this.data.raciRows, raciKeyword);
+    this.setData({
+      raciKeyword,
+      filteredRaciRows,
+      visibleRaciRows: visiblePage(filteredRaciRows, 1, runtimeConfig.projectReviewPageSize),
+      raciPage: 1,
+    });
+  },
+  clearRaciKeyword() {
+    const filteredRaciRows = this.data.raciRows;
+    this.setData({
+      raciKeyword: "",
+      filteredRaciRows,
+      visibleRaciRows: visiblePage(filteredRaciRows, 1, runtimeConfig.projectReviewPageSize),
+      raciPage: 1,
+    });
+  },
   showMoreSpecs() {
     const specPage = this.data.specPage + 1;
     this.setData({
@@ -117,7 +184,7 @@ Page({
     this.setData({
       raciPage,
       visibleRaciRows: visiblePage(
-        this.data.raciRows,
+        this.data.filteredRaciRows,
         raciPage,
         runtimeConfig.projectReviewPageSize,
       ),
