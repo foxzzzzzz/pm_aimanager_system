@@ -6,29 +6,61 @@
   <block wx:else>
     <view class="context">
       <text>当前项目：{{projectCode}} · {{projectName}}</text>
-      <button size="mini" bindtap="selectProject">切换</button>
+      <button class="context-action" bindtap="selectProject">切换项目</button>
     </view>
-    <view class="card">
-      <text class="title">{{editingIssueId ? '编辑重难点' : '登记重难点'}}</text>
-      <textarea class="field" value="{{description}}" placeholder="问题描述" bindinput="onDescription" />
-      <textarea class="field" value="{{impact}}" placeholder="项目影响" bindinput="onImpact" />
-      <input class="field" value="{{ownerName}}" disabled placeholder="责任人姓名" />
-      <picker range="{{severityLabels}}" value="{{severityIndex}}" bindchange="onSeverity"><view class="field">严重程度：{{severityLabels[severityIndex]}}</view></picker>
-      <picker mode="date" bindchange="onDueDate"><view class="field">预计完成：{{dueDate || '请选择'}}</view></picker>
-      <picker wx:if="{{editingIssueId}}" range="{{statusOptions}}" value="{{statusIndex}}" bindchange="onStatus"><view class="field">问题状态：{{statusOptions[statusIndex]}}</view></picker>
-      <button class="primary" loading="{{creating}}" disabled="{{creating}}" bindtap="createIssue">{{editingIssueId ? '保存问题修改' : '登记问题'}}</button>
-      <button wx:if="{{editingIssueId}}" disabled="{{creating}}" bindtap="cancelEdit">取消编辑</button>
+    <view class="issue-toolbar">
+      <view>
+        <text class="section-heading">问题列表</text>
+        <text class="list-count">共 {{issues.length}} 条</text>
+      </view>
+      <button wx:if="{{!formVisible}}" class="add-issue" bindtap="openCreateForm">＋ 登记问题</button>
+    </view>
+    <view wx:if="{{formVisible}}" id="issue-form" class="card form-card">
+      <view class="form-heading">
+        <text class="section-heading">{{editingIssueId ? '编辑问题' : '登记新问题'}}</text>
+        <button class="close-form" disabled="{{creating}}" bindtap="cancelEdit">收起</button>
+      </view>
+      <view class="field-block">
+        <text class="field-label">问题描述 <text class="required">*</text></text>
+        <textarea class="field" value="{{description}}" placeholder="请简要说明遇到的问题" bindinput="onDescription" />
+      </view>
+      <view class="field-block">
+        <text class="field-label">项目影响 <text class="required">*</text></text>
+        <textarea class="field" value="{{impact}}" placeholder="请说明对进度、质量或交付的影响" bindinput="onImpact" />
+      </view>
+      <view class="field-block">
+        <text class="field-label">责任人</text>
+        <view class="readonly-field">{{ownerName}}</view>
+      </view>
+      <view class="field-block">
+        <text class="field-label">严重程度 <text class="required">*</text></text>
+        <picker range="{{severityLabels}}" value="{{severityIndex}}" bindchange="onSeverity"><view class="field picker-field">{{severityLabels[severityIndex]}} <text>›</text></view></picker>
+      </view>
+      <view class="field-block">
+        <text class="field-label">预计完成日期 <text class="required">*</text></text>
+        <picker mode="date" bindchange="onDueDate"><view class="field picker-field">{{dueDate || '请选择日期'}} <text>›</text></view></picker>
+      </view>
+      <view wx:if="{{editingIssueId}}" class="field-block">
+        <text class="field-label">问题状态</text>
+        <picker range="{{statusOptions}}" value="{{statusIndex}}" bindchange="onStatus"><view class="field picker-field">{{statusOptions[statusIndex]}} <text>›</text></view></picker>
+      </view>
+      <view class="form-actions">
+        <button class="secondary-action" disabled="{{creating}}" bindtap="cancelEdit">取消</button>
+        <button class="primary submit-action" loading="{{creating}}" disabled="{{creating}}" bindtap="createIssue">{{editingIssueId ? '保存修改' : '确认登记'}}</button>
+      </view>
     </view>
     <view wx:if="{{loading}}" class="card loading-state">正在加载问题…</view>
     <view wx:if="{{!loading && issues.length === 0}}" class="card empty-state">当前项目暂无重难点问题</view>
-    <view wx:if="{{!loading}}" wx:for="{{issues}}" wx:key="id" class="card">
+    <view wx:if="{{!loading}}" wx:for="{{issues}}" wx:key="id" class="card issue-card">
       <text class="tag">{{item.status}}</text>
       <text class="issue-title">{{item.description}}</text>
       <text class="muted">影响：{{item.impact}}</text>
       <text class="muted">{{item.owner_name}} · {{item.severityLabel}} · {{item.dueDateLabel}}</text>
-      <button wx:if="{{item.owner_name === currentMemberName && item.status !== '已关闭'}}" disabled="{{actionIssueId !== ''}}" size="mini" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="editIssue">编辑</button>
-      <button wx:if="{{item.owner_name === currentMemberName && item.status === '待处理'}}" loading="{{actionIssueId === item.id}}" disabled="{{actionIssueId !== ''}}" size="mini" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="startIssue">开始处理</button>
-      <button wx:if="{{item.owner_name === currentMemberName && item.status !== '已关闭'}}" loading="{{actionIssueId === item.id}}" disabled="{{actionIssueId !== ''}}" type="warn" size="mini" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="deleteIssue">作废问题</button>
+      <view wx:if="{{item.owner_name === currentMemberName && item.status !== '已关闭'}}" class="issue-actions">
+        <button class="issue-action edit-action" disabled="{{actionIssueId !== ''}}" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="editIssue">编辑</button>
+        <button wx:if="{{item.status === '待处理'}}" class="issue-action progress-action" loading="{{actionIssueId === item.id}}" disabled="{{actionIssueId !== ''}}" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="startIssue">开始处理</button>
+        <button class="issue-action danger-action" loading="{{actionIssueId === item.id}}" disabled="{{actionIssueId !== ''}}" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="deleteIssue">作废</button>
+      </view>
     </view>
   </block>
 </view>

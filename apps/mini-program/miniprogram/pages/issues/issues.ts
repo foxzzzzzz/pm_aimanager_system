@@ -36,6 +36,7 @@ Page({
     statusIndex: 0,
     editingIssueId: "",
     editingRevision: 0,
+    formVisible: false,
     creating: false,
     actionIssueId: "",
     loading: false,
@@ -51,6 +52,16 @@ Page({
       currentMemberName,
       ownerName: projectChanged ? currentMemberName : this.data.ownerName || currentMemberName,
       issues: projectChanged ? [] : this.data.issues,
+      ...(projectChanged ? {
+        formVisible: false,
+        editingIssueId: "",
+        editingRevision: 0,
+        description: "",
+        impact: "",
+        dueDate: "",
+        severityIndex: 2,
+        statusIndex: 0,
+      } : {}),
     });
     if (!projectId) {
       this.setData({ loading: false, issues: [] });
@@ -71,10 +82,25 @@ Page({
   onSeverity(event: PickerEvent) { this.setData({ severityIndex: Number(event.detail.value) }); },
   onStatus(event: PickerEvent) { this.setData({ statusIndex: Number(event.detail.value) }); },
   selectProject() { wx.switchTab({ url: "/pages/projects/projects" }); },
+  openCreateForm() {
+    this.setData({
+      formVisible: true,
+      editingIssueId: "",
+      editingRevision: 0,
+      description: "",
+      impact: "",
+      ownerName: this.data.currentMemberName,
+      dueDate: "",
+      severityIndex: 2,
+      statusIndex: 0,
+    });
+    this.scrollToIssueForm();
+  },
   editIssue(event: IssueTapEvent) {
     const issue = this.data.issues.find((item) => item.id === event.currentTarget.dataset.id);
     if (!issue) return;
     this.setData({
+      formVisible: true,
       editingIssueId: issue.id,
       editingRevision: issue.revision,
       description: issue.description,
@@ -84,9 +110,11 @@ Page({
       severityIndex: Math.max(0, this.data.severityOptions.indexOf(issue.severity)),
       statusIndex: Math.max(0, this.data.statusOptions.indexOf(issue.status)),
     });
+    this.scrollToIssueForm();
   },
   cancelEdit() {
     this.setData({
+      formVisible: false,
       editingIssueId: "",
       editingRevision: 0,
       description: "",
@@ -95,6 +123,11 @@ Page({
       dueDate: "",
       severityIndex: 2,
       statusIndex: 0,
+    });
+  },
+  scrollToIssueForm() {
+    wx.nextTick(() => {
+      wx.pageScrollTo({ selector: "#issue-form", duration: 250 });
     });
   },
   async createIssue() {
