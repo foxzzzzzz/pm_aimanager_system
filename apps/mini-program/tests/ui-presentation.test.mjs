@@ -4,10 +4,11 @@ import test from "node:test";
 
 const readSource = (relativePath) => readFile(new URL(relativePath, import.meta.url), "utf8");
 
-test("dashboard uses consistent full-width action rows instead of default mini buttons", async () => {
-  const template = await readSource(
-    "../miniprogram/pages/dashboard/dashboard.wxml",
-  );
+test("dashboard uses right-aligned pill actions instead of default mini buttons", async () => {
+  const [template, styles] = await Promise.all([
+    readSource("../miniprogram/pages/dashboard/dashboard.wxml"),
+    readSource("../miniprogram/pages/dashboard/dashboard.wxss"),
+  ]);
 
   assert.match(template, /class="card-action summary-action"/);
   assert.match(template, /class="card-action milestone-action"/);
@@ -15,6 +16,11 @@ test("dashboard uses consistent full-width action rows instead of default mini b
   assert.match(template, /更新进度/);
   assert.doesNotMatch(template, /size="mini" bindtap="openProjectReview"/);
   assert.doesNotMatch(template, /size="mini" data-code=.*bindtap="updateMilestone"/);
+  assert.match(styles, /\.card-action\s*\{[^}]*width:\s*auto/s);
+  assert.match(styles, /\.card-action\s*\{[^}]*margin-left:\s*auto/s);
+  assert.match(styles, /\.card-action\s*\{[^}]*border-radius:\s*999rpx/s);
+  assert.match(styles, /\.card-action\s*\{[^}]*background:\s*#146c5a/s);
+  assert.match(styles, /\.card-action\s*\{[^}]*color:\s*#fff(?:fff)?/s);
 });
 
 test("list pages avoid duplicate native navigation titles", async () => {

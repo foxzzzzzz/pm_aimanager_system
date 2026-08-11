@@ -35,3 +35,10 @@ test("native tab bar provides normal and selected icons", async () => {
     await access(new URL(`../miniprogram/${item.selectedIconPath}`, import.meta.url));
   }
 });
+
+test("native tab bar clearly distinguishes selected and unselected colors", async () => {
+  const appConfig = JSON.parse(await readSource("../miniprogram/app.json"));
+
+  assert.equal(appConfig.tabBar.color, "#9aa5a1");
+  assert.equal(appConfig.tabBar.selectedColor, "#087a64");
+});
