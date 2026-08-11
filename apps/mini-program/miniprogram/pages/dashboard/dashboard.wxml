@@ -7,7 +7,10 @@
     <text class="title">{{dashboard.project.name}}</text>
     <text class="muted">身份：{{dashboard.member_name}} · 正式版本 v{{dashboard.current_version_number}}</text>
     <text class="plan">当前计划：{{dashboard.active_plan_name}}</text>
-    <button class="review-entry" size="mini" bindtap="openProjectReview">查看项目资料</button>
+    <button class="card-action summary-action" bindtap="openProjectReview">
+      <text>查看项目资料</text>
+      <text class="action-arrow">›</text>
+    </button>
   </view>
   <view wx:for="{{proposals}}" wx:key="id" class="card milestone">
     <text class="tag">待我审批</text>
@@ -29,14 +32,17 @@
     </view>
   </scroll-view>
   <view wx:if="{{visibleMilestones.length === 0}}" class="card empty-state">当前分类暂无节点</view>
-  <view wx:for="{{visibleMilestones}}" wx:key="code" class="card milestone">
+  <view wx:for="{{visibleMilestones}}" wx:key="code" class="card milestone milestone-card">
     <view class="row">
       <text class="code">{{item.code}}</text>
       <text class="name">{{item.name}}</text>
       <text wx:if="{{item.statusLabel}}" class="done">{{item.statusLabel}}</text>
     </view>
     <text class="muted">计划：{{item.planLabel}}</text>
-    <button wx:if="{{item.can_update}}" size="mini" data-code="{{item.code}}" bindtap="updateMilestone">更新节点</button>
+    <button wx:if="{{item.can_update}}" class="card-action milestone-action" data-code="{{item.code}}" bindtap="updateMilestone">
+      <text>更新进度</text>
+      <text class="action-arrow">›</text>
+    </button>
   </view>
 </view>
 <view class="page" wx:else>

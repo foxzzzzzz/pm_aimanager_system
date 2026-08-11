@@ -1,10 +1,28 @@
-.summary .muted, .plan { display: block; margin-top: 12rpx; }
-.review-entry { margin: 20rpx 0 0; color: #146c5a; }
+.summary .muted, .plan { display: block; margin-top: 10rpx; }
 .row { display: flex; align-items: center; gap: 14rpx; margin-bottom: 14rpx; }
 .code { color: #146c5a; font-weight: 700; }
 .name { flex: 1; font-weight: 650; }
 .done { color: #146c5a; font-size: 22rpx; }
-.milestone button { margin: 18rpx 0 0; color: #146c5a; }
+.card-action {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  margin: 18rpx 0 0;
+  padding: 18rpx 0 0;
+  border-top: 1rpx solid #e3ece9;
+  border-radius: 0;
+  color: #146c5a;
+  background: transparent;
+  font-size: 27rpx;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: left;
+}
+.card-action::after { border: 0; }
+.action-arrow { color: #7a918b; font-size: 34rpx; font-weight: 400; }
+.milestone-card .muted { display: block; }
 .proposal-actions { display: flex; gap: 16rpx; }
 .proposal-actions button { margin-right: 0; }
 .milestone-filters { width: 100%; margin-bottom: 20rpx; white-space: nowrap; }

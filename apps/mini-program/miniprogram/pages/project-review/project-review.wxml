@@ -1,7 +1,6 @@
 <view class="page">
   <view wx:if="{{loading}}" class="card loading-state">正在加载项目资料…</view>
   <view wx:if="{{review}}" class="card review-summary">
-    <text class="title">项目资料</text>
     <text class="muted">正式版本 v{{review.current_version_number}} · {{review.active_plan_name}}</text>
     <text class="muted counts">规格 {{specs.length}} · 成员 {{members.length}} · 节点 {{raciRows.length}}</text>
   </view>
