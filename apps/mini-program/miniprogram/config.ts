@@ -6,7 +6,7 @@ export const runtimeConfig = {
   // Replace with the approved WeChat subscription-message template before release.
   subscriptionTemplateId: "replace-with-template-id",
   // 节点结束日期距今天不超过该天数时，归入“近期”筛选。
-  milestoneUpcomingDays: 3,
+  milestoneUpcomingDays: 14,
   // API 时间戳展示使用的业务时区偏移量，当前为 UTC+8。
   presentationTimezoneOffsetMinutes: 480,
   // 网络层在没有收到响应时自动重试的次数，重试复用同一个幂等键。

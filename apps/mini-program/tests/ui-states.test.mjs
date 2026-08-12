@@ -42,3 +42,9 @@ test("native tab bar clearly distinguishes selected and unselected colors", asyn
   assert.equal(appConfig.tabBar.color, "#9aa5a1");
   assert.equal(appConfig.tabBar.selectedColor, "#087a64");
 });
+
+test("upcoming milestone window is configured as fourteen days", async () => {
+  const config = await readSource("../miniprogram/config.ts");
+
+  assert.match(config, /milestoneUpcomingDays:\s*14/);
+});

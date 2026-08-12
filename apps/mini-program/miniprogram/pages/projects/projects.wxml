@@ -13,5 +13,24 @@
     <text class="tag">{{item.code}}</text>
     <text class="project-name">{{item.name}}</text>
     <text class="muted">当前正式版本 v{{item.current_version_number}}</text>
+    <view wx:if="{{item.overdueMilestones.length > 0}}" class="alert-section overdue-section">
+      <text class="alert-heading overdue-heading">逾期节点 {{item.overdueMilestones.length}}</text>
+      <view wx:for="{{item.overdueMilestones}}" wx:key="code" wx:for-item="milestone" class="alert-milestone overdue-milestone">
+        <view class="alert-title"><text>{{milestone.code}} · {{milestone.name}}</text><text class="alert-date">截止 {{milestone.endDate}}</text></view>
+        <view class="alert-raci">
+          <view wx:for="{{milestone.roles}}" wx:key="key" wx:for-item="role" class="raci-role"><text class="raci-key">{{role.key}}</text><text class="raci-names">{{role.names}}</text></view>
+        </view>
+      </view>
+    </view>
+    <view wx:if="{{item.upcomingMilestones.length > 0}}" class="alert-section upcoming-section">
+      <text class="alert-heading upcoming-heading">近期节点 {{item.upcomingMilestones.length}}</text>
+      <view wx:for="{{item.upcomingMilestones}}" wx:key="code" wx:for-item="milestone" class="alert-milestone">
+        <view class="alert-title"><text>{{milestone.code}} · {{milestone.name}}</text><text class="alert-date">截止 {{milestone.endDate}}</text></view>
+        <view class="alert-raci">
+          <view wx:for="{{milestone.roles}}" wx:key="key" wx:for-item="role" class="raci-role"><text class="raci-key">{{role.key}}</text><text class="raci-names">{{role.names}}</text></view>
+        </view>
+      </view>
+    </view>
+    <view wx:if="{{item.overdueMilestones.length === 0 && item.upcomingMilestones.length === 0}}" class="alert-empty">未来14天暂无到期或逾期节点</view>
   </view>
 </view>

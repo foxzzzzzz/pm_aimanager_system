@@ -4,6 +4,8 @@ export interface ProjectSummary {
   name: string;
   status: string;
   current_version_number: number;
+  business_date: string;
+  milestones: Milestone[];
 }
 
 export interface Milestone {
@@ -13,6 +15,7 @@ export interface Milestone {
   plan: { state: string; start_date: string | null; end_date: string | null } | null;
   can_update: boolean;
   can_approve: boolean;
+  assignments: Record<"R" | "A" | "C" | "I", string[]>;
 }
 
 export interface MobileDashboard {

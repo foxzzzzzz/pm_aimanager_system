@@ -63,3 +63,17 @@ test("milestone filters exclude completed and not-applicable nodes from todo", (
     ["DONE"],
   );
 });
+
+test("upcoming defaults to today through the next fourteen days", () => {
+  const boundaryMilestones = [
+    milestone({ code: "TODAY", endDate: "2026-08-10" }),
+    milestone({ code: "DAY14", endDate: "2026-08-24" }),
+    milestone({ code: "DAY15", endDate: "2026-08-25" }),
+  ];
+
+  assert.deepEqual(
+    filterMilestones(boundaryMilestones, "upcoming", "2026-08-10", 14)
+      .map((item) => item.code),
+    ["TODAY", "DAY14"],
+  );
+});

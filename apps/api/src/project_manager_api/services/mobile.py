@@ -259,36 +259,27 @@ class MobileService:
             .where(ProjectMembership.actor_id == actor_id)
             .order_by(Project.created_at.desc())
         )
-        return [
-            {
-                "id": str(project.id),
-                "code": project.code,
-                "name": project.name,
-                "status": project.status,
-                "current_version_number": project.current_version_number or 0,
-            }
-            for project in self.session.scalars(query)
-        ]
+        business_date = current_business_date(self.settings).isoformat()
+        projects = []
+        for project in self.session.scalars(query):
+            _, snapshot = self._project_snapshot(project.id)
+            projects.append(
+                {
+                    "id": str(project.id),
+                    "code": project.code,
+                    "name": project.name,
+                    "status": project.status,
+                    "current_version_number": project.current_version_number or 0,
+                    "business_date": business_date,
+                    "milestones": _mobile_milestones(snapshot),
+                }
+            )
+        return projects
 
     def dashboard(self, project_id: uuid.UUID) -> dict[str, Any]:
         project, binding, snapshot = self._bound_project(project_id)
         active_name = snapshot.get("active_plan_name")
-        plan: dict[str, Any] = next(
-            (item for item in snapshot.get("plan_versions", []) if item["name"] == active_name),
-            {"milestones": {}},
-        )
-        milestones = []
-        for milestone in snapshot.get("milestones", []):
-            milestones.append(
-                {
-                    **milestone,
-                    "plan": plan["milestones"].get(milestone["name"]),
-                    "can_update": binding.member_name
-                    in milestone.get("assignments", {}).get("R", []),
-                    "can_approve": binding.member_name
-                    in milestone.get("assignments", {}).get("A", []),
-                }
-            )
+        milestones = _mobile_milestones(snapshot, binding.member_name)
         return {
             "project": {"id": str(project.id), "code": project.code, "name": project.name},
             "current_version_number": project.current_version_number or 0,
@@ -539,6 +530,29 @@ class MobileService:
                 entity_id=entity_id,
             )
         )
+
+
+def _mobile_milestones(
+    snapshot: dict[str, Any], member_name: str | None = None
+) -> list[dict[str, Any]]:
+    active_name = snapshot.get("active_plan_name")
+    plan: dict[str, Any] = next(
+        (item for item in snapshot.get("plan_versions", []) if item["name"] == active_name),
+        {"milestones": {}},
+    )
+    return [
+        {
+            **milestone,
+            "plan": plan["milestones"].get(milestone["name"]),
+            "can_update": bool(
+                member_name and member_name in milestone.get("assignments", {}).get("R", [])
+            ),
+            "can_approve": bool(
+                member_name and member_name in milestone.get("assignments", {}).get("A", [])
+            ),
+        }
+        for milestone in snapshot.get("milestones", [])
+    ]
 
 
 def natural_language_prefill(text: str, settings: AppSettings) -> dict[str, Any]:

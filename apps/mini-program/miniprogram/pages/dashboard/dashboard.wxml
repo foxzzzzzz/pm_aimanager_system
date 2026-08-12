@@ -19,17 +19,16 @@
       <button size="mini" type="warn" loading="{{resolvingProposalId === item.id}}" disabled="{{resolvingProposalId !== ''}}" data-id="{{item.id}}" bindtap="rejectProposal">驳回</button>
     </view>
   </view>
-  <scroll-view class="milestone-filters" scroll-x enhanced show-scrollbar="{{false}}">
-    <view class="milestone-filter-list">
-      <button
-        wx:for="{{milestoneFilters}}"
-        wx:key="key"
-        class="milestone-filter {{selectedMilestoneFilter === item.key ? 'active' : ''}}"
-        data-key="{{item.key}}"
-        bindtap="selectMilestoneFilter"
-      >{{item.label}} {{item.count}}</button>
-    </view>
-  </scroll-view>
+  <view class="milestone-filters">
+    <button
+      wx:for="{{primaryMilestoneFilters}}"
+      wx:key="key"
+      class="milestone-filter {{selectedMilestoneFilter === item.key ? 'active' : ''}} {{item.key === 'overdue' && item.count > 0 ? 'overdue' : ''}}"
+      data-key="{{item.key}}"
+      bindtap="selectMilestoneFilter"
+    >{{item.label}} {{item.count}}</button>
+    <button class="milestone-filter more {{selectedMilestoneFilter === 'completed' || selectedMilestoneFilter === 'all' ? 'active' : ''}}" bindtap="openMoreFilters">{{moreFilterLabel}}</button>
+  </view>
   <view wx:if="{{visibleMilestones.length === 0}}" class="card empty-state">当前分类暂无节点</view>
   <view wx:for="{{visibleMilestones}}" wx:key="code" class="card milestone milestone-card">
     <view class="row">

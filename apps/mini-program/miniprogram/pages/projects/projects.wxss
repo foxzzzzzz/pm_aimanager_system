@@ -2,3 +2,16 @@
 .page-head .muted { display: block; }
 .project-name { display: block; margin: 18rpx 0 10rpx; font-size: 34rpx; font-weight: 650; }
 .empty { color: #63716d; text-align: center; }
+.alert-section { margin-top: 22rpx; padding-top: 18rpx; border-top: 1rpx solid #e3ece9; }
+.alert-heading { display: block; margin-bottom: 12rpx; color: #b54708; font-size: 24rpx; font-weight: 700; }
+.overdue-heading { color: #c53030; }
+.alert-milestone { margin-top: 10rpx; padding: 16rpx; border-radius: 14rpx; background: #fff8ef; }
+.overdue-milestone { background: #fff5f5; }
+.alert-title { display: flex; justify-content: space-between; gap: 16rpx; color: #17322d; font-size: 25rpx; font-weight: 650; }
+.overdue-milestone .alert-title, .overdue-milestone .alert-date { color: #c53030; }
+.alert-date { flex-shrink: 0; color: #b54708; font-size: 22rpx; font-weight: 500; }
+.alert-raci { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8rpx 14rpx; margin-top: 14rpx; }
+.raci-role { display: flex; min-width: 0; gap: 8rpx; font-size: 22rpx; }
+.raci-key { flex: 0 0 28rpx; color: #146c5a; font-weight: 700; }
+.raci-names { overflow-wrap: anywhere; color: #63716d; }
+.alert-empty { margin-top: 20rpx; padding-top: 16rpx; border-top: 1rpx solid #e3ece9; color: #8a9692; font-size: 23rpx; }

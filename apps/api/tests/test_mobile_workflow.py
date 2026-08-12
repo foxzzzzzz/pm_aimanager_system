@@ -124,9 +124,7 @@ def test_unbound_user_cannot_view_project_and_bound_user_can(
     invitation = _invite(client, project_id, "成员10", "invite-member10")
     with client.app.state.session_factory() as session:
         invitation_record = session.scalar(
-            select(IdempotencyRecord).where(
-                IdempotencyRecord.request_key == "invite-member10"
-            )
+            select(IdempotencyRecord).where(IdempotencyRecord.request_key == "invite-member10")
         )
         assert invitation_record is not None
         assert "mini_program_code_data_url" not in invitation_record.response_body
@@ -144,6 +142,14 @@ def test_unbound_user_cannot_view_project_and_bound_user_can(
     assert accepted.json()["status"] == "bound"
     projects = client.get("/api/v1/mobile/projects", headers=member_headers)
     assert [project["code"] for project in projects.json()] == ["ZPD1322"]
+    assert projects.json()[0]["business_date"]
+    assert len(projects.json()[0]["milestones"]) == 24
+    assert projects.json()[0]["milestones"][0]["assignments"].keys() == {
+        "R",
+        "A",
+        "C",
+        "I",
+    }
     dashboard = client.get(
         f"/api/v1/mobile/projects/{project_id}/dashboard", headers=member_headers
     )

@@ -33,6 +33,8 @@ Page({
     dashboard: null as MobileDashboard | null,
     proposals: [] as ChangeProposal[],
     milestoneFilters: [] as ReturnType<typeof buildMilestoneFilters>,
+    primaryMilestoneFilters: [] as ReturnType<typeof buildMilestoneFilters>,
+    moreFilterLabel: "更多筛选",
     visibleMilestones: [] as MilestoneView[],
     selectedMilestoneFilter: "todo" as MilestoneFilterKey,
     loading: true,
@@ -59,10 +61,14 @@ Page({
       ]);
       const today = dashboard.business_date;
       const upcomingDays = runtimeConfig.milestoneUpcomingDays;
+      const milestoneFilters = buildMilestoneFilters(dashboard.milestones, today, upcomingDays);
       this.setData({
         dashboard,
         proposals,
-        milestoneFilters: buildMilestoneFilters(dashboard.milestones, today, upcomingDays),
+        milestoneFilters,
+        primaryMilestoneFilters: milestoneFilters.filter(
+          (filter) => ["todo", "upcoming", "overdue"].includes(filter.key),
+        ),
         visibleMilestones: presentMilestones(
           filterMilestones(
             dashboard.milestones,
@@ -88,6 +94,7 @@ Page({
     const selectedMilestoneFilter = event.currentTarget.dataset.key;
     this.setData({
       selectedMilestoneFilter,
+      moreFilterLabel: "更多筛选",
       visibleMilestones: presentMilestones(
         filterMilestones(
           this.data.dashboard.milestones,
@@ -97,6 +104,30 @@ Page({
         ),
       ),
     });
+  },
+  async openMoreFilters() {
+    const itemList = ["已完成", "全部"];
+    try {
+      const result = await wx.showActionSheet({ itemList });
+      const selectedMilestoneFilter = result.tapIndex === 0 ? "completed" : "all";
+      const selectedFilter = this.data.milestoneFilters.find(
+        (filter) => filter.key === selectedMilestoneFilter,
+      );
+      this.setData({
+        selectedMilestoneFilter,
+        moreFilterLabel: `${selectedFilter?.label || itemList[result.tapIndex]} ${selectedFilter?.count || 0}`,
+        visibleMilestones: presentMilestones(
+          filterMilestones(
+            this.data.dashboard?.milestones || [],
+            selectedMilestoneFilter,
+            this.data.dashboard?.business_date || "",
+            runtimeConfig.milestoneUpcomingDays,
+          ),
+        ),
+      });
+    } catch {
+      // The user dismissed the action sheet.
+    }
   },
   openProjectReview() {
     wx.navigateTo({
