@@ -15,7 +15,7 @@ from project_manager_api.api.schemas import IssueUpdate
 from project_manager_api.db.base import Base
 from project_manager_api.db.models import Issue, IssueStatus
 from project_manager_api.services.errors import ConflictError
-from project_manager_api.services.projects import ProjectService, _issue_risk
+from project_manager_api.services.projects import ProjectService, _issue_risk, milestone_risk
 from project_manager_api.settings import AppSettings
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -195,6 +195,46 @@ def test_import_diff_publish_history_and_dashboard(workflow: tuple[TestClient, P
     }
     versions = client.get(f"/api/v1/projects/{project_id}/versions", headers=PM_HEADERS)
     assert [item["version_number"] for item in versions.json()] == [1]
+
+
+def test_project_dashboard_exposes_server_classified_tasks_and_issue_summary(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    issue = client.post(
+        f"/api/v1/projects/{project_id}/issues",
+        headers=_headers("dashboard-issue"),
+        json={
+            "description": "项目看板问题",
+            "impact": "验证问题风险摘要",
+            "owner_name": "成员10",
+            "accountable_names": ["成员02"],
+            "consulted_names": ["成员03"],
+            "informed_names": ["成员04"],
+            "severity": "high",
+            "due_date": "2026-08-20",
+        },
+    )
+    assert issue.status_code == 201
+
+    response = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM_HEADERS)
+
+    assert response.status_code == 200
+    dashboard = response.json()
+    assert dashboard["business_date"] == "2026-08-12"
+    assert dashboard["tasks"]
+    assert set(dashboard["tasks"][0]) >= {
+        "code",
+        "name",
+        "plan",
+        "assignments",
+        "risk",
+    }
+    assert set(dashboard["tasks"][0]["assignments"]) == {"R", "A", "C", "I"}
+    assert dashboard["tasks"][0]["risk"] in {"todo", "upcoming", "overdue", "completed"}
+    assert dashboard["issues"][0]["description"] == "项目看板问题"
+    assert dashboard["issues"][0]["risk"] == "upcoming"
 
 
 def test_project_review_exposes_specs_roles_raci_and_tbd_without_contacts(
@@ -585,6 +625,22 @@ def test_issue_risk_uses_inclusive_fourteen_day_boundary() -> None:
     assert _issue_risk(issue, business_date, 14) == "overdue"
     issue.status = IssueStatus.RESOLVED
     assert _issue_risk(issue, business_date, 14) == "completed"
+
+
+def test_milestone_risk_uses_the_same_inclusive_fourteen_day_boundary() -> None:
+    business_date = date(2026, 8, 12)
+    milestone = {
+        "actual_completion": {"end_date": None},
+        "plan": {"state": "scheduled", "end_date": "2026-08-26"},
+    }
+
+    assert milestone_risk(milestone, business_date, 14) == "upcoming"
+    milestone["plan"]["end_date"] = "2026-08-27"
+    assert milestone_risk(milestone, business_date, 14) == "todo"
+    milestone["plan"]["end_date"] = "2026-08-11"
+    assert milestone_risk(milestone, business_date, 14) == "overdue"
+    milestone["actual_completion"]["end_date"] = "2026-08-10"
+    assert milestone_risk(milestone, business_date, 14) == "completed"
 
 
 def test_issue_revision_check_uses_the_current_database_value(

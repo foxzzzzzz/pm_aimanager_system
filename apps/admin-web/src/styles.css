@@ -59,9 +59,15 @@ button, input { font: inherit; }
 .ant-statistic-content { color: #123f39 !important; }
 .diff-table { margin-top: 22px; }
 .diff-table td { max-width: 360px; overflow-wrap: anywhere; }
+.board-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.issue-summary-list { display: grid; gap: 12px; }
+.issue-summary-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #e6efed; }
+.issue-summary-item:last-child { border-bottom: 0; }
+.board-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
 @media (max-width: 767px) {
   .top-bar { padding: 0 16px; }
   .workspace { padding: 20px 16px 36px; }
   .page-heading { align-items: flex-start; flex-direction: column; }
+  .issue-summary-item { align-items: flex-start; flex-direction: column; }
 }

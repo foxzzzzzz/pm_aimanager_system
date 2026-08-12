@@ -20,6 +20,7 @@ describe("App", () => {
 
     expect(screen.getByRole("heading", { name: "AI项目管理系统" })).toBeInTheDocument();
     expect(await screen.findByText("项目总览")).toBeInTheDocument();
+    expect(screen.getByText("项目看板")).toBeInTheDocument();
     expect(screen.getByText("项目核对")).toBeInTheDocument();
     expect(screen.getByText("Excel导入")).toBeInTheDocument();
     expect(screen.getByText("版本历史")).toBeInTheDocument();
@@ -52,8 +53,11 @@ describe("App", () => {
             current_version_number: 0,
           },
           current_version_number: 0,
+          business_date: "2026-08-12",
           active_plan_name: null,
           milestones: {},
+          tasks: [],
+          issues: [],
           counts: { members: 0, milestones: 0, product_specs: 0, issues_open: 0 },
         }),
       });

@@ -5,7 +5,7 @@ import hmac
 import re
 import secrets
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -45,7 +45,7 @@ from project_manager_api.services.errors import (
 )
 from project_manager_api.services.llm import OpenAICompatibleClient
 from project_manager_api.services.operations import current_business_date
-from project_manager_api.services.projects import ProjectService
+from project_manager_api.services.projects import ProjectService, milestone_risk
 from project_manager_api.services.wechat import (
     build_invitation_path,
     exchange_wechat_code,
@@ -316,7 +316,7 @@ class MobileService:
                     {
                         **milestone,
                         "roles": roles,
-                        "risk": _milestone_risk(
+                        "risk": milestone_risk(
                             milestone,
                             business_date,
                             self.settings.mobile_upcoming_days,
@@ -613,23 +613,6 @@ def _mobile_milestones(
         }
         for milestone in snapshot.get("milestones", [])
     ]
-
-
-def _milestone_risk(milestone: dict[str, Any], business_date: date, upcoming_days: int) -> str:
-    if milestone.get("actual_completion", {}).get("end_date"):
-        return "completed"
-    plan = milestone.get("plan")
-    if not plan or plan.get("state") == "not_applicable":
-        return "todo"
-    end_date_text = plan.get("end_date")
-    if not end_date_text:
-        return "todo"
-    end_date = date.fromisoformat(end_date_text)
-    if end_date < business_date:
-        return "overdue"
-    if end_date <= business_date + timedelta(days=upcoming_days):
-        return "upcoming"
-    return "todo"
 
 
 def natural_language_prefill(text: str, settings: AppSettings) -> dict[str, Any]:

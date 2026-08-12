@@ -258,11 +258,37 @@ class ProjectService:
             ),
             None,
         )
+        active_milestones = active_plan.get("milestones", {}) if active_plan else {}
+        tasks = [
+            {
+                **milestone,
+                "plan": active_milestones.get(milestone.get("name")),
+                "risk": milestone_risk(
+                    {
+                        **milestone,
+                        "plan": active_milestones.get(milestone.get("name")),
+                    },
+                    self.business_date,
+                    self.upcoming_days,
+                ),
+            }
+            for milestone in snapshot.get("milestones", [])
+        ]
+        issues = list(
+            self.session.scalars(
+                select(Issue)
+                .where(Issue.project_id == project.id)
+                .order_by(Issue.created_at.desc())
+            )
+        )
         return {
             "project": _project_dict(project),
             "current_version_number": project.current_version_number or 0,
+            "business_date": self.business_date.isoformat(),
             "active_plan_name": active_plan_name,
-            "milestones": active_plan.get("milestones", {}) if active_plan else {},
+            "milestones": active_milestones,
+            "tasks": tasks,
+            "issues": [self._issue_dict(issue) for issue in issues],
             "counts": {
                 "members": len(snapshot.get("members", [])),
                 "milestones": len(snapshot.get("milestones", [])),
@@ -977,6 +1003,23 @@ def _issue_risk(issue: Issue, business_date: date, upcoming_days: int) -> str:
     if issue.due_date < today:
         return "overdue"
     if issue.due_date <= today + timedelta(days=upcoming_days):
+        return "upcoming"
+    return "todo"
+
+
+def milestone_risk(milestone: dict[str, Any], business_date: date, upcoming_days: int) -> str:
+    if milestone.get("actual_completion", {}).get("end_date"):
+        return "completed"
+    plan = milestone.get("plan")
+    if not plan or plan.get("state") == "not_applicable":
+        return "todo"
+    end_date_text = plan.get("end_date")
+    if not end_date_text:
+        return "todo"
+    end_date = date.fromisoformat(end_date_text)
+    if end_date < business_date:
+        return "overdue"
+    if end_date <= business_date + timedelta(days=upcoming_days):
         return "upcoming"
     return "todo"
 

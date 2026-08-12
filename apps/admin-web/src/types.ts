@@ -10,13 +10,25 @@ export interface Dashboard {
   project: Project;
   current_version_number: number;
   active_plan_name: string | null;
+  business_date: string;
   milestones: Record<string, PlanWindow>;
+  tasks: ProjectBoardTask[];
+  issues: Issue[];
   counts: {
     members: number;
     milestones: number;
     product_specs: number;
     issues_open: number;
   };
+}
+
+export interface ProjectBoardTask {
+  code: string;
+  name: string;
+  output: string | null;
+  plan: PlanWindow | null;
+  assignments: Record<"R" | "A" | "C" | "I", string[]>;
+  risk: "todo" | "upcoming" | "overdue" | "completed";
 }
 
 export interface PlanWindow {

@@ -696,10 +696,16 @@ def list_versions(
 @router.get("/projects/{project_id}/dashboard")
 def get_dashboard(
     project_id: uuid.UUID,
+    request: Request,
     session: SessionDependency,
     actor_id: ActorDependency,
 ) -> dict[str, Any]:
-    return ProjectService(session, actor_id).dashboard(project_id)
+    return ProjectService(
+        session,
+        actor_id,
+        current_business_date(request.app.state.settings),
+        request.app.state.settings.mobile_upcoming_days,
+    ).dashboard(project_id)
 
 
 @router.get("/projects/{project_id}/review")
