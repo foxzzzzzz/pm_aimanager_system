@@ -88,6 +88,9 @@ tmp/                # 不提交的临时文件
 | `GET /api/v1/projects/{id}/issue-create-proposals` | 查询重点问题新增申请 |
 | `POST /api/v1/issue-create-proposals/{id}/approve` | 批准重点问题新增申请 |
 | `POST /api/v1/issue-create-proposals/{id}/reject` | 驳回重点问题新增申请 |
+| `GET /api/v1/projects/{id}/issue-delete-proposals` | 查询重点问题删除申请 |
+| `POST /api/v1/issue-delete-proposals/{id}/approve` | 批准重点问题删除申请并版本化关闭原问题 |
+| `POST /api/v1/issue-delete-proposals/{id}/reject` | 驳回重点问题删除申请 |
 | `PATCH /api/v1/issues/{id}` | 更新问题 |
 | `DELETE /api/v1/issues/{id}` | 管理后台版本化关闭问题并记录原因 |
 | `DELETE /api/v1/mobile/issues/{id}` | 小程序版本化关闭本人负责的问题 |
@@ -474,7 +477,13 @@ tmp/                # 不提交的临时文件
 
 #### Phase F3：重点问题删除审批
 
+**状态**：✅ 已完成（2026-08-12）。
+
 - 删除改为申请；待审期间原问题有效，批准后版本化关闭并停止提醒，驳回保持不变。
+
+**实现**：新增独立 `issue_delete_proposals` 审批实体与 `0011_issue_delete_proposals` 迁移；Web与小程序删除操作统一创建申请，项目经理可在小程序项目看板或Web“问题删除审批”页签批准、驳回。批准沿用问题乐观锁将问题版本号递增并关闭，驳回不修改原问题；重复待审申请、已关闭问题和过期版本申请均被拒绝。
+
+**验收**：申请提交后原问题仍进入正式列表、风险统计与既有通知；批准后版本化关闭并停止后续提醒，驳回后保持原状态和版本；申请、批准、驳回及最终关闭均有审计记录。
 
 #### Phase F4：小程序、Web审批界面与通知
 

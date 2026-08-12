@@ -15,6 +15,18 @@ const mocks = vi.hoisted(() => ({
   ]),
   approveIssueCreateProposal: vi.fn().mockResolvedValue({}),
   rejectIssueCreateProposal: vi.fn().mockResolvedValue({}),
+  listIssueDeleteProposals: vi.fn().mockResolvedValue([
+    {
+      id: "delete-proposal-1",
+      issue_id: "issue-1",
+      issue_description: "待删除问题",
+      reason: "重复记录",
+      status: "pending",
+      created_at: "2026-08-12T10:40:00Z",
+    },
+  ]),
+  approveIssueDeleteProposal: vi.fn().mockResolvedValue({}),
+  rejectIssueDeleteProposal: vi.fn().mockResolvedValue({}),
   projectReview: vi.fn().mockResolvedValue({ members: [
     { name: "成员02", role: "经理", notes: null },
     { name: "成员10", role: "执行", notes: null },
@@ -180,7 +192,19 @@ describe("IssuesAuditPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /删\s*除/ }));
     fireEvent.change(screen.getByLabelText("删除原因"), { target: { value: "记录作废" } });
-    fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交删除申请" }));
     await waitFor(() => expect(mocks.deleteIssue).toHaveBeenCalledWith("issue-1", 1, "记录作废"));
+  });
+
+  it("lists and approves a pending issue deletion", async () => {
+    render(
+      <IssuesAuditPage
+        project={{ id: "project-1", code: "ZPD1322", name: "Lyra Pro", status: "active", current_version_number: 1 }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("tab", { name: /问题删除审批/ }));
+    expect(await screen.findByText("待删除问题")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "批准删除" }));
+    await waitFor(() => expect(mocks.approveIssueDeleteProposal).toHaveBeenCalledWith("delete-proposal-1"));
   });
 });

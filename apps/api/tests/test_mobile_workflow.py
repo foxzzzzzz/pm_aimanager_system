@@ -859,15 +859,36 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
         json={"expected_revision": 2, "reason": "越权作废"},
     )
     assert forbidden_delete.status_code == 403
-    deleted = client.request(
+    requested_delete = client.request(
         "DELETE",
         f"/api/v1/mobile/issues/{issue_id}",
         headers={**member_headers, "X-Idempotency-Key": "mobile-issue-delete"},
         json={"expected_revision": 2, "reason": "问题已作废"},
     )
-    assert deleted.status_code == 200
-    assert deleted.json()["status"] == "已关闭"
-    assert deleted.json()["revision"] == 3
+    assert requested_delete.status_code == 201
+    assert requested_delete.json()["status"] == "pending"
+    active_issue = client.get(
+        f"/api/v1/mobile/projects/{project_id}/issues", headers=member_headers
+    ).json()[0]
+    assert active_issue["revision"] == 2
+    manager_invitation = _invite(client, project_id, "成员01", "invite-delete-manager")
+    manager_headers, _ = _login(client, "dev:delete-manager")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=manager_headers,
+        json={"invitation_token": manager_invitation["invitation_token"], "phone": "13800000001"},
+    )
+    manager_queue = client.get(
+        f"/api/v1/mobile/projects/{project_id}/issue-delete-proposals",
+        headers=manager_headers,
+    )
+    assert [item["id"] for item in manager_queue.json()] == [requested_delete.json()["id"]]
+    approved_delete = client.post(
+        f"/api/v1/mobile/issue-delete-proposals/{requested_delete.json()['id']}/approve",
+        headers={**manager_headers, "X-Idempotency-Key": "mobile-issue-delete-approve"},
+    )
+    assert approved_delete.status_code == 200
+    assert approved_delete.json()["status"] == "approved"
 
     prefill = client.post(
         "/api/v1/mobile/natural-language/prefill",

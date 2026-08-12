@@ -195,6 +195,30 @@ class IssueCreateProposal(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class IssueDeleteProposal(Base):
+    __tablename__ = "issue_delete_proposals"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    issue_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    expected_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32), default=ProposalStatus.PENDING, nullable=False
+    )
+    submitted_by_actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    resolved_by_actor_id: Mapped[str | None] = mapped_column(String(128))
+    resolution_reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    issue: Mapped[Issue] = relationship()
+
+
 class ChangeProposal(Base):
     __tablename__ = "change_proposals"
 

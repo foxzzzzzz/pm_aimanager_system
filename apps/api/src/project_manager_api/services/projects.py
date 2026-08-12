@@ -27,6 +27,7 @@ from project_manager_api.db.models import (
     ImportStatus,
     Issue,
     IssueCreateProposal,
+    IssueDeleteProposal,
     IssueStatus,
     MemberBinding,
     Project,
@@ -722,12 +723,114 @@ class ProjectService:
         self._require_project(issue.project_id, manager=True)
         return self.update_issue_as_member(issue, payload)
 
-    def delete_issue(self, issue_id: uuid.UUID, payload: IssueDelete) -> dict[str, Any]:
+    def create_issue_delete_proposal(
+        self, issue_id: uuid.UUID, payload: IssueDelete
+    ) -> dict[str, Any]:
         issue = self.session.get(Issue, issue_id)
         if issue is None:
             raise NotFoundError("issue not found")
-        self._require_project(issue.project_id, manager=True)
-        return self.delete_issue_as_member(issue, payload)
+        self._require_project(issue.project_id)
+        if issue.status == IssueStatus.CLOSED:
+            raise ConflictError("issue is already closed")
+        if issue.revision != payload.expected_revision:
+            raise ConflictError("issue revision is stale")
+        pending = self.session.scalar(
+            select(IssueDeleteProposal).where(
+                IssueDeleteProposal.issue_id == issue.id,
+                IssueDeleteProposal.status == ProposalStatus.PENDING,
+            )
+        )
+        if pending is not None:
+            raise ConflictError("issue already has a pending delete proposal")
+        proposal = IssueDeleteProposal(
+            project_id=issue.project_id,
+            issue_id=issue.id,
+            expected_revision=payload.expected_revision,
+            reason=payload.reason,
+            submitted_by_actor_id=self.actor_id,
+        )
+        self.session.add(proposal)
+        self.session.flush()
+        result = _issue_delete_proposal_dict(proposal)
+        self._audit(
+            issue.project_id,
+            "issue_delete_proposal.created",
+            "issue_delete_proposal",
+            str(proposal.id),
+            after=result,
+            reason=payload.reason,
+        )
+        return result
+
+    def list_issue_delete_proposals(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
+        self._require_project(project_id, manager=True)
+        query = (
+            select(IssueDeleteProposal)
+            .where(IssueDeleteProposal.project_id == project_id)
+            .order_by(IssueDeleteProposal.created_at.desc())
+        )
+        return [_issue_delete_proposal_dict(item) for item in self.session.scalars(query)]
+
+    def approve_issue_delete_proposal(self, proposal_id: uuid.UUID) -> dict[str, Any]:
+        proposal = self.session.scalar(
+            select(IssueDeleteProposal)
+            .where(IssueDeleteProposal.id == proposal_id)
+            .with_for_update()
+        )
+        if proposal is None:
+            raise NotFoundError("issue delete proposal not found")
+        self._require_project(proposal.project_id, manager=True)
+        if proposal.status != ProposalStatus.PENDING:
+            raise ConflictError("issue delete proposal is already resolved")
+        issue = self.session.get(Issue, proposal.issue_id)
+        if issue is None:
+            raise NotFoundError("issue not found")
+        self.delete_issue_as_member(
+            issue,
+            IssueDelete(expected_revision=proposal.expected_revision, reason=proposal.reason),
+        )
+        proposal.status = ProposalStatus.APPROVED
+        proposal.resolved_by_actor_id = self.actor_id
+        proposal.resolved_at = datetime.now(UTC)
+        result = _issue_delete_proposal_dict(proposal)
+        self._audit(
+            proposal.project_id,
+            "issue_delete_proposal.approved",
+            "issue_delete_proposal",
+            str(proposal.id),
+            before={"status": ProposalStatus.PENDING},
+            after=result,
+        )
+        return result
+
+    def reject_issue_delete_proposal(
+        self, proposal_id: uuid.UUID, reason: str
+    ) -> dict[str, Any]:
+        proposal = self.session.scalar(
+            select(IssueDeleteProposal)
+            .where(IssueDeleteProposal.id == proposal_id)
+            .with_for_update()
+        )
+        if proposal is None:
+            raise NotFoundError("issue delete proposal not found")
+        self._require_project(proposal.project_id, manager=True)
+        if proposal.status != ProposalStatus.PENDING:
+            raise ConflictError("issue delete proposal is already resolved")
+        proposal.status = ProposalStatus.REJECTED
+        proposal.resolved_by_actor_id = self.actor_id
+        proposal.resolution_reason = reason
+        proposal.resolved_at = datetime.now(UTC)
+        result = _issue_delete_proposal_dict(proposal)
+        self._audit(
+            proposal.project_id,
+            "issue_delete_proposal.rejected",
+            "issue_delete_proposal",
+            str(proposal.id),
+            before={"status": ProposalStatus.PENDING},
+            after=result,
+            reason=reason,
+        )
+        return result
 
     def delete_issue_as_member(
         self, issue: Issue, payload: IssueDelete
@@ -1072,6 +1175,23 @@ def _issue_create_proposal_dict(proposal: IssueCreateProposal) -> dict[str, Any]
         "resolved_by_actor_id": proposal.resolved_by_actor_id,
         "resolution_reason": proposal.resolution_reason,
         "issue_id": str(proposal.issue_id) if proposal.issue_id else None,
+        "created_at": proposal.created_at.isoformat(),
+        "resolved_at": proposal.resolved_at.isoformat() if proposal.resolved_at else None,
+    }
+
+
+def _issue_delete_proposal_dict(proposal: IssueDeleteProposal) -> dict[str, Any]:
+    return {
+        "id": str(proposal.id),
+        "project_id": str(proposal.project_id),
+        "issue_id": str(proposal.issue_id),
+        "issue_description": proposal.issue.description,
+        "expected_revision": proposal.expected_revision,
+        "reason": proposal.reason,
+        "status": proposal.status,
+        "submitted_by_actor_id": proposal.submitted_by_actor_id,
+        "resolved_by_actor_id": proposal.resolved_by_actor_id,
+        "resolution_reason": proposal.resolution_reason,
         "created_at": proposal.created_at.isoformat(),
         "resolved_at": proposal.resolved_at.isoformat() if proposal.resolved_at else None,
     }

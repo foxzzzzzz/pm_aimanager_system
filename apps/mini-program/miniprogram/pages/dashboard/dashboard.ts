@@ -6,7 +6,7 @@ import {
 } from "../../services/milestone-view.js";
 import { formatDateTime, labelPlanState, presentPlan } from "../../services/presentation.js";
 import type { MilestoneFilterKey } from "../../services/milestone-view.js";
-import type { ChangeProposal, IssueCreateProposal, Milestone, MobileDashboard } from "../../types";
+import type { ChangeProposal, IssueCreateProposal, IssueDeleteProposal, Milestone, MobileDashboard } from "../../types";
 
 interface MilestoneTapEvent { currentTarget: { dataset: { code: string } } }
 interface ProposalTapEvent { currentTarget: { dataset: { id: string; version: number } } }
@@ -33,6 +33,7 @@ Page({
     dashboard: null as MobileDashboard | null,
     proposals: [] as ChangeProposal[],
     issueCreateProposals: [] as IssueCreateProposal[],
+    issueDeleteProposals: [] as IssueDeleteProposal[],
     milestoneFilters: [] as ReturnType<typeof buildMilestoneFilters>,
     primaryMilestoneFilters: [] as ReturnType<typeof buildMilestoneFilters>,
     moreFilterLabel: "更多筛选",
@@ -57,9 +58,10 @@ Page({
     if (!this.data.dashboard) this.setData({ loading: true, loadError: false });
     try {
       const dashboard = await api.dashboard(this.data.projectId);
-      const [proposals, issueCreateProposals] = await Promise.all([
+      const [proposals, issueCreateProposals, issueDeleteProposals] = await Promise.all([
         api.approvableProposals(this.data.projectId).catch(() => [] as ChangeProposal[]),
         api.issueCreateProposals(this.data.projectId).catch(() => [] as IssueCreateProposal[]),
+        api.issueDeleteProposals(this.data.projectId).catch(() => [] as IssueDeleteProposal[]),
       ]);
       const today = dashboard.business_date;
       const upcomingDays = runtimeConfig.milestoneUpcomingDays;
@@ -74,6 +76,13 @@ Page({
           ),
         })),
         issueCreateProposals: issueCreateProposals.map((item) => ({
+          ...item,
+          createdAtLabel: formatDateTime(
+            item.created_at,
+            runtimeConfig.presentationTimezoneOffsetMinutes,
+          ),
+        })),
+        issueDeleteProposals: issueDeleteProposals.map((item) => ({
           ...item,
           createdAtLabel: formatDateTime(
             item.created_at,
@@ -112,6 +121,20 @@ Page({
         await api.approveIssueCreateProposal(id);
       } else {
         await api.rejectIssueCreateProposal(id, "项目经理驳回");
+      }
+      await this.loadDashboard();
+    } catch (error) {
+      wx.showToast({ title: (error as Error).message, icon: "none" });
+    }
+  },
+  async resolveIssueDeleteProposal(event: WechatMiniprogram.TouchEvent) {
+    const id = event.currentTarget.dataset.id as string;
+    const action = event.currentTarget.dataset.action as "approve" | "reject";
+    try {
+      if (action === "approve") {
+        await api.approveIssueDeleteProposal(id);
+      } else {
+        await api.rejectIssueDeleteProposal(id, "项目经理驳回");
       }
       await this.loadDashboard();
     } catch (error) {

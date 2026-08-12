@@ -3,7 +3,7 @@ import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "../api";
-import type { AuditLog, ChangeProposal, Issue, IssueCreateProposal, MemberBinding, MemberInvitation, Project, ProjectMemberReview } from "../types";
+import type { AuditLog, ChangeProposal, Issue, IssueCreateProposal, IssueDeleteProposal, MemberBinding, MemberInvitation, Project, ProjectMemberReview } from "../types";
 
 interface Props {
   project?: Project;
@@ -29,6 +29,7 @@ export default function IssuesAuditPage({ project }: Props) {
   const [bindings, setBindings] = useState<MemberBinding[]>([]);
   const [proposals, setProposals] = useState<ChangeProposal[]>([]);
   const [issueCreateProposals, setIssueCreateProposals] = useState<IssueCreateProposal[]>([]);
+  const [issueDeleteProposals, setIssueDeleteProposals] = useState<IssueDeleteProposal[]>([]);
   const [members, setMembers] = useState<ProjectMemberReview[]>([]);
   const [open, setOpen] = useState(false);
   const [editingIssue, setEditingIssue] = useState<Issue>();
@@ -45,12 +46,13 @@ export default function IssuesAuditPage({ project }: Props) {
     if (!project) return;
     const sequence = ++reloadSequence.current;
     try {
-      const [nextIssues, nextAudit, nextBindings, nextProposals, nextIssueCreateProposals, review] = await Promise.all([
+      const [nextIssues, nextAudit, nextBindings, nextProposals, nextIssueCreateProposals, nextIssueDeleteProposals, review] = await Promise.all([
         api.listIssues(project.id),
         api.listAuditLogs(project.id),
         api.listMemberBindings(project.id),
         api.listChangeProposals(project.id),
         api.listIssueCreateProposals(project.id),
+        api.listIssueDeleteProposals(project.id),
         api.projectReview(project.id),
       ]);
       if (sequence !== reloadSequence.current) return;
@@ -59,6 +61,7 @@ export default function IssuesAuditPage({ project }: Props) {
       setBindings(nextBindings);
       setProposals(nextProposals);
       setIssueCreateProposals(nextIssueCreateProposals);
+      setIssueDeleteProposals(nextIssueDeleteProposals);
       setMembers(review.members);
       setError(undefined);
     } catch (reason) {
@@ -124,6 +127,11 @@ export default function IssuesAuditPage({ project }: Props) {
 
   const rejectIssueCreate = async (proposalId: string) => {
     await api.rejectIssueCreateProposal(proposalId, "项目经理驳回");
+    await reload();
+  };
+
+  const rejectIssueDelete = async (proposalId: string) => {
+    await api.rejectIssueDeleteProposal(proposalId, "项目经理驳回");
     await reload();
   };
 
@@ -215,6 +223,31 @@ export default function IssuesAuditPage({ project }: Props) {
                       <Space>
                         <Button size="small" type="primary" onClick={async () => { await api.approveIssueCreateProposal(item.id); await reload(); }}>批准新增</Button>
                         <Button size="small" danger onClick={() => void rejectIssueCreate(item.id)}>驳回</Button>
+                      </Space>
+                    ) : "—",
+                  },
+                ]}
+              />
+            ),
+          },
+          {
+            key: "issue-delete-proposals",
+            label: `问题删除审批 ${issueDeleteProposals.filter((item) => item.status === "pending").length}`,
+            children: (
+              <Table
+                rowKey="id"
+                dataSource={issueDeleteProposals}
+                columns={[
+                  { title: "问题", dataIndex: "issue_description" },
+                  { title: "删除原因", dataIndex: "reason" },
+                  { title: "提交时间", dataIndex: "created_at", render: (value: string) => dayjs(value).format("YYYY-MM-DD HH:mm") },
+                  { title: "状态", dataIndex: "status", render: (value: string) => <Tag>{value}</Tag> },
+                  {
+                    title: "操作",
+                    render: (_: unknown, item: IssueDeleteProposal) => item.status === "pending" ? (
+                      <Space>
+                        <Button size="small" type="primary" danger onClick={async () => { await api.approveIssueDeleteProposal(item.id); await reload(); }}>批准删除</Button>
+                        <Button size="small" onClick={() => void rejectIssueDelete(item.id)}>驳回</Button>
                       </Space>
                     ) : "—",
                   },
@@ -318,9 +351,9 @@ export default function IssuesAuditPage({ project }: Props) {
         </Form>
       </Modal>
       <Modal
-        title="删除问题（版本化关闭）"
+        title="申请删除问题"
         open={Boolean(deletingIssue)}
-        okText="确认删除"
+        okText="提交删除申请"
         cancelText="取消"
         okButtonProps={{ disabled: !deleteReason.trim(), danger: true }}
         onOk={deleteIssue}
@@ -329,7 +362,7 @@ export default function IssuesAuditPage({ project }: Props) {
           setDeleteReason("");
         }}
       >
-        <Alert type="warning" showIcon message="该操作会将问题标记为已关闭，历史和审计记录仍保留。" />
+        <Alert type="warning" showIcon message="申请提交后原问题继续有效，项目经理批准后才会版本化关闭。" />
         <Form layout="vertical">
           <Form.Item label="删除原因" htmlFor="issue-delete-reason" required>
             <Input.TextArea

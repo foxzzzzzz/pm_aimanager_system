@@ -439,6 +439,22 @@ class MobileService:
     ) -> dict[str, Any]:
         return self._project_service().reject_issue_create_proposal(proposal_id, reason)
 
+    def list_issue_delete_proposals(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
+        self._bound_project(project_id)
+        return [
+            item
+            for item in self._project_service().list_issue_delete_proposals(project_id)
+            if item["status"] == ProposalStatus.PENDING
+        ]
+
+    def approve_issue_delete_proposal(self, proposal_id: uuid.UUID) -> dict[str, Any]:
+        return self._project_service().approve_issue_delete_proposal(proposal_id)
+
+    def reject_issue_delete_proposal(
+        self, proposal_id: uuid.UUID, reason: str
+    ) -> dict[str, Any]:
+        return self._project_service().reject_issue_delete_proposal(proposal_id, reason)
+
     def list_messages(self) -> list[dict[str, Any]]:
         user = self._user()
         query = (
@@ -507,7 +523,7 @@ class MobileService:
         _, binding, _ = self._bound_project(issue.project_id)
         if binding.member_name != issue.owner_name:
             raise ForbiddenError("only the issue owner can delete this issue")
-        return self._project_service().delete_issue_as_member(issue, payload)
+        return self._project_service().create_issue_delete_proposal(issue.id, payload)
 
     def mark_message_read(self, message_id: uuid.UUID) -> dict[str, Any]:
         message = self.session.get(InAppMessage, message_id)

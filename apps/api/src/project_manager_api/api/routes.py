@@ -563,7 +563,7 @@ def update_mobile_issue(
     )
 
 
-@router.delete("/mobile/issues/{issue_id}")
+@router.delete("/mobile/issues/{issue_id}", status_code=201)
 def delete_mobile_issue(
     issue_id: uuid.UUID,
     payload: IssueDelete,
@@ -579,11 +579,70 @@ def delete_mobile_issue(
         request_key,
         request.method,
         request.url.path,
-        200,
+        201,
         _request_hash(payload),
         lambda: MobileService(session, request.app.state.settings, user).delete_issue(
             issue_id, payload
         ),
+    )
+
+
+@router.get("/mobile/projects/{project_id}/issue-delete-proposals")
+def list_mobile_issue_delete_proposals(
+    project_id: uuid.UUID,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+) -> list[dict[str, Any]]:
+    return MobileService(
+        session, request.app.state.settings, user
+    ).list_issue_delete_proposals(project_id)
+
+
+@router.post("/mobile/issue-delete-proposals/{proposal_id}/approve")
+def approve_mobile_issue_delete_proposal(
+    proposal_id: uuid.UUID,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    actor_id = f"mobile:{user.id}"
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        _request_hash({}),
+        lambda: MobileService(
+            session, request.app.state.settings, user
+        ).approve_issue_delete_proposal(proposal_id),
+    )
+
+
+@router.post("/mobile/issue-delete-proposals/{proposal_id}/reject")
+def reject_mobile_issue_delete_proposal(
+    proposal_id: uuid.UUID,
+    payload: RejectRequest,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    actor_id = f"mobile:{user.id}"
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        _request_hash(payload),
+        lambda: MobileService(
+            session, request.app.state.settings, user
+        ).reject_issue_delete_proposal(proposal_id, payload.reason),
     )
 
 
@@ -1074,7 +1133,59 @@ def update_issue(
     )
 
 
-@router.delete("/issues/{issue_id}")
+@router.get("/projects/{project_id}/issue-delete-proposals")
+def list_issue_delete_proposals(
+    project_id: uuid.UUID,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+) -> list[dict[str, Any]]:
+    return ProjectService(session, actor_id).list_issue_delete_proposals(project_id)
+
+
+@router.post("/issue-delete-proposals/{proposal_id}/approve")
+def approve_issue_delete_proposal(
+    proposal_id: uuid.UUID,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        _request_hash({}),
+        lambda: ProjectService(session, actor_id).approve_issue_delete_proposal(proposal_id),
+    )
+
+
+@router.post("/issue-delete-proposals/{proposal_id}/reject")
+def reject_issue_delete_proposal(
+    proposal_id: uuid.UUID,
+    payload: RejectRequest,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        _request_hash(payload),
+        lambda: ProjectService(session, actor_id).reject_issue_delete_proposal(
+            proposal_id, payload.reason
+        ),
+    )
+
+
+@router.delete("/issues/{issue_id}", status_code=201)
 def delete_issue(
     issue_id: uuid.UUID,
     payload: IssueDelete,
@@ -1089,14 +1200,14 @@ def delete_issue(
         request_key,
         request.method,
         request.url.path,
-        200,
+        201,
         _request_hash(payload),
         lambda: ProjectService(
             session,
             actor_id,
             current_business_date(request.app.state.settings),
             request.app.state.settings.mobile_upcoming_days,
-        ).delete_issue(issue_id, payload),
+        ).create_issue_delete_proposal(issue_id, payload),
     )
 
 

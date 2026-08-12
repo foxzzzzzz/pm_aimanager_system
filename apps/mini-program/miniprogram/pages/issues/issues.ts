@@ -241,16 +241,11 @@ Page({
     if (!confirmation.confirm || !reason) return;
     this.setData({ actionIssueId: event.currentTarget.dataset.id });
     try {
-      const saved = await api.deleteIssue(event.currentTarget.dataset.id, {
+      await api.deleteIssue(event.currentTarget.dataset.id, {
         expected_revision: event.currentTarget.dataset.revision,
         reason,
       });
-      this.setData({
-        issues: presentIssues(
-          this.data.issues.map((item) => item.id === saved.id ? saved : item),
-        ),
-      });
-      wx.showToast({ title: "问题已作废", icon: "success" });
+      wx.showToast({ title: "删除申请已提交", icon: "success" });
     } catch (error) {
       wx.showToast({ title: (error as Error).message, icon: "none" });
     } finally {

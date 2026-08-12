@@ -3,6 +3,7 @@ import type {
   ChangeProposal,
   Issue,
   IssueCreateProposal,
+  IssueDeleteProposal,
   Message,
   MobileDashboard,
   MyTaskProject,
@@ -52,10 +53,16 @@ export const api = {
     request<IssueCreateProposal>(`/mobile/issue-create-proposals/${proposalId}/approve`, "POST"),
   rejectIssueCreateProposal: (proposalId: string, reason: string) =>
     request<IssueCreateProposal>(`/mobile/issue-create-proposals/${proposalId}/reject`, "POST", { reason }),
+  issueDeleteProposals: (projectId: string) =>
+    request<IssueDeleteProposal[]>(`/mobile/projects/${projectId}/issue-delete-proposals`),
+  approveIssueDeleteProposal: (proposalId: string) =>
+    request<IssueDeleteProposal>(`/mobile/issue-delete-proposals/${proposalId}/approve`, "POST"),
+  rejectIssueDeleteProposal: (proposalId: string, reason: string) =>
+    request<IssueDeleteProposal>(`/mobile/issue-delete-proposals/${proposalId}/reject`, "POST", { reason }),
   updateIssue: (issueId: string, data: WechatMiniprogram.IAnyObject) =>
     request<Issue>(`/mobile/issues/${issueId}`, "PATCH", data),
   deleteIssue: (issueId: string, data: WechatMiniprogram.IAnyObject) =>
-    request<Issue>(`/mobile/issues/${issueId}`, "DELETE", data),
+    request<IssueDeleteProposal>(`/mobile/issues/${issueId}`, "DELETE", data),
   approvableProposals: (projectId: string) =>
     request<ChangeProposal[]>(`/mobile/projects/${projectId}/change-proposals`),
   approveProposal: (proposalId: string, expectedVersion: number) =>

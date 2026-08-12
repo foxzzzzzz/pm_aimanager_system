@@ -97,6 +97,19 @@ export interface IssueCreateProposal {
   created_at: string;
 }
 
+export interface IssueDeleteProposal {
+  id: string;
+  project_id: string;
+  issue_id: string;
+  issue_description: string;
+  expected_revision: number;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  submitted_by_actor_id: string;
+  resolution_reason: string | null;
+  created_at: string;
+}
+
 export interface AuditLog {
   id: string;
   actor_id: string;

@@ -98,6 +98,18 @@ export interface IssueCreateProposal {
   createdAtLabel?: string;
 }
 
+export interface IssueDeleteProposal {
+  id: string;
+  project_id: string;
+  issue_id: string;
+  issue_description: string;
+  expected_revision: number;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  createdAtLabel?: string;
+}
+
 export interface ChangeProposal {
   id: string;
   milestone_code: string;

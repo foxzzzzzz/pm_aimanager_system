@@ -30,6 +30,16 @@
       <button size="mini" type="warn" data-id="{{item.id}}" data-action="reject" bindtap="resolveIssueCreateProposal">驳回</button>
     </view>
   </view>
+  <view wx:for="{{issueDeleteProposals}}" wx:key="id" class="card milestone">
+    <text class="tag approval-tag">待审批删除问题</text>
+    <text class="name">{{item.issue_description}}</text>
+    <text class="muted">删除原因：{{item.reason}}</text>
+    <text class="muted proposal-time">提交时间：{{item.createdAtLabel}}</text>
+    <view class="proposal-actions">
+      <button size="mini" type="warn" data-id="{{item.id}}" data-action="approve" bindtap="resolveIssueDeleteProposal">批准删除</button>
+      <button size="mini" data-id="{{item.id}}" data-action="reject" bindtap="resolveIssueDeleteProposal">驳回</button>
+    </view>
+  </view>
   <view class="milestone-filters">
     <button
       wx:for="{{primaryMilestoneFilters}}"

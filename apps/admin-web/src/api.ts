@@ -6,6 +6,7 @@ import type {
   ImportRecord,
   Issue,
   IssueCreateProposal,
+  IssueDeleteProposal,
   MemberBinding,
   MemberInvitation,
   NotificationDelivery,
@@ -142,6 +143,22 @@ export const api = {
       },
       body: JSON.stringify({ reason }),
     }),
+  listIssueDeleteProposals: (projectId: string) =>
+    request<IssueDeleteProposal[]>(`/projects/${projectId}/issue-delete-proposals`),
+  approveIssueDeleteProposal: (proposalId: string) =>
+    request<IssueDeleteProposal>(`/issue-delete-proposals/${proposalId}/approve`, {
+      method: "POST",
+      headers: { "X-Idempotency-Key": requestKey("issue-delete-approve") },
+    }),
+  rejectIssueDeleteProposal: (proposalId: string, reason: string) =>
+    request<IssueDeleteProposal>(`/issue-delete-proposals/${proposalId}/reject`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": requestKey("issue-delete-reject"),
+      },
+      body: JSON.stringify({ reason }),
+    }),
   createIssue: (
     projectId: string,
     payload: {
@@ -178,7 +195,7 @@ export const api = {
       status?: string;
     },
   ) =>
-    request<Issue>(`/issues/${issueId}`, {
+    request<IssueDeleteProposal>(`/issues/${issueId}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",

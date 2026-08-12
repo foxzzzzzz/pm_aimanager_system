@@ -592,17 +592,83 @@ def test_issue_updates_require_current_revision_and_create_audit(
     audit = client.get(f"/api/v1/projects/{project_id}/audit-logs", headers=PM_HEADERS)
     assert "issue.updated" in [item["action"] for item in audit.json()]
 
-    deleted = client.request(
+    requested = client.request(
         "DELETE",
         f"/api/v1/issues/{created['id']}",
         headers=_headers("issue-delete"),
         json={"expected_revision": 2, "reason": "问题记录作废"},
     )
-    assert deleted.status_code == 200
-    assert deleted.json()["status"] == "已关闭"
-    assert deleted.json()["revision"] == 3
+    assert requested.status_code == 201
+    assert requested.json()["status"] == "pending"
+    duplicate = client.request(
+        "DELETE",
+        f"/api/v1/issues/{created['id']}",
+        headers=_headers("issue-delete-duplicate"),
+        json={"expected_revision": 2, "reason": "重复申请"},
+    )
+    assert duplicate.status_code == 409
+    unchanged = client.get(f"/api/v1/projects/{project_id}/issues", headers=PM_HEADERS)
+    assert unchanged.json()[0]["revision"] == 2
+    assert unchanged.json()[0]["status"] != IssueStatus.CLOSED
+    dashboard = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM_HEADERS)
+    assert dashboard.json()["counts"]["issues_open"] == 1
+
+    queue = client.get(
+        f"/api/v1/projects/{project_id}/issue-delete-proposals", headers=PM_HEADERS
+    )
+    assert [item["id"] for item in queue.json()] == [requested.json()["id"]]
+    approved = client.post(
+        f"/api/v1/issue-delete-proposals/{requested.json()['id']}/approve",
+        headers=_headers("issue-delete-approve"),
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+    deleted = client.get(f"/api/v1/projects/{project_id}/issues", headers=PM_HEADERS)
+    assert deleted.json()[0]["status"] == IssueStatus.CLOSED
+    assert deleted.json()[0]["revision"] == 3
+    dashboard = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM_HEADERS)
+    assert dashboard.json()["counts"]["issues_open"] == 0
     audit = client.get(f"/api/v1/projects/{project_id}/audit-logs", headers=PM_HEADERS)
     assert "issue.deleted" in [item["action"] for item in audit.json()]
+    assert "issue_delete_proposal.created" in [item["action"] for item in audit.json()]
+    assert "issue_delete_proposal.approved" in [item["action"] for item in audit.json()]
+
+
+def test_rejected_issue_delete_proposal_keeps_issue_active(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    issue = _create_approved_issue(
+        client,
+        project_id,
+        {
+            "description": "Delete approval rejection",
+            "impact": "Issue must remain active",
+            "owner_name": "成员10",
+            "accountable_names": ["成员02"],
+            "severity": "high",
+            "due_date": "2026-08-20",
+        },
+        "issue-delete-reject-create",
+    )
+    requested = client.request(
+        "DELETE",
+        f"/api/v1/issues/{issue['id']}",
+        headers=_headers("issue-delete-reject-request"),
+        json={"expected_revision": 1, "reason": "mistaken entry"},
+    )
+    rejected = client.post(
+        f"/api/v1/issue-delete-proposals/{requested.json()['id']}/reject",
+        headers=_headers("issue-delete-reject"),
+        json={"reason": "keep tracking"},
+    )
+
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+    remaining = client.get(f"/api/v1/projects/{project_id}/issues", headers=PM_HEADERS)
+    assert remaining.json()[0]["revision"] == 1
+    assert remaining.json()[0]["status"] != IssueStatus.CLOSED
 
 
 def test_issue_raci_requires_project_members_and_returns_derived_risk(

@@ -55,3 +55,18 @@ test("issue form and cards expose complete RACI and risk state", async () => {
   assert.match(template, /I 知情/);
   assert.match(template, /item\.riskLabel/);
 });
+
+test("issue deletion submits an approval request and managers can resolve it", async () => {
+  const [issuesSource, dashboardSource, dashboardTemplate] = await Promise.all([
+    readSource("../miniprogram/pages/issues/issues.ts"),
+    readSource("../miniprogram/pages/dashboard/dashboard.ts"),
+    readSource("../miniprogram/pages/dashboard/dashboard.wxml"),
+  ]);
+
+  assert.match(issuesSource, /删除申请已提交/);
+  assert.match(dashboardSource, /issueDeleteProposals/);
+  assert.match(dashboardSource, /approveIssueDeleteProposal/);
+  assert.match(dashboardSource, /rejectIssueDeleteProposal/);
+  assert.match(dashboardTemplate, /待审批删除问题/);
+  assert.match(dashboardTemplate, /批准删除/);
+});
