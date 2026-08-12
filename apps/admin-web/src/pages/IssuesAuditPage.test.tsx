@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
       reason: "驱动联调延期",
       status: "pending",
       base_version_number: 1,
+      created_at: "2026-08-12T10:30:00Z",
     },
   ]),
   approveChangeProposal: vi.fn().mockResolvedValue({}),
@@ -86,6 +87,7 @@ describe("IssuesAuditPage", () => {
 
     fireEvent.click(await screen.findByRole("tab", { name: /变更审批/ }));
     expect(await screen.findByText("驱动联调延期")).toBeInTheDocument();
+    expect(screen.getByText("2026-08-12 18:30")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /驳\s*回/ }));
 
     await waitFor(() =>

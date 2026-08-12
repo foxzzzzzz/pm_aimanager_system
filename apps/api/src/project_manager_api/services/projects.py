@@ -832,8 +832,6 @@ class ProjectService:
     def _require_approval_permission(
         self, project: Project, proposal: ChangeProposal
     ) -> None:
-        if proposal.submitted_by_actor_id == self.actor_id:
-            raise ForbiddenError("proposal submitter cannot approve or reject their own proposal")
         membership = self.session.scalar(
             select(ProjectMembership).where(
                 ProjectMembership.project_id == project.id,
@@ -842,6 +840,8 @@ class ProjectService:
         )
         if membership is not None and membership.role == ProjectRole.MANAGER:
             return
+        if proposal.submitted_by_actor_id == self.actor_id:
+            raise ForbiddenError("non-manager submitters cannot resolve their own proposal")
         binding = self.session.scalar(
             select(MemberBinding).where(
                 MemberBinding.project_id == project.id,
@@ -969,6 +969,7 @@ def _proposal_dict(proposal: ChangeProposal) -> dict[str, Any]:
         "after_value": proposal.after_value,
         "reason": proposal.reason,
         "status": proposal.status,
+        "created_at": proposal.created_at.isoformat(),
     }
 
 

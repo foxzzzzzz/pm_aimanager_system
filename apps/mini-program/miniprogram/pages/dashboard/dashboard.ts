@@ -4,7 +4,7 @@ import {
   buildMilestoneFilters,
   filterMilestones,
 } from "../../services/milestone-view.js";
-import { labelPlanState, presentPlan } from "../../services/presentation.js";
+import { formatDateTime, labelPlanState, presentPlan } from "../../services/presentation.js";
 import type { MilestoneFilterKey } from "../../services/milestone-view.js";
 import type { ChangeProposal, Milestone, MobileDashboard } from "../../types";
 
@@ -64,7 +64,13 @@ Page({
       const milestoneFilters = buildMilestoneFilters(dashboard.milestones, today, upcomingDays);
       this.setData({
         dashboard,
-        proposals,
+        proposals: proposals.map((item) => ({
+          ...item,
+          createdAtLabel: formatDateTime(
+            item.created_at,
+            runtimeConfig.presentationTimezoneOffsetMinutes,
+          ),
+        })),
         milestoneFilters,
         primaryMilestoneFilters: milestoneFilters.filter(
           (filter) => ["todo", "upcoming", "overdue"].includes(filter.key),

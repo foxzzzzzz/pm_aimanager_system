@@ -4,6 +4,7 @@
 .name { flex: 1; font-weight: 650; }
 .done { color: #146c5a; font-size: 22rpx; }
 .approval-tag { color: #b54708; background: #fff1e6; }
+.proposal-time { display: block; margin-top: 10rpx; }
 .card-action-row {
   display: flex;
   justify-content: flex-end;

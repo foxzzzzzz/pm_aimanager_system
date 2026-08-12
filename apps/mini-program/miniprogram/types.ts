@@ -95,6 +95,10 @@ export interface ChangeProposal {
   reason: string;
   status: string;
   base_version_number: number;
+  created_at: string;
+  createdAtLabel?: string;
+  is_own_submission: boolean;
+  can_resolve: boolean;
 }
 
 export interface Message {

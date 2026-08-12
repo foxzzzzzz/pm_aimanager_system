@@ -312,7 +312,7 @@ def test_reimport_transfers_project_manager_role_without_changing_raci(
         assert roles[f"mobile:{next_user['user']['id']}"] == ProjectRole.MANAGER
 
 
-def test_submitter_cannot_approve_or_reject_own_ra_proposal(
+def test_non_manager_submitter_cannot_resolve_own_ra_proposal(
     mobile_workflow: TestClient,
 ) -> None:
     client = mobile_workflow
@@ -336,6 +336,16 @@ def test_submitter_cannot_approve_or_reject_own_ra_proposal(
     )
     assert proposal.status_code == 201
 
+    visible = client.get(
+        f"/api/v1/mobile/projects/{project_id}/change-proposals",
+        headers=member_headers,
+    )
+    assert visible.status_code == 200
+    assert visible.json()[0]["id"] == proposal.json()["id"]
+    assert visible.json()[0]["is_own_submission"] is True
+    assert visible.json()[0]["can_resolve"] is False
+    assert visible.json()[0]["created_at"]
+
     approved = client.post(
         f"/api/v1/mobile/change-proposals/{proposal.json()['id']}/approve",
         headers={**member_headers, "X-Idempotency-Key": "self-review-approve"},
@@ -355,6 +365,45 @@ def test_submitter_cannot_approve_or_reject_own_ra_proposal(
         json={"expected_project_version": 1},
     )
     assert manager_approved.status_code == 200
+
+
+def test_sheet_project_manager_can_approve_own_proposal(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    invitation = _invite(client, project_id, "成员01", "invite-manager-self-review")
+    manager_headers, _ = _login(client, "dev:manager-self-review")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=manager_headers,
+        json={"invitation_token": invitation["invitation_token"], "phone": "13800000001"},
+    )
+    proposal = client.post(
+        f"/api/v1/mobile/projects/{project_id}/milestones/M01/proposals",
+        headers={**manager_headers, "X-Idempotency-Key": "manager-self-proposal"},
+        json={
+            "kind": "completed",
+            "base_version_number": 1,
+            "actual_completion_date": "2026-08-12",
+            "reason": "项目经理本人提交并审批",
+        },
+    )
+    assert proposal.status_code == 201
+    visible = client.get(
+        f"/api/v1/mobile/projects/{project_id}/change-proposals",
+        headers=manager_headers,
+    )
+    assert visible.status_code == 200
+    assert visible.json()[0]["is_own_submission"] is True
+    assert visible.json()[0]["can_resolve"] is True
+
+    approved = client.post(
+        f"/api/v1/mobile/change-proposals/{proposal.json()['id']}/approve",
+        headers={**manager_headers, "X-Idempotency-Key": "manager-self-approve"},
+        json={"expected_project_version": 1},
+    )
+    assert approved.status_code == 200
 
 
 def test_my_tasks_only_returns_bound_members_ra_milestones_without_duplicates(

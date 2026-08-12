@@ -8,7 +8,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from project_manager_api.api.schemas import (
@@ -443,18 +443,28 @@ class MobileService:
             for item in snapshot.get("milestones", [])
             if binding.member_name in item.get("assignments", {}).get("A", [])
         }
+        permitted = (
+            ChangeProposal.milestone_code.in_(accountable_codes)
+            if not is_manager
+            else ChangeProposal.project_id == project_id
+        )
         query = (
             select(ChangeProposal)
             .where(
                 ChangeProposal.project_id == project_id,
                 ChangeProposal.status == ProposalStatus.PENDING,
-                ChangeProposal.submitted_by_actor_id != actor_id,
+                or_(ChangeProposal.submitted_by_actor_id == actor_id, permitted),
             )
             .order_by(ChangeProposal.created_at.desc())
         )
-        if not is_manager:
-            query = query.where(ChangeProposal.milestone_code.in_(accountable_codes))
-        return [_proposal_dict(proposal) for proposal in self.session.scalars(query)]
+        return [
+            {
+                **_proposal_dict(proposal),
+                "is_own_submission": proposal.submitted_by_actor_id == actor_id,
+                "can_resolve": is_manager or proposal.submitted_by_actor_id != actor_id,
+            }
+            for proposal in self.session.scalars(query)
+        ]
 
     def update_issue(self, issue_id: uuid.UUID, payload: IssueUpdate) -> dict[str, Any]:
         issue = self.session.get(Issue, issue_id)
@@ -746,6 +756,7 @@ def _proposal_dict(proposal: ChangeProposal) -> dict[str, Any]:
         "after_value": proposal.after_value,
         "reason": proposal.reason,
         "status": proposal.status,
+        "created_at": _utc_isoformat(proposal.created_at),
     }
 
 

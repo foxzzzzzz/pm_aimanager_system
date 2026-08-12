@@ -5,7 +5,8 @@ import test from "node:test";
 const readSource = (relativePath) => readFile(new URL(relativePath, import.meta.url), "utf8");
 
 test("dashboard uses right-aligned primary mini actions consistent with approval", async () => {
-  const [template, styles] = await Promise.all([
+  const [source, template, styles] = await Promise.all([
+    readSource("../miniprogram/pages/dashboard/dashboard.ts"),
     readSource("../miniprogram/pages/dashboard/dashboard.wxml"),
     readSource("../miniprogram/pages/dashboard/dashboard.wxss"),
   ]);
@@ -21,7 +22,11 @@ test("dashboard uses right-aligned primary mini actions consistent with approval
   assert.match(styles, /\.card-action\s*\{[^}]*margin:\s*0/s);
   assert.match(styles, /\.proposal-actions\s*\{[^}]*justify-content:\s*flex-end/s);
   assert.match(styles, /\.proposal-actions button\s*\{[^}]*margin:\s*0/s);
-  assert.match(template, /class="tag approval-tag">待我审批/);
+  assert.match(template, /class="tag approval-tag">\{\{.*待我审批.*\}\}/);
+  assert.match(template, /本人提交 · 可审批/);
+  assert.match(template, /提交时间：\{\{item\.createdAtLabel\}\}/);
+  assert.match(template, /wx:if="\{\{item\.can_resolve\}\}" class="proposal-actions"/);
+  assert.match(source, /formatDateTime\(\s*item\.created_at/s);
   assert.match(styles, /\.approval-tag\s*\{[^}]*color:\s*#b54708/s);
   assert.match(styles, /\.approval-tag\s*\{[^}]*background:\s*#fff1e6/s);
 });

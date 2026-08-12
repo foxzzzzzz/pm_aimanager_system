@@ -12,9 +12,10 @@
     </view>
   </view>
   <view wx:for="{{proposals}}" wx:key="id" class="card milestone">
-    <text class="tag approval-tag">待我审批</text>
+    <text class="tag approval-tag">{{item.is_own_submission && item.can_resolve ? "本人提交 · 可审批" : item.is_own_submission ? "本人提交 · 待他人审批" : "待我审批"}}</text>
     <text class="name">{{item.milestone_code}} · {{item.reason}}</text>
-    <view class="proposal-actions">
+    <text class="muted proposal-time">提交时间：{{item.createdAtLabel}}</text>
+    <view wx:if="{{item.can_resolve}}" class="proposal-actions">
       <button size="mini" type="primary" loading="{{resolvingProposalId === item.id}}" disabled="{{resolvingProposalId !== ''}}" data-id="{{item.id}}" data-version="{{item.base_version_number}}" bindtap="approveProposal">批准变更</button>
       <button size="mini" type="warn" loading="{{resolvingProposalId === item.id}}" disabled="{{resolvingProposalId !== ''}}" data-id="{{item.id}}" bindtap="rejectProposal">驳回</button>
     </view>

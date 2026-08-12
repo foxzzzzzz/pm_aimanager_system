@@ -223,6 +223,7 @@ export default function IssuesAuditPage({ project }: Props) {
                   { title: "节点", dataIndex: "milestone_code" },
                   { title: "类型", dataIndex: "kind" },
                   { title: "原因", dataIndex: "reason" },
+                  { title: "提交时间", dataIndex: "created_at", render: (value: string) => dayjs(value).format("YYYY-MM-DD HH:mm") },
                   { title: "状态", dataIndex: "status", render: (value: string) => <Tag>{value}</Tag> },
                   {
                     title: "操作",

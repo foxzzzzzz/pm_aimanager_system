@@ -119,6 +119,7 @@ export interface ChangeProposal {
   reason: string;
   status: "pending" | "approved" | "rejected";
   base_version_number: number;
+  created_at: string;
 }
 
 export interface NotificationDelivery {
