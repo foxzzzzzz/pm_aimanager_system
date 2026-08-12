@@ -4,7 +4,7 @@ import test from "node:test";
 
 const readSource = (relativePath) => readFile(new URL(relativePath, import.meta.url), "utf8");
 
-test("dashboard uses right-aligned pill actions instead of default mini buttons", async () => {
+test("dashboard uses right-aligned primary mini actions consistent with approval", async () => {
   const [template, styles] = await Promise.all([
     readSource("../miniprogram/pages/dashboard/dashboard.wxml"),
     readSource("../miniprogram/pages/dashboard/dashboard.wxss"),
@@ -14,13 +14,16 @@ test("dashboard uses right-aligned pill actions instead of default mini buttons"
   assert.match(template, /class="card-action milestone-action"/);
   assert.match(template, /查看项目资料/);
   assert.match(template, /更新进度/);
-  assert.doesNotMatch(template, /size="mini" bindtap="openProjectReview"/);
-  assert.doesNotMatch(template, /size="mini" data-code=.*bindtap="updateMilestone"/);
-  assert.match(styles, /\.card-action\s*\{[^}]*width:\s*auto/s);
-  assert.match(styles, /\.card-action\s*\{[^}]*margin-left:\s*auto/s);
-  assert.match(styles, /\.card-action\s*\{[^}]*border-radius:\s*999rpx/s);
-  assert.match(styles, /\.card-action\s*\{[^}]*background:\s*#146c5a/s);
-  assert.match(styles, /\.card-action\s*\{[^}]*color:\s*#fff(?:fff)?/s);
+  assert.match(template, /class="card-action summary-action" size="mini" type="primary" bindtap="openProjectReview"/);
+  assert.match(template, /class="card-action milestone-action" size="mini" type="primary" data-code=.*bindtap="updateMilestone"/);
+  assert.doesNotMatch(template, /class="action-arrow"/);
+  assert.match(styles, /\.card-action-row\s*\{[^}]*justify-content:\s*flex-end/s);
+  assert.match(styles, /\.card-action\s*\{[^}]*margin:\s*0/s);
+  assert.match(styles, /\.proposal-actions\s*\{[^}]*justify-content:\s*flex-end/s);
+  assert.match(styles, /\.proposal-actions button\s*\{[^}]*margin:\s*0/s);
+  assert.match(template, /class="tag approval-tag">待我审批/);
+  assert.match(styles, /\.approval-tag\s*\{[^}]*color:\s*#b54708/s);
+  assert.match(styles, /\.approval-tag\s*\{[^}]*background:\s*#fff1e6/s);
 });
 
 test("list pages avoid duplicate native navigation titles", async () => {
