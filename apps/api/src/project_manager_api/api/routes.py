@@ -303,6 +303,15 @@ def list_mobile_projects(
     return MobileService(session, request.app.state.settings, user).list_projects()
 
 
+@router.get("/mobile/my-tasks")
+def list_mobile_my_tasks(
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+) -> list[dict[str, Any]]:
+    return MobileService(session, request.app.state.settings, user).list_my_tasks()
+
+
 @router.get("/mobile/projects/{project_id}/dashboard")
 def get_mobile_dashboard(
     project_id: uuid.UUID,

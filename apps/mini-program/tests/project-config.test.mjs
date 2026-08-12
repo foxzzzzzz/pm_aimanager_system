@@ -26,11 +26,13 @@ test("mini program declares TypeScript and required pages", async () => {
     "pages/milestone-update/milestone-update",
     "pages/issues/issues",
     "pages/messages/messages",
+    "pages/my-tasks/my-tasks",
   ]);
   assert.deepEqual(appConfig.tabBar.list.map((item) => item.pagePath), [
     "pages/projects/projects",
     "pages/issues/issues",
     "pages/messages/messages",
+    "pages/my-tasks/my-tasks",
   ]);
   assert.deepEqual(sitemapConfig.rules, [{ action: "allow", page: "*" }]);
 });

@@ -5,7 +5,7 @@ import hmac
 import re
 import secrets
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -289,6 +289,55 @@ class MobileService:
             "milestones": milestones,
         }
 
+    def list_my_tasks(self) -> list[dict[str, Any]]:
+        user = self._user()
+        query = (
+            select(MemberBinding, Project)
+            .join(Project, Project.id == MemberBinding.project_id)
+            .where(
+                MemberBinding.user_id == user.id,
+                MemberBinding.status == BindingStatus.BOUND,
+            )
+            .order_by(Project.created_at.desc())
+        )
+        business_date = current_business_date(self.settings)
+        projects = []
+        for binding, project in self.session.execute(query):
+            _, snapshot = self._project_snapshot(project.id)
+            tasks = []
+            for milestone in _mobile_milestones(snapshot, binding.member_name):
+                assignments = milestone.get("assignments", {})
+                roles = [
+                    role for role in ("R", "A") if binding.member_name in assignments.get(role, [])
+                ]
+                if not roles:
+                    continue
+                tasks.append(
+                    {
+                        **milestone,
+                        "roles": roles,
+                        "risk": _milestone_risk(
+                            milestone,
+                            business_date,
+                            self.settings.mobile_upcoming_days,
+                        ),
+                    }
+                )
+            if tasks:
+                projects.append(
+                    {
+                        "project": {
+                            "id": str(project.id),
+                            "code": project.code,
+                            "name": project.name,
+                        },
+                        "business_date": business_date.isoformat(),
+                        "member_name": binding.member_name,
+                        "tasks": tasks,
+                    }
+                )
+        return projects
+
     def project_review(self, project_id: uuid.UUID) -> dict[str, Any]:
         self._bound_project(project_id)
         review = ProjectService(self.session, _actor_id(self._user())).review(project_id)
@@ -553,6 +602,23 @@ def _mobile_milestones(
         }
         for milestone in snapshot.get("milestones", [])
     ]
+
+
+def _milestone_risk(milestone: dict[str, Any], business_date: date, upcoming_days: int) -> str:
+    if milestone.get("actual_completion", {}).get("end_date"):
+        return "completed"
+    plan = milestone.get("plan")
+    if not plan or plan.get("state") == "not_applicable":
+        return "todo"
+    end_date_text = plan.get("end_date")
+    if not end_date_text:
+        return "todo"
+    end_date = date.fromisoformat(end_date_text)
+    if end_date < business_date:
+        return "overdue"
+    if end_date <= business_date + timedelta(days=upcoming_days):
+        return "upcoming"
+    return "todo"
 
 
 def natural_language_prefill(text: str, settings: AppSettings) -> dict[str, Any]:

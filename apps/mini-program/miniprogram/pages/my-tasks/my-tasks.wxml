@@ -1,0 +1,22 @@
+<view class="page">
+  <view class="task-filters">
+    <button wx:for="{{filters}}" wx:key="key" class="task-filter {{selectedFilter === item.key ? 'active' : ''}} {{item.key === 'overdue' ? 'overdue' : ''}}" data-key="{{item.key}}" bindtap="selectFilter">{{item.label}}</button>
+  </view>
+  <view wx:if="{{loading}}" class="card loading-state">正在加载我的任务…</view>
+  <view wx:if="{{!loading && loadError}}" class="card error-state">
+    <text class="error-title">我的任务加载失败</text>
+    <text class="error-detail">请检查网络连接后重新加载。</text>
+    <button class="retry-action" bindtap="loadTasks">重新加载</button>
+  </view>
+  <view wx:if="{{!loading && !loadError && projects.length === 0}}" class="card empty-state">当前分类暂无本人负责或审批的任务</view>
+  <view wx:if="{{!loading && !loadError}}" wx:for="{{projects}}" wx:key="project.id" class="card project-group">
+    <view class="project-head" data-id="{{item.project.id}}" data-code="{{item.project.code}}" data-name="{{item.project.name}}" bindtap="openProject">
+      <view><text class="tag">{{item.project.code}}</text><text class="project-name">{{item.project.name}}</text></view>
+      <text class="project-entry">进入看板</text>
+    </view>
+    <view wx:for="{{item.visibleTasks}}" wx:key="code" wx:for-item="task" class="task-row {{task.risk === 'overdue' ? 'overdue-task' : ''}}">
+      <view class="task-main"><text class="task-title">{{task.code}} · {{task.name}}</text><text class="task-date">截止 {{task.plan.end_date || '—'}}</text></view>
+      <view class="task-role"><text>本人角色</text><text wx:for="{{task.roles}}" wx:key="*this" wx:for-item="role" class="role-tag">{{role}}</text></view>
+    </view>
+  </view>
+</view>

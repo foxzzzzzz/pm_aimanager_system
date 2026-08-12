@@ -14,7 +14,12 @@ from sqlalchemy import select
 
 from project_manager_api.api.app import create_app
 from project_manager_api.db.base import Base
-from project_manager_api.db.models import IdempotencyRecord, MemberBinding, MobileUser
+from project_manager_api.db.models import (
+    IdempotencyRecord,
+    MemberBinding,
+    MobileUser,
+    ProjectVersion,
+)
 from project_manager_api.settings import AppSettings
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -172,6 +177,61 @@ def test_unbound_user_cannot_view_project_and_bound_user_can(
         assert binding.provided_phone_hash != "13800000010"
         assert "13800000010" not in str(user.__dict__)
         assert "13800000010" not in str(binding.__dict__)
+
+
+def test_my_tasks_only_returns_bound_members_ra_milestones_without_duplicates(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    outsider_headers, _ = _login(client, "dev:my-tasks-outsider")
+
+    assert client.get("/api/v1/mobile/my-tasks", headers=outsider_headers).json() == []
+
+    invitation = _invite(client, project_id, "成员03", "invite-my-tasks-member03")
+    member_headers, _ = _login(client, "dev:my-tasks-member03")
+    accepted = client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=member_headers,
+        json={
+            "invitation_token": invitation["invitation_token"],
+            "phone_code": "dev:13800000003",
+        },
+    )
+    assert accepted.status_code == 200
+
+    with client.app.state.session_factory() as session:
+        version = session.scalar(
+            select(ProjectVersion).where(ProjectVersion.project_id == uuid.UUID(project_id))
+        )
+        assert version is not None
+        snapshot = dict(version.snapshot)
+        milestones = [dict(item) for item in snapshot["milestones"]]
+        target = milestones[0]
+        assignments = {key: list(value) for key, value in target["assignments"].items()}
+        assignments["R"] = ["成员03"]
+        assignments["A"] = ["成员03"]
+        target["assignments"] = assignments
+        snapshot["milestones"] = milestones
+        version.snapshot = snapshot
+        session.commit()
+
+    response = client.get("/api/v1/mobile/my-tasks", headers=member_headers)
+    assert response.status_code == 200
+    projects = response.json()
+    assert len(projects) == 1
+    assert projects[0]["project"] == {
+        "id": project_id,
+        "code": "ZPD1322",
+        "name": "Lyra Pro",
+    }
+    assert projects[0]["business_date"]
+    assert projects[0]["member_name"] == "成员03"
+    matching = [task for task in projects[0]["tasks"] if task["code"] == target["code"]]
+    assert len(matching) == 1
+    assert matching[0]["roles"] == ["R", "A"]
+    assert matching[0]["risk"] == "overdue"
+    assert all(set(task["roles"]) <= {"R", "A"} for task in projects[0]["tasks"])
 
 
 def test_bound_user_can_view_read_only_project_review_without_contacts(

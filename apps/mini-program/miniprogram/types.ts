@@ -27,6 +27,18 @@ export interface MobileDashboard {
   milestones: Milestone[];
 }
 
+export interface MyTask extends Milestone {
+  roles: Array<"R" | "A">;
+  risk: "todo" | "upcoming" | "overdue" | "completed";
+}
+
+export interface MyTaskProject {
+  project: { id: string; code: string; name: string };
+  business_date: string;
+  member_name: string;
+  tasks: MyTask[];
+}
+
 export interface ProductSpec {
   row_number: number;
   major_category: string | null;

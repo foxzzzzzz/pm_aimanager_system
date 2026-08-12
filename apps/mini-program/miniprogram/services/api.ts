@@ -4,6 +4,7 @@ import type {
   Issue,
   Message,
   MobileDashboard,
+  MyTaskProject,
   ProjectReview,
   ProjectSummary,
 } from "../types";
@@ -34,6 +35,7 @@ export const api = {
       phone_code: phoneCode,
     }),
   projects: () => request<ProjectSummary[]>("/mobile/projects"),
+  myTasks: () => request<MyTaskProject[]>("/mobile/my-tasks"),
   dashboard: (projectId: string) =>
     request<MobileDashboard>(`/mobile/projects/${projectId}/dashboard`),
   projectReview: (projectId: string) =>

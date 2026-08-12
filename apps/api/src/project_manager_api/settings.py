@@ -30,6 +30,7 @@ class AppSettings(BaseModel):
     wechat_app_secret: str | None = None
     mobile_session_days: int = 30
     mobile_invitation_days: int = Field(default=7, ge=1, le=30)
+    mobile_upcoming_days: int = Field(default=14, ge=1, le=90)
     wechat_invitation_page: str = Field(default="pages/index/index", min_length=1, pattern=r"^[^/]")
     wechat_invitation_env_version: Literal["release", "trial", "develop"] = "release"
     wechat_invitation_code_width: int = Field(default=430, ge=280, le=1280)
@@ -141,6 +142,7 @@ class AppSettings(BaseModel):
                     str(wechat.get("invitation_days", 7)),
                 )
             ),
+            mobile_upcoming_days=int(config["mobile"]["upcoming_days"]),
             wechat_invitation_page=os.environ.get(
                 "WECHAT_INVITATION_PAGE",
                 str(wechat.get("invitation_page", "pages/index/index")),

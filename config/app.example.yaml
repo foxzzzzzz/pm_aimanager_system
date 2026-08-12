@@ -8,6 +8,11 @@ app:
   cors_origins:
     - http://localhost:15173
 
+# Mobile presentation rules. Keep these separate from notification delivery thresholds.
+mobile:
+  # Inclusive number of days after today classified as upcoming in mobile task views.
+  upcoming_days: 14
+
 # Database and background-job connections. Secrets may be overridden by environment variables.
 database:
   # SQLAlchemy-compatible PostgreSQL connection URL for local development.

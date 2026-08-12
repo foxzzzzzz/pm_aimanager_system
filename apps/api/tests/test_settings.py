@@ -22,6 +22,7 @@ def test_example_config_contains_required_external_parameters() -> None:
     assert config["object_storage"]["backend"] == "s3"
     assert config["object_storage"]["bucket"] == "project-manager"
     assert config["notifications"]["due_soon_days"] == 3
+    assert config["mobile"]["upcoming_days"] == 14
     assert config["wechat"]["invitation_days"] == 7
     assert config["wechat"]["invitation_page"] == "pages/index/index"
     assert config["wechat"]["invitation_env_version"] == "release"

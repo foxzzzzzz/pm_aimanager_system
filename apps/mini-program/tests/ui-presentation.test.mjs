@@ -76,3 +76,19 @@ test("project cards expose upcoming and overdue milestones with RACI", async () 
   assert.match(template, /role\.key/);
   assert.match(template, /role\.names/);
 });
+
+test("my tasks groups R and A milestones by project with four risk filters", async () => {
+  const [source, template, styles, apiSource] = await Promise.all([
+    readSource("../miniprogram/pages/my-tasks/my-tasks.ts"),
+    readSource("../miniprogram/pages/my-tasks/my-tasks.wxml"),
+    readSource("../miniprogram/pages/my-tasks/my-tasks.wxss"),
+    readSource("../miniprogram/services/api.ts"),
+  ]);
+
+  assert.match(apiSource, /mobile\/my-tasks/);
+  assert.match(source, /task\.risk === selectedFilter/);
+  assert.match(source, /\["todo", "upcoming", "overdue", "completed"\]/);
+  assert.match(template, /本人角色/);
+  assert.match(template, /bindtap="openProject"/);
+  assert.match(styles, /grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/);
+});

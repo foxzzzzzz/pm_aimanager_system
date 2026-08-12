@@ -6,7 +6,8 @@
     "pages/project-review/project-review",
     "pages/milestone-update/milestone-update",
     "pages/issues/issues",
-    "pages/messages/messages"
+    "pages/messages/messages",
+    "pages/my-tasks/my-tasks"
   ],
   "window": {
     "navigationBarTitleText": "项目管理",
@@ -37,6 +38,12 @@
         "text": "消息",
         "iconPath": "assets/tabbar/message.png",
         "selectedIconPath": "assets/tabbar/message-active.png"
+      },
+      {
+        "pagePath": "pages/my-tasks/my-tasks",
+        "text": "我的",
+        "iconPath": "assets/tabbar/my.png",
+        "selectedIconPath": "assets/tabbar/my-active.png"
       }
     ]
   },

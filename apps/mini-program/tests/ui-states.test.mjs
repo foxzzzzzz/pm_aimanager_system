@@ -5,7 +5,7 @@ import test from "node:test";
 const readSource = (relativePath) => readFile(new URL(relativePath, import.meta.url), "utf8");
 
 test("primary data pages expose persistent retry states", async () => {
-  const pages = ["projects", "dashboard", "project-review", "issues", "messages"];
+  const pages = ["projects", "dashboard", "project-review", "issues", "messages", "my-tasks"];
 
   for (const page of pages) {
     const [source, template] = await Promise.all([
