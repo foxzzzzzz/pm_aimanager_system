@@ -26,6 +26,7 @@ from project_manager_api.db.models import (
     ImportRecord,
     ImportStatus,
     Issue,
+    IssueCreateProposal,
     IssueStatus,
     MemberBinding,
     Project,
@@ -626,6 +627,94 @@ class ProjectService:
         )
         return self._issue_dict(issue)
 
+    def create_issue_proposal(
+        self, project_id: uuid.UUID, payload: IssueCreate
+    ) -> dict[str, Any]:
+        project = self._require_project(project_id)
+        self._validate_issue_raci(project, payload)
+        proposal = IssueCreateProposal(
+            project_id=project.id,
+            payload=payload.model_dump(mode="json"),
+            submitted_by_actor_id=self.actor_id,
+        )
+        self.session.add(proposal)
+        self.session.flush()
+        self._audit(
+            project.id,
+            "issue_create_proposal.created",
+            "issue_create_proposal",
+            str(proposal.id),
+            after=_issue_create_proposal_dict(proposal),
+        )
+        return _issue_create_proposal_dict(proposal)
+
+    def list_issue_create_proposals(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
+        self._require_project(project_id, manager=True)
+        query = (
+            select(IssueCreateProposal)
+            .where(IssueCreateProposal.project_id == project_id)
+            .order_by(IssueCreateProposal.created_at.desc())
+        )
+        return [_issue_create_proposal_dict(item) for item in self.session.scalars(query)]
+
+    def approve_issue_create_proposal(
+        self, proposal_id: uuid.UUID
+    ) -> dict[str, Any]:
+        proposal = self.session.scalar(
+            select(IssueCreateProposal)
+            .where(IssueCreateProposal.id == proposal_id)
+            .with_for_update()
+        )
+        if proposal is None:
+            raise NotFoundError("issue create proposal not found")
+        self._require_project(proposal.project_id, manager=True)
+        if proposal.status != ProposalStatus.PENDING:
+            raise ConflictError("issue create proposal is already resolved")
+        issue = self.create_issue(proposal.project_id, IssueCreate.model_validate(proposal.payload))
+        proposal.status = ProposalStatus.APPROVED
+        proposal.resolved_by_actor_id = self.actor_id
+        proposal.issue_id = uuid.UUID(issue["id"])
+        proposal.resolved_at = datetime.now(UTC)
+        result = _issue_create_proposal_dict(proposal)
+        self._audit(
+            proposal.project_id,
+            "issue_create_proposal.approved",
+            "issue_create_proposal",
+            str(proposal.id),
+            before={"status": ProposalStatus.PENDING},
+            after=result,
+        )
+        return result
+
+    def reject_issue_create_proposal(
+        self, proposal_id: uuid.UUID, reason: str
+    ) -> dict[str, Any]:
+        proposal = self.session.scalar(
+            select(IssueCreateProposal)
+            .where(IssueCreateProposal.id == proposal_id)
+            .with_for_update()
+        )
+        if proposal is None:
+            raise NotFoundError("issue create proposal not found")
+        self._require_project(proposal.project_id, manager=True)
+        if proposal.status != ProposalStatus.PENDING:
+            raise ConflictError("issue create proposal is already resolved")
+        proposal.status = ProposalStatus.REJECTED
+        proposal.resolved_by_actor_id = self.actor_id
+        proposal.resolution_reason = reason
+        proposal.resolved_at = datetime.now(UTC)
+        result = _issue_create_proposal_dict(proposal)
+        self._audit(
+            proposal.project_id,
+            "issue_create_proposal.rejected",
+            "issue_create_proposal",
+            str(proposal.id),
+            before={"status": ProposalStatus.PENDING},
+            after=result,
+            reason=reason,
+        )
+        return result
+
     def update_issue(self, issue_id: uuid.UUID, payload: IssueUpdate) -> dict[str, Any]:
         issue = self.session.get(Issue, issue_id)
         if issue is None:
@@ -970,6 +1059,21 @@ def _proposal_dict(proposal: ChangeProposal) -> dict[str, Any]:
         "reason": proposal.reason,
         "status": proposal.status,
         "created_at": proposal.created_at.isoformat(),
+    }
+
+
+def _issue_create_proposal_dict(proposal: IssueCreateProposal) -> dict[str, Any]:
+    return {
+        "id": str(proposal.id),
+        "project_id": str(proposal.project_id),
+        "payload": proposal.payload,
+        "status": proposal.status,
+        "submitted_by_actor_id": proposal.submitted_by_actor_id,
+        "resolved_by_actor_id": proposal.resolved_by_actor_id,
+        "resolution_reason": proposal.resolution_reason,
+        "issue_id": str(proposal.issue_id) if proposal.issue_id else None,
+        "created_at": proposal.created_at.isoformat(),
+        "resolved_at": proposal.resolved_at.isoformat() if proposal.resolved_at else None,
     }
 
 

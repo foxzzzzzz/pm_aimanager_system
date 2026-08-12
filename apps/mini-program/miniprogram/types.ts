@@ -88,6 +88,16 @@ export interface Issue {
   revision: number;
 }
 
+export interface IssueCreateProposal {
+  id: string;
+  project_id: string;
+  payload: Omit<Issue, "id" | "risk" | "status" | "revision">;
+  status: "pending" | "approved" | "rejected";
+  issue_id: string | null;
+  created_at: string;
+  createdAtLabel?: string;
+}
+
 export interface ChangeProposal {
   id: string;
   milestone_code: string;

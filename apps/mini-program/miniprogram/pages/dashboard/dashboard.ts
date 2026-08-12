@@ -6,7 +6,7 @@ import {
 } from "../../services/milestone-view.js";
 import { formatDateTime, labelPlanState, presentPlan } from "../../services/presentation.js";
 import type { MilestoneFilterKey } from "../../services/milestone-view.js";
-import type { ChangeProposal, Milestone, MobileDashboard } from "../../types";
+import type { ChangeProposal, IssueCreateProposal, Milestone, MobileDashboard } from "../../types";
 
 interface MilestoneTapEvent { currentTarget: { dataset: { code: string } } }
 interface ProposalTapEvent { currentTarget: { dataset: { id: string; version: number } } }
@@ -32,6 +32,7 @@ Page({
     projectId: "",
     dashboard: null as MobileDashboard | null,
     proposals: [] as ChangeProposal[],
+    issueCreateProposals: [] as IssueCreateProposal[],
     milestoneFilters: [] as ReturnType<typeof buildMilestoneFilters>,
     primaryMilestoneFilters: [] as ReturnType<typeof buildMilestoneFilters>,
     moreFilterLabel: "更多筛选",
@@ -55,9 +56,10 @@ Page({
   async loadDashboard(showError = true): Promise<boolean> {
     if (!this.data.dashboard) this.setData({ loading: true, loadError: false });
     try {
-      const [dashboard, proposals] = await Promise.all([
-        api.dashboard(this.data.projectId),
-        api.approvableProposals(this.data.projectId),
+      const dashboard = await api.dashboard(this.data.projectId);
+      const [proposals, issueCreateProposals] = await Promise.all([
+        api.approvableProposals(this.data.projectId).catch(() => [] as ChangeProposal[]),
+        api.issueCreateProposals(this.data.projectId).catch(() => [] as IssueCreateProposal[]),
       ]);
       const today = dashboard.business_date;
       const upcomingDays = runtimeConfig.milestoneUpcomingDays;
@@ -65,6 +67,13 @@ Page({
       this.setData({
         dashboard,
         proposals: proposals.map((item) => ({
+          ...item,
+          createdAtLabel: formatDateTime(
+            item.created_at,
+            runtimeConfig.presentationTimezoneOffsetMinutes,
+          ),
+        })),
+        issueCreateProposals: issueCreateProposals.map((item) => ({
           ...item,
           createdAtLabel: formatDateTime(
             item.created_at,
@@ -93,6 +102,20 @@ Page({
       return false;
     } finally {
       this.setData({ loading: false });
+    }
+  },
+  async resolveIssueCreateProposal(event: WechatMiniprogram.TouchEvent) {
+    const id = event.currentTarget.dataset.id as string;
+    const action = event.currentTarget.dataset.action as "approve" | "reject";
+    try {
+      if (action === "approve") {
+        await api.approveIssueCreateProposal(id);
+      } else {
+        await api.rejectIssueCreateProposal(id, "项目经理驳回");
+      }
+      await this.loadDashboard();
+    } catch (error) {
+      wx.showToast({ title: (error as Error).message, icon: "none" });
     }
   },
   selectMilestoneFilter(event: FilterTapEvent) {

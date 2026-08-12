@@ -174,6 +174,27 @@ class Issue(Base):
     project: Mapped[Project] = relationship(back_populates="issues")
 
 
+class IssueCreateProposal(Base):
+    __tablename__ = "issue_create_proposals"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32), default=ProposalStatus.PENDING, nullable=False
+    )
+    submitted_by_actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    resolved_by_actor_id: Mapped[str | None] = mapped_column(String(128))
+    resolution_reason: Mapped[str | None] = mapped_column(Text)
+    issue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("issues.id", ondelete="SET NULL"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ChangeProposal(Base):
     __tablename__ = "change_proposals"
 

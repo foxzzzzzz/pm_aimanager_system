@@ -86,6 +86,17 @@ export interface Issue {
   revision: number;
 }
 
+export interface IssueCreateProposal {
+  id: string;
+  project_id: string;
+  payload: Omit<Issue, "id" | "risk" | "status" | "revision">;
+  status: "pending" | "approved" | "rejected";
+  submitted_by_actor_id: string;
+  resolution_reason: string | null;
+  issue_id: string | null;
+  created_at: string;
+}
+
 export interface AuditLog {
   id: string;
   actor_id: string;

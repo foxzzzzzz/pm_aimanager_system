@@ -3,7 +3,7 @@ import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "../api";
-import type { AuditLog, ChangeProposal, Issue, MemberBinding, MemberInvitation, Project, ProjectMemberReview } from "../types";
+import type { AuditLog, ChangeProposal, Issue, IssueCreateProposal, MemberBinding, MemberInvitation, Project, ProjectMemberReview } from "../types";
 
 interface Props {
   project?: Project;
@@ -28,6 +28,7 @@ export default function IssuesAuditPage({ project }: Props) {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [bindings, setBindings] = useState<MemberBinding[]>([]);
   const [proposals, setProposals] = useState<ChangeProposal[]>([]);
+  const [issueCreateProposals, setIssueCreateProposals] = useState<IssueCreateProposal[]>([]);
   const [members, setMembers] = useState<ProjectMemberReview[]>([]);
   const [open, setOpen] = useState(false);
   const [editingIssue, setEditingIssue] = useState<Issue>();
@@ -44,11 +45,12 @@ export default function IssuesAuditPage({ project }: Props) {
     if (!project) return;
     const sequence = ++reloadSequence.current;
     try {
-      const [nextIssues, nextAudit, nextBindings, nextProposals, review] = await Promise.all([
+      const [nextIssues, nextAudit, nextBindings, nextProposals, nextIssueCreateProposals, review] = await Promise.all([
         api.listIssues(project.id),
         api.listAuditLogs(project.id),
         api.listMemberBindings(project.id),
         api.listChangeProposals(project.id),
+        api.listIssueCreateProposals(project.id),
         api.projectReview(project.id),
       ]);
       if (sequence !== reloadSequence.current) return;
@@ -56,6 +58,7 @@ export default function IssuesAuditPage({ project }: Props) {
       setAuditLogs(nextAudit);
       setBindings(nextBindings);
       setProposals(nextProposals);
+      setIssueCreateProposals(nextIssueCreateProposals);
       setMembers(review.members);
       setError(undefined);
     } catch (reason) {
@@ -116,6 +119,11 @@ export default function IssuesAuditPage({ project }: Props) {
 
   const approveBinding = async (bindingId: string) => {
     await api.approveMemberBinding(bindingId);
+    await reload();
+  };
+
+  const rejectIssueCreate = async (proposalId: string) => {
+    await api.rejectIssueCreateProposal(proposalId, "项目经理驳回");
     await reload();
   };
 
@@ -182,6 +190,33 @@ export default function IssuesAuditPage({ project }: Props) {
                         >删除</Button>
                       </Space>
                     ),
+                  },
+                ]}
+              />
+            ),
+          },
+          {
+            key: "issue-create-proposals",
+            label: `问题新增审批 ${issueCreateProposals.filter((item) => item.status === "pending").length}`,
+            children: (
+              <Table
+                rowKey="id"
+                dataSource={issueCreateProposals}
+                columns={[
+                  { title: "问题", render: (_: unknown, item: IssueCreateProposal) => item.payload.description },
+                  { title: "R", render: (_: unknown, item: IssueCreateProposal) => item.payload.owner_name },
+                  { title: "A", render: (_: unknown, item: IssueCreateProposal) => item.payload.accountable_names.join("、") },
+                  { title: "预计完成", render: (_: unknown, item: IssueCreateProposal) => item.payload.due_date },
+                  { title: "提交时间", dataIndex: "created_at", render: (value: string) => dayjs(value).format("YYYY-MM-DD HH:mm") },
+                  { title: "状态", dataIndex: "status", render: (value: string) => <Tag>{value}</Tag> },
+                  {
+                    title: "操作",
+                    render: (_: unknown, item: IssueCreateProposal) => item.status === "pending" ? (
+                      <Space>
+                        <Button size="small" type="primary" onClick={async () => { await api.approveIssueCreateProposal(item.id); await reload(); }}>批准新增</Button>
+                        <Button size="small" danger onClick={() => void rejectIssueCreate(item.id)}>驳回</Button>
+                      </Space>
+                    ) : "—",
                   },
                 ]}
               />

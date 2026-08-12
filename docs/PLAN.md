@@ -85,6 +85,9 @@ tmp/                # 不提交的临时文件
 | `POST /api/v1/change-sets/{id}/publish` | 二次校验并原子发布新版本 |
 | `POST /api/v1/change-sets/{id}/cancel` | 取消未发布变更集 |
 | `POST /api/v1/projects/{id}/issues` | 登记问题 |
+| `GET /api/v1/projects/{id}/issue-create-proposals` | 查询重点问题新增申请 |
+| `POST /api/v1/issue-create-proposals/{id}/approve` | 批准重点问题新增申请 |
+| `POST /api/v1/issue-create-proposals/{id}/reject` | 驳回重点问题新增申请 |
 | `PATCH /api/v1/issues/{id}` | 更新问题 |
 | `DELETE /api/v1/issues/{id}` | 管理后台版本化关闭问题并记录原因 |
 | `DELETE /api/v1/mobile/issues/{id}` | 小程序版本化关闭本人负责的问题 |
@@ -460,8 +463,14 @@ tmp/                # 不提交的临时文件
 
 #### Phase F2：任意成员R与重点问题新增审批
 
+**状态**：✅ 已完成（2026-08-12）。
+
 - 小程序登记问题时R可选择任意正式成员；新增先形成申请，批准前不进入正式业务数据与通知。
 - 小程序项目经理和Web管理员可批准、驳回并留下审计记录。
+
+**实现**：新增独立 `issue_create_proposals` 审批实体与 `0010_issue_create_proposals` 迁移；Web和小程序登记统一提交申请，项目经理批准时才生成正式 `issues` 记录。小程序项目经理在项目看板审批，Web管理员在“问题新增审批”页签处理。
+
+**验收**：R可指定任一正式成员；非法RACI被拒绝；待审/驳回申请不进入正式问题列表、看板统计及每日通知；批准后问题进入正式列表并记录申请、批准或驳回审计。
 
 #### Phase F3：重点问题删除审批
 

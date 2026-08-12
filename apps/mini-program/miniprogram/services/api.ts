@@ -2,6 +2,7 @@ import { runtimeConfig } from "../config";
 import type {
   ChangeProposal,
   Issue,
+  IssueCreateProposal,
   Message,
   MobileDashboard,
   MyTaskProject,
@@ -44,7 +45,13 @@ export const api = {
     request(`/mobile/projects/${projectId}/milestones/${code}/proposals`, "POST", data),
   issues: (projectId: string) => request<Issue[]>(`/mobile/projects/${projectId}/issues`),
   createIssue: (projectId: string, data: WechatMiniprogram.IAnyObject) =>
-    request<Issue>(`/mobile/projects/${projectId}/issues`, "POST", data),
+    request<IssueCreateProposal>(`/mobile/projects/${projectId}/issue-create-proposals`, "POST", data),
+  issueCreateProposals: (projectId: string) =>
+    request<IssueCreateProposal[]>(`/mobile/projects/${projectId}/issue-create-proposals`),
+  approveIssueCreateProposal: (proposalId: string) =>
+    request<IssueCreateProposal>(`/mobile/issue-create-proposals/${proposalId}/approve`, "POST"),
+  rejectIssueCreateProposal: (proposalId: string, reason: string) =>
+    request<IssueCreateProposal>(`/mobile/issue-create-proposals/${proposalId}/reject`, "POST", { reason }),
   updateIssue: (issueId: string, data: WechatMiniprogram.IAnyObject) =>
     request<Issue>(`/mobile/issues/${issueId}`, "PATCH", data),
   deleteIssue: (issueId: string, data: WechatMiniprogram.IAnyObject) =>

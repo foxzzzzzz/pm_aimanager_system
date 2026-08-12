@@ -29,20 +29,21 @@
         <textarea class="field" value="{{impact}}" placeholder="请说明对进度、质量或交付的影响" bindinput="onImpact" />
       </view>
       <view class="field-block">
-        <text class="field-label">R 执行负责人</text>
-        <view class="readonly-field">{{ownerName}}</view>
+        <text class="field-label">R 执行负责人 <text class="required">*</text></text>
+        <picker wx:if="{{!editingIssueId}}" range="{{projectMembers}}" bindchange="onOwner"><view class="field picker-field">{{ownerName || '请选择执行负责人'}} <text>›</text></view></picker>
+        <view wx:else class="readonly-field">{{ownerName}}</view>
       </view>
       <view wx:if="{{!editingIssueId}}" class="field-block">
         <text class="field-label">A 最终负责人 <text class="required">*</text></text>
-        <checkbox-group class="member-options" data-name="accountableNames" bindchange="updateRaciMembers"><label wx:for="{{projectMembers}}" wx:key="*this" wx:for-item="member" class="member-option"><checkbox value="{{member}}" checked="{{accountableNames.indexOf(member) >= 0}}" color="#146c5a" />{{member}}</label></checkbox-group>
+        <checkbox-group class="member-options" data-name="accountableNames" bindchange="updateRaciMembers"><label wx:for="{{projectMembers}}" wx:key="*this" wx:for-item="member" class="member-option"><checkbox value="{{member}}" color="#146c5a" />{{member}}</label></checkbox-group>
       </view>
       <view wx:if="{{!editingIssueId}}" class="field-block">
         <text class="field-label">C 协作/咨询</text>
-        <checkbox-group class="member-options" data-name="consultedNames" bindchange="updateRaciMembers"><label wx:for="{{projectMembers}}" wx:key="*this" wx:for-item="member" class="member-option"><checkbox value="{{member}}" checked="{{consultedNames.indexOf(member) >= 0}}" color="#146c5a" />{{member}}</label></checkbox-group>
+        <checkbox-group class="member-options" data-name="consultedNames" bindchange="updateRaciMembers"><label wx:for="{{projectMembers}}" wx:key="*this" wx:for-item="member" class="member-option"><checkbox value="{{member}}" color="#146c5a" />{{member}}</label></checkbox-group>
       </view>
       <view wx:if="{{!editingIssueId}}" class="field-block">
         <text class="field-label">I 知情</text>
-        <checkbox-group class="member-options" data-name="informedNames" bindchange="updateRaciMembers"><label wx:for="{{projectMembers}}" wx:key="*this" wx:for-item="member" class="member-option"><checkbox value="{{member}}" checked="{{informedNames.indexOf(member) >= 0}}" color="#146c5a" />{{member}}</label></checkbox-group>
+        <checkbox-group class="member-options" data-name="informedNames" bindchange="updateRaciMembers"><label wx:for="{{projectMembers}}" wx:key="*this" wx:for-item="member" class="member-option"><checkbox value="{{member}}" color="#146c5a" />{{member}}</label></checkbox-group>
       </view>
       <view class="field-block">
         <text class="field-label">严重程度 <text class="required">*</text></text>
@@ -58,7 +59,7 @@
       </view>
       <view class="form-actions">
         <button class="secondary-action" disabled="{{creating}}" bindtap="cancelEdit">取消</button>
-        <button class="primary submit-action" loading="{{creating}}" disabled="{{creating}}" bindtap="createIssue">{{editingIssueId ? '保存修改' : '确认登记'}}</button>
+        <button class="primary submit-action" loading="{{creating}}" disabled="{{creating}}" bindtap="createIssue">{{editingIssueId ? '保存修改' : '提交新增审批'}}</button>
       </view>
     </view>
     <view wx:if="{{loading}}" class="card loading-state">正在加载问题…</view>

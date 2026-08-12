@@ -118,6 +118,25 @@ def _published_project(client: TestClient) -> tuple[str, dict[str, Any]]:
     return project_id, response.json()
 
 
+def _create_approved_issue(
+    client: TestClient, project_id: str, payload: dict[str, Any], key: str
+) -> dict[str, Any]:
+    proposal = client.post(
+        f"/api/v1/projects/{project_id}/issues",
+        headers=_headers(key),
+        json=payload,
+    )
+    assert proposal.status_code == 201, proposal.json()
+    approved = client.post(
+        f"/api/v1/issue-create-proposals/{proposal.json()['id']}/approve",
+        headers=_headers(f"{key}-approve"),
+    )
+    assert approved.status_code == 200, approved.json()
+    issue_id = approved.json()["issue_id"]
+    issues = client.get(f"/api/v1/projects/{project_id}/issues", headers=PM_HEADERS).json()
+    return next(issue for issue in issues if issue["id"] == issue_id)
+
+
 def _copy_with_active_plan_date(workdir: Path, filename: str, value: date) -> Path:
     changed = workdir / filename
     shutil.copyfile(WORKBOOK, changed)
@@ -213,10 +232,10 @@ def test_project_dashboard_exposes_server_classified_tasks_and_issue_summary(
 ) -> None:
     client, _ = workflow
     project_id, _ = _published_project(client)
-    issue = client.post(
-        f"/api/v1/projects/{project_id}/issues",
-        headers=_headers("dashboard-issue"),
-        json={
+    _create_approved_issue(
+        client,
+        project_id,
+        {
             "description": "项目看板问题",
             "impact": "验证问题风险摘要",
             "owner_name": "成员10",
@@ -226,8 +245,8 @@ def test_project_dashboard_exposes_server_classified_tasks_and_issue_summary(
             "severity": "high",
             "due_date": "2026-08-20",
         },
+        "dashboard-issue",
     )
-    assert issue.status_code == 201
 
     response = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM_HEADERS)
 
@@ -540,10 +559,10 @@ def test_issue_updates_require_current_revision_and_create_audit(
 ) -> None:
     client, _ = workflow
     project_id, _ = _published_project(client)
-    created = client.post(
-        f"/api/v1/projects/{project_id}/issues",
-        headers=_headers("issue-create"),
-        json={
+    created = _create_approved_issue(
+        client,
+        project_id,
+        {
             "description": "摄像头调试存在低照噪点",
             "impact": "影响DVT验收",
             "owner_name": "成员10",
@@ -551,16 +570,16 @@ def test_issue_updates_require_current_revision_and_create_audit(
             "severity": "high",
             "due_date": "2026-08-20",
         },
+        "issue-create",
     )
-    assert created.status_code == 201, created.json()
 
     updated = client.patch(
-        f"/api/v1/issues/{created.json()['id']}",
+        f"/api/v1/issues/{created['id']}",
         headers=_headers("issue-update"),
         json={"expected_revision": 1, "status": "处理中"},
     )
     stale = client.patch(
-        f"/api/v1/issues/{created.json()['id']}",
+        f"/api/v1/issues/{created['id']}",
         headers=_headers("issue-update-stale"),
         json={"expected_revision": 1, "status": "已解决"},
     )
@@ -575,7 +594,7 @@ def test_issue_updates_require_current_revision_and_create_audit(
 
     deleted = client.request(
         "DELETE",
-        f"/api/v1/issues/{created.json()['id']}",
+        f"/api/v1/issues/{created['id']}",
         headers=_headers("issue-delete"),
         json={"expected_revision": 2, "reason": "问题记录作废"},
     )
@@ -607,10 +626,10 @@ def test_issue_raci_requires_project_members_and_returns_derived_risk(
     )
     assert invalid.status_code == 409
 
-    created = client.post(
-        f"/api/v1/projects/{project_id}/issues",
-        headers=_headers("issue-raci-valid"),
-        json={
+    created = _create_approved_issue(
+        client,
+        project_id,
+        {
             "description": "RACI完整问题",
             "impact": "验证协作角色",
             "owner_name": "成员10",
@@ -620,12 +639,12 @@ def test_issue_raci_requires_project_members_and_returns_derived_risk(
             "severity": "high",
             "due_date": "2026-08-20",
         },
+        "issue-raci-valid",
     )
-    assert created.status_code == 201, created.json()
-    assert created.json()["accountable_names"] == ["成员02"]
-    assert created.json()["consulted_names"] == ["成员03", "成员04"]
-    assert created.json()["informed_names"] == ["成员05"]
-    assert created.json()["risk"] in {"todo", "upcoming", "overdue"}
+    assert created["accountable_names"] == ["成员02"]
+    assert created["consulted_names"] == ["成员03", "成员04"]
+    assert created["informed_names"] == ["成员05"]
+    assert created["risk"] in {"todo", "upcoming", "overdue"}
 
 
 def test_issue_risk_uses_inclusive_fourteen_day_boundary() -> None:
@@ -664,10 +683,10 @@ def test_issue_revision_check_uses_the_current_database_value(
 ) -> None:
     client, _ = workflow
     project_id, _ = _published_project(client)
-    created = client.post(
-        f"/api/v1/projects/{project_id}/issues",
-        headers=_headers("issue-atomic-create"),
-        json={
+    created = _create_approved_issue(
+        client,
+        project_id,
+        {
             "description": "并发更新验证",
             "impact": "验证乐观锁",
             "owner_name": "成员10",
@@ -675,8 +694,9 @@ def test_issue_revision_check_uses_the_current_database_value(
             "severity": "high",
             "due_date": "2026-08-20",
         },
+        "issue-atomic-create",
     )
-    issue_id = uuid.UUID(created.json()["id"])
+    issue_id = uuid.UUID(created["id"])
     stale_session = client.app.state.session_factory()
     try:
         stale_issue = stale_session.get(Issue, issue_id)

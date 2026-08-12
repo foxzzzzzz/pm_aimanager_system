@@ -100,6 +100,9 @@ Page({
   },
   onDescription(event: InputEvent) { this.setData({ description: event.detail.value }); },
   onImpact(event: InputEvent) { this.setData({ impact: event.detail.value }); },
+  onOwner(event: PickerEvent) {
+    this.setData({ ownerName: this.data.projectMembers[Number(event.detail.value)] });
+  },
   onDueDate(event: PickerEvent) { this.setData({ dueDate: event.detail.value }); },
   onSeverity(event: PickerEvent) { this.setData({ severityIndex: Number(event.detail.value) }); },
   onStatus(event: PickerEvent) { this.setData({ statusIndex: Number(event.detail.value) }); },
@@ -182,7 +185,7 @@ Page({
           status: this.data.statusOptions[this.data.statusIndex],
         });
       } else {
-        saved = await api.createIssue(this.data.projectId, {
+        await api.createIssue(this.data.projectId, {
           description: this.data.description,
           impact: this.data.impact,
           owner_name: this.data.ownerName,
@@ -192,13 +195,14 @@ Page({
           severity: this.data.severityOptions[this.data.severityIndex],
           due_date: this.data.dueDate,
         });
+        this.cancelEdit();
+        wx.showToast({ title: "问题新增申请已提交", icon: "success" });
+        return;
       }
-      const issues = this.data.issues.some((item) => item.id === saved.id)
-        ? this.data.issues.map((item) => item.id === saved.id ? saved : item)
-        : [saved, ...this.data.issues];
+      const issues = this.data.issues.map((item) => item.id === saved.id ? saved : item);
       this.cancelEdit();
       this.setData({ issues: presentIssues(issues) });
-      wx.showToast({ title: isEditing ? "问题已更新" : "问题已登记", icon: "success" });
+      wx.showToast({ title: "问题已更新", icon: "success" });
     } catch (error) {
       wx.showToast({ title: (error as Error).message, icon: "none" });
     } finally {

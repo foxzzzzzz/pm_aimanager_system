@@ -4,6 +4,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   listIssues: vi.fn().mockResolvedValue([]),
   listAuditLogs: vi.fn().mockResolvedValue([]),
+  listIssueCreateProposals: vi.fn().mockResolvedValue([
+    {
+      id: "issue-proposal-1",
+      project_id: "project-1",
+      payload: { description: "待审批问题", owner_name: "成员10", accountable_names: ["成员02"], due_date: "2026-08-20" },
+      status: "pending",
+      created_at: "2026-08-12T10:30:00Z",
+    },
+  ]),
+  approveIssueCreateProposal: vi.fn().mockResolvedValue({}),
+  rejectIssueCreateProposal: vi.fn().mockResolvedValue({}),
   projectReview: vi.fn().mockResolvedValue({ members: [
     { name: "成员02", role: "经理", notes: null },
     { name: "成员10", role: "执行", notes: null },
@@ -93,6 +104,18 @@ describe("IssuesAuditPage", () => {
     await waitFor(() =>
       expect(mocks.rejectChangeProposal).toHaveBeenCalledWith("proposal-1", "项目经理驳回"),
     );
+  });
+
+  it("lists and approves a pending issue creation", async () => {
+    render(
+      <IssuesAuditPage
+        project={{ id: "project-1", code: "ZPD1322", name: "Lyra Pro", status: "active", current_version_number: 1 }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("tab", { name: /问题新增审批/ }));
+    expect(await screen.findByText("待审批问题")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "批准新增" }));
+    await waitFor(() => expect(mocks.approveIssueCreateProposal).toHaveBeenCalledWith("issue-proposal-1"));
   });
 
   it("creates a member invitation from the binding tab", async () => {

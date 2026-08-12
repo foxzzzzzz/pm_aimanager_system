@@ -5,6 +5,7 @@ import type {
   EditableProjectData,
   ImportRecord,
   Issue,
+  IssueCreateProposal,
   MemberBinding,
   MemberInvitation,
   NotificationDelivery,
@@ -125,6 +126,22 @@ export const api = {
   listVersions: (projectId: string) =>
     request<ProjectVersion[]>(`/projects/${projectId}/versions`),
   listIssues: (projectId: string) => request<Issue[]>(`/projects/${projectId}/issues`),
+  listIssueCreateProposals: (projectId: string) =>
+    request<IssueCreateProposal[]>(`/projects/${projectId}/issue-create-proposals`),
+  approveIssueCreateProposal: (proposalId: string) =>
+    request<IssueCreateProposal>(`/issue-create-proposals/${proposalId}/approve`, {
+      method: "POST",
+      headers: { "X-Idempotency-Key": requestKey("issue-create-approve") },
+    }),
+  rejectIssueCreateProposal: (proposalId: string, reason: string) =>
+    request<IssueCreateProposal>(`/issue-create-proposals/${proposalId}/reject`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": requestKey("issue-create-reject"),
+      },
+      body: JSON.stringify({ reason }),
+    }),
   createIssue: (
     projectId: string,
     payload: {
@@ -138,7 +155,7 @@ export const api = {
       due_date: string;
     },
   ) =>
-    request<Issue>(`/projects/${projectId}/issues`, {
+    request<IssueCreateProposal>(`/projects/${projectId}/issues`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

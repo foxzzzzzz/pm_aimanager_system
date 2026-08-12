@@ -41,6 +41,34 @@ test("list pages avoid duplicate native navigation titles", async () => {
   assert.doesNotMatch(reviewTemplate, /class="title">项目资料/);
 });
 
+test("issue RACI checkboxes rely on checkbox-group values without unsupported WXML calls", async () => {
+  const [template, source] = await Promise.all([
+    readSource("../miniprogram/pages/issues/issues.wxml"),
+    readSource("../miniprogram/pages/issues/issues.ts"),
+  ]);
+
+  assert.match(template, /data-name="accountableNames" bindchange="updateRaciMembers"/);
+  assert.match(template, /data-name="consultedNames" bindchange="updateRaciMembers"/);
+  assert.match(template, /data-name="informedNames" bindchange="updateRaciMembers"/);
+  assert.doesNotMatch(template, /checked="\{\{[^}]*\.indexOf\(/);
+  assert.match(source, /this\.setData\(\{ \[field\]: event\.detail\.value \}\)/);
+});
+
+test("issue creation selects any project member as R and waits for approval", async () => {
+  const [template, source, apiSource] = await Promise.all([
+    readSource("../miniprogram/pages/issues/issues.wxml"),
+    readSource("../miniprogram/pages/issues/issues.ts"),
+    readSource("../miniprogram/services/api.ts"),
+  ]);
+
+  assert.match(template, /picker[^>]*range="\{\{projectMembers\}\}"[^>]*bindchange="onOwner"/);
+  assert.match(template, /R 执行负责人/);
+  assert.match(source, /ownerName:\s*this\.data\.projectMembers\[Number\(event\.detail\.value\)\]/);
+  assert.match(apiSource, /issue-create-proposals/);
+  assert.match(source, /问题新增申请已提交/);
+  assert.doesNotMatch(source, /\[saved,\s*\.\.\.this\.data\.issues\]/);
+});
+
 test("global mobile layout uses compact cards and bottom safe-area spacing", async () => {
   const styles = await readSource("../miniprogram/app.wxss");
 

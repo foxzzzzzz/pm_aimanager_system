@@ -20,6 +20,16 @@
       <button size="mini" type="warn" loading="{{resolvingProposalId === item.id}}" disabled="{{resolvingProposalId !== ''}}" data-id="{{item.id}}" bindtap="rejectProposal">驳回</button>
     </view>
   </view>
+  <view wx:for="{{issueCreateProposals}}" wx:key="id" class="card milestone">
+    <text class="tag approval-tag">待审批新增问题</text>
+    <text class="name">{{item.payload.description}}</text>
+    <text class="muted">R {{item.payload.owner_name}} · A {{item.payload.accountable_names.join('、')}}</text>
+    <text class="muted proposal-time">提交时间：{{item.createdAtLabel}}</text>
+    <view class="proposal-actions">
+      <button size="mini" type="primary" data-id="{{item.id}}" data-action="approve" bindtap="resolveIssueCreateProposal">批准新增</button>
+      <button size="mini" type="warn" data-id="{{item.id}}" data-action="reject" bindtap="resolveIssueCreateProposal">驳回</button>
+    </view>
+  </view>
   <view class="milestone-filters">
     <button
       wx:for="{{primaryMilestoneFilters}}"

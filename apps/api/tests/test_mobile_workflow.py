@@ -796,8 +796,8 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
         json={"invitation_token": invitation["invitation_token"], "phone": "13800000010"},
     )
 
-    issue = client.post(
-        f"/api/v1/mobile/projects/{project_id}/issues",
+    proposal = client.post(
+        f"/api/v1/mobile/projects/{project_id}/issue-create-proposals",
         headers={**member_headers, "X-Idempotency-Key": "mobile-issue"},
         json={
             "description": "软件封板存在阻塞",
@@ -808,9 +808,18 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
             "due_date": "2026-08-20",
         },
     )
-    assert issue.status_code == 201
-    forged_owner = client.post(
-        f"/api/v1/mobile/projects/{project_id}/issues",
+    assert proposal.status_code == 201
+    approved = client.post(
+        f"/api/v1/issue-create-proposals/{proposal.json()['id']}/approve",
+        headers=_admin_headers("mobile-issue-approve"),
+    )
+    assert approved.status_code == 200
+    issue_id = approved.json()["issue_id"]
+    client.get(
+        f"/api/v1/mobile/projects/{project_id}/issues", headers=member_headers
+    ).json()[0]
+    assigned_owner = client.post(
+        f"/api/v1/mobile/projects/{project_id}/issue-create-proposals",
         headers={**member_headers, "X-Idempotency-Key": "mobile-forged-owner"},
         json={
             "description": "伪造责任人",
@@ -821,16 +830,17 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
             "due_date": "2026-08-21",
         },
     )
-    assert forged_owner.status_code == 403
+    assert assigned_owner.status_code == 201
+    assert assigned_owner.json()["payload"]["owner_name"] == "成员11"
     updated = client.patch(
-        f"/api/v1/mobile/issues/{issue.json()['id']}",
+        f"/api/v1/mobile/issues/{issue_id}",
         headers={**member_headers, "X-Idempotency-Key": "mobile-issue-update"},
         json={"expected_revision": 1, "status": "处理中"},
     )
     assert updated.status_code == 200
     assert updated.json()["revision"] == 2
     forbidden_raci_update = client.patch(
-        f"/api/v1/mobile/issues/{issue.json()['id']}",
+        f"/api/v1/mobile/issues/{issue_id}",
         headers={**member_headers, "X-Idempotency-Key": "mobile-issue-raci-update"},
         json={"expected_revision": 2, "accountable_names": ["成员03"]},
     )
@@ -844,14 +854,14 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
     )
     forbidden_delete = client.request(
         "DELETE",
-        f"/api/v1/mobile/issues/{issue.json()['id']}",
+        f"/api/v1/mobile/issues/{issue_id}",
         headers={**other_headers, "X-Idempotency-Key": "mobile-issue-delete-forbidden"},
         json={"expected_revision": 2, "reason": "越权作废"},
     )
     assert forbidden_delete.status_code == 403
     deleted = client.request(
         "DELETE",
-        f"/api/v1/mobile/issues/{issue.json()['id']}",
+        f"/api/v1/mobile/issues/{issue_id}",
         headers={**member_headers, "X-Idempotency-Key": "mobile-issue-delete"},
         json={"expected_revision": 2, "reason": "问题已作废"},
     )
@@ -880,6 +890,132 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
     )
     assert marked.status_code == 200
     assert marked.json()["is_read"] is True
+
+
+def test_mobile_issue_create_requires_manager_approval_and_allows_any_member_r(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    submitter_invitation = _invite(client, project_id, "成员10", "invite-issue-submitter")
+    submitter_headers, _ = _login(client, "dev:issue-submitter")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=submitter_headers,
+        json={"invitation_token": submitter_invitation["invitation_token"], "phone": "13800000010"},
+    )
+    manager_invitation = _invite(client, project_id, "成员01", "invite-issue-manager")
+    manager_headers, _ = _login(client, "dev:issue-manager")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=manager_headers,
+        json={"invitation_token": manager_invitation["invitation_token"], "phone": "13800000001"},
+    )
+
+    invalid_owner = client.post(
+        f"/api/v1/mobile/projects/{project_id}/issue-create-proposals",
+        headers={**submitter_headers, "X-Idempotency-Key": "invalid-issue-owner"},
+        json={
+            "description": "责任人不在团队",
+            "impact": "无法落实责任",
+            "owner_name": "外部人员",
+            "accountable_names": ["成员02"],
+            "severity": "high",
+            "due_date": "2026-08-20",
+        },
+    )
+    assert invalid_owner.status_code == 409
+
+    proposed = client.post(
+        f"/api/v1/mobile/projects/{project_id}/issue-create-proposals",
+        headers={**submitter_headers, "X-Idempotency-Key": "issue-create-proposal"},
+        json={
+            "description": "张三反馈、李四负责的问题",
+            "impact": "影响试产",
+            "owner_name": "成员11",
+            "accountable_names": ["成员02"],
+            "consulted_names": ["成员03"],
+            "informed_names": ["成员04"],
+            "severity": "high",
+            "due_date": "2026-08-20",
+        },
+    )
+    assert proposed.status_code == 201, proposed.json()
+    assert proposed.json()["status"] == "pending"
+    assert proposed.json()["payload"]["owner_name"] == "成员11"
+    assert client.get(
+        f"/api/v1/mobile/projects/{project_id}/issues", headers=submitter_headers
+    ).json() == []
+    assert client.get(
+        f"/api/v1/mobile/projects/{project_id}/issue-create-proposals",
+        headers=submitter_headers,
+    ).status_code == 403
+    assert client.post(
+        f"/api/v1/mobile/issue-create-proposals/{proposed.json()['id']}/approve",
+        headers={**submitter_headers, "X-Idempotency-Key": "forbidden-approve-issue-create"},
+    ).status_code == 403
+    dashboard = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM)
+    assert dashboard.json()["counts"]["issues_open"] == 0
+
+    manager_queue = client.get(
+        f"/api/v1/mobile/projects/{project_id}/issue-create-proposals",
+        headers=manager_headers,
+    )
+    assert [item["id"] for item in manager_queue.json()] == [proposed.json()["id"]]
+    approved = client.post(
+        f"/api/v1/mobile/issue-create-proposals/{proposed.json()['id']}/approve",
+        headers={**manager_headers, "X-Idempotency-Key": "approve-issue-create"},
+    )
+    assert approved.status_code == 200, approved.json()
+    assert approved.json()["status"] == "approved"
+    assert approved.json()["issue_id"]
+    assert client.get(
+        f"/api/v1/mobile/projects/{project_id}/issue-create-proposals",
+        headers=manager_headers,
+    ).json() == []
+    issues = client.get(
+        f"/api/v1/mobile/projects/{project_id}/issues", headers=submitter_headers
+    ).json()
+    assert len(issues) == 1
+    assert issues[0]["owner_name"] == "成员11"
+    audit = client.get(f"/api/v1/projects/{project_id}/audit-logs", headers=PM).json()
+    assert "issue_create_proposal.created" in [item["action"] for item in audit]
+    assert "issue_create_proposal.approved" in [item["action"] for item in audit]
+
+
+def test_project_manager_can_reject_issue_create_proposal(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    submitter_invitation = _invite(client, project_id, "成员10", "invite-issue-reject-submitter")
+    submitter_headers, _ = _login(client, "dev:issue-reject-submitter")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=submitter_headers,
+        json={"invitation_token": submitter_invitation["invitation_token"], "phone": "13800000010"},
+    )
+    proposed = client.post(
+        f"/api/v1/mobile/projects/{project_id}/issue-create-proposals",
+        headers={**submitter_headers, "X-Idempotency-Key": "issue-create-reject-proposal"},
+        json={
+            "description": "不满足重点问题标准",
+            "impact": "影响较小",
+            "owner_name": "成员11",
+            "accountable_names": ["成员02"],
+            "severity": "low",
+            "due_date": "2026-08-20",
+        },
+    )
+    rejected = client.post(
+        f"/api/v1/issue-create-proposals/{proposed.json()['id']}/reject",
+        headers=_admin_headers("reject-issue-create"),
+        json={"reason": "不满足重点问题标准"},
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+    assert rejected.json()["issue_id"] is None
+    assert client.get(f"/api/v1/projects/{project_id}/issues", headers=PM).json() == []
 
 
 def test_publishing_team_change_revokes_removed_member_access(

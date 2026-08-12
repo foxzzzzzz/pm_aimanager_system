@@ -439,6 +439,89 @@ def create_mobile_issue(
     )
 
 
+@router.post("/mobile/projects/{project_id}/issue-create-proposals", status_code=201)
+def create_mobile_issue_create_proposal(
+    project_id: uuid.UUID,
+    payload: IssueCreate,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    actor_id = f"mobile:{user.id}"
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        201,
+        _request_hash(payload),
+        lambda: MobileService(session, request.app.state.settings, user).create_issue(
+            project_id, payload
+        ),
+    )
+
+
+@router.get("/mobile/projects/{project_id}/issue-create-proposals")
+def list_mobile_issue_create_proposals(
+    project_id: uuid.UUID,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+) -> list[dict[str, Any]]:
+    return MobileService(
+        session, request.app.state.settings, user
+    ).list_issue_create_proposals(project_id)
+
+
+@router.post("/mobile/issue-create-proposals/{proposal_id}/approve")
+def approve_mobile_issue_create_proposal(
+    proposal_id: uuid.UUID,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    actor_id = f"mobile:{user.id}"
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        _request_hash({}),
+        lambda: MobileService(
+            session, request.app.state.settings, user
+        ).approve_issue_create_proposal(proposal_id),
+    )
+
+
+@router.post("/mobile/issue-create-proposals/{proposal_id}/reject")
+def reject_mobile_issue_create_proposal(
+    proposal_id: uuid.UUID,
+    payload: RejectRequest,
+    request: Request,
+    session: SessionDependency,
+    user: MobileUserDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    actor_id = f"mobile:{user.id}"
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        _request_hash(payload),
+        lambda: MobileService(
+            session, request.app.state.settings, user
+        ).reject_issue_create_proposal(proposal_id, payload.reason),
+    )
+
+
 @router.get("/mobile/projects/{project_id}/issues")
 def list_mobile_issues(
     project_id: uuid.UUID,
@@ -909,7 +992,59 @@ def create_issue(
             actor_id,
             current_business_date(request.app.state.settings),
             request.app.state.settings.mobile_upcoming_days,
-        ).create_issue(project_id, payload),
+        ).create_issue_proposal(project_id, payload),
+    )
+
+
+@router.get("/projects/{project_id}/issue-create-proposals")
+def list_issue_create_proposals(
+    project_id: uuid.UUID,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+) -> list[dict[str, Any]]:
+    return ProjectService(session, actor_id).list_issue_create_proposals(project_id)
+
+
+@router.post("/issue-create-proposals/{proposal_id}/approve")
+def approve_issue_create_proposal(
+    proposal_id: uuid.UUID,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        _request_hash({}),
+        lambda: ProjectService(session, actor_id).approve_issue_create_proposal(proposal_id),
+    )
+
+
+@router.post("/issue-create-proposals/{proposal_id}/reject")
+def reject_issue_create_proposal(
+    proposal_id: uuid.UUID,
+    payload: RejectRequest,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        _request_hash(payload),
+        lambda: ProjectService(session, actor_id).reject_issue_create_proposal(
+            proposal_id, payload.reason
+        ),
     )
 
 
