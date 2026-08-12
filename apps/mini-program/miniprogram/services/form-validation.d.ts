@@ -11,6 +11,7 @@ export interface IssueCreateInput {
   description: string;
   impact: string;
   ownerName: string;
+  accountableNames: string[];
   dueDate: string;
 }
 

@@ -29,8 +29,20 @@
         <textarea class="field" value="{{impact}}" placeholder="请说明对进度、质量或交付的影响" bindinput="onImpact" />
       </view>
       <view class="field-block">
-        <text class="field-label">责任人</text>
+        <text class="field-label">R 执行负责人</text>
         <view class="readonly-field">{{ownerName}}</view>
+      </view>
+      <view wx:if="{{!editingIssueId}}" class="field-block">
+        <text class="field-label">A 最终负责人 <text class="required">*</text></text>
+        <checkbox-group class="member-options" data-name="accountableNames" bindchange="updateRaciMembers"><label wx:for="{{projectMembers}}" wx:key="*this" wx:for-item="member" class="member-option"><checkbox value="{{member}}" checked="{{accountableNames.indexOf(member) >= 0}}" color="#146c5a" />{{member}}</label></checkbox-group>
+      </view>
+      <view wx:if="{{!editingIssueId}}" class="field-block">
+        <text class="field-label">C 协作/咨询</text>
+        <checkbox-group class="member-options" data-name="consultedNames" bindchange="updateRaciMembers"><label wx:for="{{projectMembers}}" wx:key="*this" wx:for-item="member" class="member-option"><checkbox value="{{member}}" checked="{{consultedNames.indexOf(member) >= 0}}" color="#146c5a" />{{member}}</label></checkbox-group>
+      </view>
+      <view wx:if="{{!editingIssueId}}" class="field-block">
+        <text class="field-label">I 知情</text>
+        <checkbox-group class="member-options" data-name="informedNames" bindchange="updateRaciMembers"><label wx:for="{{projectMembers}}" wx:key="*this" wx:for-item="member" class="member-option"><checkbox value="{{member}}" checked="{{informedNames.indexOf(member) >= 0}}" color="#146c5a" />{{member}}</label></checkbox-group>
       </view>
       <view class="field-block">
         <text class="field-label">严重程度 <text class="required">*</text></text>
@@ -57,10 +69,11 @@
     </view>
     <view wx:if="{{!loading && !loadError && issues.length === 0}}" class="card empty-state">当前项目暂无重难点问题</view>
     <view wx:if="{{!loading && !loadError}}" wx:for="{{issues}}" wx:key="id" class="card issue-card">
-      <text class="tag">{{item.status}}</text>
+      <view class="issue-tags"><text class="tag">{{item.status}}</text><text class="risk-tag {{item.risk}}">{{item.riskLabel}}</text></view>
       <text class="issue-title">{{item.description}}</text>
       <text class="muted">影响：{{item.impact}}</text>
-      <text class="muted">{{item.owner_name}} · {{item.severityLabel}} · {{item.dueDateLabel}}</text>
+      <text class="muted">{{item.severityLabel}} · {{item.dueDateLabel}}</text>
+      <view class="issue-raci"><text>R {{item.owner_name}}</text><text>A {{item.accountable_names.join('、')}}</text><text wx:if="{{item.consulted_names.length}}">C {{item.consulted_names.join('、')}}</text><text wx:if="{{item.informed_names.length}}">I {{item.informed_names.join('、')}}</text></view>
       <view wx:if="{{item.owner_name === currentMemberName && item.status !== '已关闭'}}" class="issue-actions">
         <button class="issue-action edit-action" disabled="{{actionIssueId !== ''}}" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="editIssue">编辑</button>
         <button wx:if="{{item.status === '待处理'}}" class="issue-action progress-action" loading="{{actionIssueId === item.id}}" disabled="{{actionIssueId !== ''}}" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="startIssue">开始处理</button>

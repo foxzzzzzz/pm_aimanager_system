@@ -62,6 +62,7 @@ test("issue creation validates every required field", () => {
       description: "",
       impact: "影响试产",
       ownerName: "测试成员",
+      accountableNames: [],
       dueDate: "2026-08-20",
     }),
     "请填写问题描述",
@@ -71,8 +72,19 @@ test("issue creation validates every required field", () => {
       description: "驱动异常",
       impact: "影响试产",
       ownerName: "测试成员",
+      accountableNames: ["审批成员"],
       dueDate: "2026-08-20",
     }),
     null,
+  );
+  assert.equal(
+    validateIssueCreate({
+      description: "驱动异常",
+      impact: "影响试产",
+      ownerName: "测试成员",
+      accountableNames: [],
+      dueDate: "2026-08-20",
+    }),
+    "请选择A最终负责人",
   );
 });

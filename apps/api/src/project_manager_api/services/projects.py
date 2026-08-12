@@ -4,7 +4,7 @@ import copy
 import hashlib
 import json
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import delete, func, select, update
@@ -53,9 +53,17 @@ from project_manager_api.services.errors import (
 
 
 class ProjectService:
-    def __init__(self, session: Session, actor_id: str) -> None:
+    def __init__(
+        self,
+        session: Session,
+        actor_id: str,
+        business_date: date | None = None,
+        upcoming_days: int = 14,
+    ) -> None:
         self.session = session
         self.actor_id = actor_id
+        self.business_date = business_date or date.today()
+        self.upcoming_days = upcoming_days
 
     def create_project(self, code: str, name: str) -> dict[str, Any]:
         existing = self.session.scalar(select(Project).where(Project.code == code))
@@ -566,11 +574,15 @@ class ProjectService:
 
     def create_issue(self, project_id: uuid.UUID, payload: IssueCreate) -> dict[str, Any]:
         project = self._require_project(project_id)
+        self._validate_issue_raci(project, payload)
         issue = Issue(
             project_id=project.id,
             description=payload.description,
             impact=payload.impact,
             owner_name=payload.owner_name,
+            accountable_names=payload.accountable_names,
+            consulted_names=payload.consulted_names,
+            informed_names=payload.informed_names,
             severity=payload.severity,
             due_date=payload.due_date,
             status=IssueStatus.OPEN,
@@ -583,9 +595,9 @@ class ProjectService:
             "issue.created",
             "issue",
             str(issue.id),
-            after=_issue_dict(issue),
+            after=self._issue_dict(issue),
         )
-        return _issue_dict(issue)
+        return self._issue_dict(issue)
 
     def update_issue(self, issue_id: uuid.UUID, payload: IssueUpdate) -> dict[str, Any]:
         issue = self.session.get(Issue, issue_id)
@@ -604,7 +616,7 @@ class ProjectService:
     def delete_issue_as_member(
         self, issue: Issue, payload: IssueDelete
     ) -> dict[str, Any]:
-        before = _issue_dict(issue)
+        before = self._issue_dict(issue)
         updated_issue = self.session.scalar(
             update(Issue)
             .where(Issue.id == issue.id, Issue.revision == payload.expected_revision)
@@ -618,7 +630,7 @@ class ProjectService:
         )
         if updated_issue is None:
             raise ConflictError("issue revision is stale")
-        after = _issue_dict(updated_issue)
+        after = self._issue_dict(updated_issue)
         self._audit(
             issue.project_id,
             "issue.deleted",
@@ -631,7 +643,9 @@ class ProjectService:
         return after
 
     def update_issue_as_member(self, issue: Issue, payload: IssueUpdate) -> dict[str, Any]:
-        before = _issue_dict(issue)
+        project = self._require_project(issue.project_id)
+        self._validate_issue_raci(project, payload, issue)
+        before = self._issue_dict(issue)
         changes = payload.model_dump(exclude={"expected_revision"}, exclude_none=True)
         updated_issue = self.session.scalar(
             update(Issue)
@@ -646,7 +660,7 @@ class ProjectService:
         )
         if updated_issue is None:
             raise ConflictError("issue revision is stale")
-        after = _issue_dict(updated_issue)
+        after = self._issue_dict(updated_issue)
         self._audit(
             issue.project_id,
             "issue.updated",
@@ -656,6 +670,46 @@ class ProjectService:
             after=after,
         )
         return after
+
+    def _validate_issue_raci(
+        self, project: Project, payload: IssueCreate | IssueUpdate, issue: Issue | None = None
+    ) -> None:
+        version = self._current_version(project)
+        member_names = {
+            item["name"] for item in (version.snapshot if version else {}).get("members", [])
+        }
+        owner_name = (
+            payload.owner_name
+            if payload.owner_name is not None
+            else issue.owner_name if issue else ""
+        )
+        accountable_names = (
+            payload.accountable_names
+            if payload.accountable_names is not None
+            else issue.accountable_names if issue else []
+        )
+        consulted_names = (
+            payload.consulted_names
+            if payload.consulted_names is not None
+            else issue.consulted_names if issue else []
+        )
+        informed_names = (
+            payload.informed_names
+            if payload.informed_names is not None
+            else issue.informed_names if issue else []
+        )
+        role_names = {
+            owner_name,
+            *accountable_names,
+            *consulted_names,
+            *informed_names,
+        }
+        if not accountable_names:
+            raise ConflictError("issue accountable member is required")
+        unknown = sorted(role_names - member_names)
+        if unknown:
+            message = f"issue RACI members are not in the current project: {', '.join(unknown)}"
+            raise ConflictError(message)
 
     def _reconcile_member_bindings(
         self, project: Project, snapshot: dict[str, Any]
@@ -693,7 +747,10 @@ class ProjectService:
         query = (
             select(Issue).where(Issue.project_id == project_id).order_by(Issue.created_at.desc())
         )
-        return [_issue_dict(issue) for issue in self.session.scalars(query)]
+        return [self._issue_dict(issue) for issue in self.session.scalars(query)]
+
+    def _issue_dict(self, issue: Issue) -> dict[str, Any]:
+        return _issue_dict(issue, self.business_date, self.upcoming_days)
 
     def list_audit_logs(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
         self._require_project(project_id)
@@ -893,13 +950,17 @@ def _change_set_dict(change_set: ProjectChangeSet) -> dict[str, Any]:
     }
 
 
-def _issue_dict(issue: Issue) -> dict[str, Any]:
+def _issue_dict(issue: Issue, business_date: date, upcoming_days: int) -> dict[str, Any]:
     return {
         "id": str(issue.id),
         "project_id": str(issue.project_id),
         "description": issue.description,
         "impact": issue.impact,
         "owner_name": issue.owner_name,
+        "accountable_names": issue.accountable_names,
+        "consulted_names": issue.consulted_names,
+        "informed_names": issue.informed_names,
+        "risk": _issue_risk(issue, business_date, upcoming_days),
         "severity": issue.severity,
         "due_date": issue.due_date.isoformat(),
         "status": issue.status,
@@ -907,6 +968,17 @@ def _issue_dict(issue: Issue) -> dict[str, Any]:
         "created_at": issue.created_at.isoformat(),
         "updated_at": issue.updated_at.isoformat(),
     }
+
+
+def _issue_risk(issue: Issue, business_date: date, upcoming_days: int) -> str:
+    today = business_date
+    if issue.status in (IssueStatus.RESOLVED, IssueStatus.CLOSED, "resolved", "closed"):
+        return "completed"
+    if issue.due_date < today:
+        return "overdue"
+    if issue.due_date <= today + timedelta(days=upcoming_days):
+        return "upcoming"
+    return "todo"
 
 
 def _audit_dict(log: AuditLog) -> dict[str, Any]:

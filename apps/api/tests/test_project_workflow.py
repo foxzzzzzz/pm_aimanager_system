@@ -13,9 +13,9 @@ from openpyxl import load_workbook
 from project_manager_api.api.app import create_app
 from project_manager_api.api.schemas import IssueUpdate
 from project_manager_api.db.base import Base
-from project_manager_api.db.models import Issue
+from project_manager_api.db.models import Issue, IssueStatus
 from project_manager_api.services.errors import ConflictError
-from project_manager_api.services.projects import ProjectService
+from project_manager_api.services.projects import ProjectService, _issue_risk
 from project_manager_api.settings import AppSettings
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -491,6 +491,7 @@ def test_issue_updates_require_current_revision_and_create_audit(
             "description": "摄像头调试存在低照噪点",
             "impact": "影响DVT验收",
             "owner_name": "成员10",
+            "accountable_names": ["成员02"],
             "severity": "high",
             "due_date": "2026-08-20",
         },
@@ -529,6 +530,63 @@ def test_issue_updates_require_current_revision_and_create_audit(
     assert "issue.deleted" in [item["action"] for item in audit.json()]
 
 
+def test_issue_raci_requires_project_members_and_returns_derived_risk(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    invalid = client.post(
+        f"/api/v1/projects/{project_id}/issues",
+        headers=_headers("issue-raci-invalid"),
+        json={
+            "description": "RACI成员校验",
+            "impact": "避免错误通知",
+            "owner_name": "成员10",
+            "accountable_names": ["不存在成员"],
+            "consulted_names": ["成员03"],
+            "informed_names": [],
+            "severity": "high",
+            "due_date": "2026-08-20",
+        },
+    )
+    assert invalid.status_code == 409
+
+    created = client.post(
+        f"/api/v1/projects/{project_id}/issues",
+        headers=_headers("issue-raci-valid"),
+        json={
+            "description": "RACI完整问题",
+            "impact": "验证协作角色",
+            "owner_name": "成员10",
+            "accountable_names": ["成员02"],
+            "consulted_names": ["成员03", "成员04"],
+            "informed_names": ["成员05"],
+            "severity": "high",
+            "due_date": "2026-08-20",
+        },
+    )
+    assert created.status_code == 201, created.json()
+    assert created.json()["accountable_names"] == ["成员02"]
+    assert created.json()["consulted_names"] == ["成员03", "成员04"]
+    assert created.json()["informed_names"] == ["成员05"]
+    assert created.json()["risk"] in {"todo", "upcoming", "overdue"}
+
+
+def test_issue_risk_uses_inclusive_fourteen_day_boundary() -> None:
+    business_date = date(2026, 8, 12)
+    issue = Issue(due_date=business_date, status=IssueStatus.OPEN)
+
+    assert _issue_risk(issue, business_date, 14) == "upcoming"
+    issue.due_date = date(2026, 8, 26)
+    assert _issue_risk(issue, business_date, 14) == "upcoming"
+    issue.due_date = date(2026, 8, 27)
+    assert _issue_risk(issue, business_date, 14) == "todo"
+    issue.due_date = date(2026, 8, 11)
+    assert _issue_risk(issue, business_date, 14) == "overdue"
+    issue.status = IssueStatus.RESOLVED
+    assert _issue_risk(issue, business_date, 14) == "completed"
+
+
 def test_issue_revision_check_uses_the_current_database_value(
     workflow: tuple[TestClient, Path],
 ) -> None:
@@ -541,6 +599,7 @@ def test_issue_revision_check_uses_the_current_database_value(
             "description": "并发更新验证",
             "impact": "验证乐观锁",
             "owner_name": "成员10",
+            "accountable_names": ["成员02"],
             "severity": "high",
             "due_date": "2026-08-20",
         },

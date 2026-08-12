@@ -5,17 +5,22 @@ import type { Issue } from "../../types";
 
 interface InputEvent { detail: { value: string } }
 interface PickerEvent { detail: { value: string } }
+interface MultiSelectEvent { detail: { value: string[] }; currentTarget: { dataset: { name: string } } }
 interface IssueTapEvent { currentTarget: { dataset: { id: string; revision: number } } }
 
 interface IssueView extends Issue {
   severityLabel: string;
   dueDateLabel: string;
+  riskLabel: string;
 }
+
+const riskLabels = { todo: "待办", upcoming: "近期", overdue: "逾期", completed: "已完成" };
 
 const presentIssues = (issues: Issue[]): IssueView[] => issues.map((issue) => ({
   ...issue,
   severityLabel: labelSeverity(issue.severity),
   dueDateLabel: formatDate(issue.due_date),
+  riskLabel: riskLabels[issue.risk],
 }));
 
 Page({
@@ -28,6 +33,10 @@ Page({
     description: "",
     impact: "",
     ownerName: "",
+    projectMembers: [] as string[],
+    accountableNames: [] as string[],
+    consultedNames: [] as string[],
+    informedNames: [] as string[],
     dueDate: "",
     severityOptions: ["low", "medium", "high", "critical"],
     severityLabels: ["低", "中", "高", "重大"],
@@ -74,8 +83,13 @@ Page({
     if (!this.data.projectId) return;
     this.setData({ loading: true, loadError: false });
     try {
+      const [issues, review] = await Promise.all([
+        api.issues(this.data.projectId),
+        api.projectReview(this.data.projectId),
+      ]);
       this.setData({
-        issues: presentIssues(await api.issues(this.data.projectId)),
+        issues: presentIssues(issues),
+        projectMembers: review.members.map((member) => member.name),
         loadError: false,
       });
     } catch {
@@ -89,6 +103,10 @@ Page({
   onDueDate(event: PickerEvent) { this.setData({ dueDate: event.detail.value }); },
   onSeverity(event: PickerEvent) { this.setData({ severityIndex: Number(event.detail.value) }); },
   onStatus(event: PickerEvent) { this.setData({ statusIndex: Number(event.detail.value) }); },
+  updateRaciMembers(event: MultiSelectEvent) {
+    const field = event.currentTarget.dataset.name as "accountableNames" | "consultedNames" | "informedNames";
+    this.setData({ [field]: event.detail.value });
+  },
   selectProject() { wx.switchTab({ url: "/pages/projects/projects" }); },
   openCreateForm() {
     this.setData({
@@ -98,6 +116,7 @@ Page({
       description: "",
       impact: "",
       ownerName: this.data.currentMemberName,
+      accountableNames: [], consultedNames: [], informedNames: [],
       dueDate: "",
       severityIndex: 2,
       statusIndex: 0,
@@ -114,6 +133,9 @@ Page({
       description: issue.description,
       impact: issue.impact,
       ownerName: issue.owner_name,
+      accountableNames: issue.accountable_names,
+      consultedNames: issue.consulted_names,
+      informedNames: issue.informed_names,
       dueDate: issue.due_date,
       severityIndex: Math.max(0, this.data.severityOptions.indexOf(issue.severity)),
       statusIndex: Math.max(0, this.data.statusOptions.indexOf(issue.status)),
@@ -128,6 +150,7 @@ Page({
       description: "",
       impact: "",
       ownerName: this.data.currentMemberName,
+      accountableNames: [], consultedNames: [], informedNames: [],
       dueDate: "",
       severityIndex: 2,
       statusIndex: 0,
@@ -163,6 +186,9 @@ Page({
           description: this.data.description,
           impact: this.data.impact,
           owner_name: this.data.ownerName,
+          accountable_names: this.data.accountableNames,
+          consulted_names: this.data.consultedNames,
+          informed_names: this.data.informedNames,
           severity: this.data.severityOptions[this.data.severityIndex],
           due_date: this.data.dueDate,
         });

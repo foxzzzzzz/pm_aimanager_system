@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ProjectCreate(BaseModel):
@@ -57,8 +57,19 @@ class IssueCreate(BaseModel):
     description: str = Field(min_length=1, max_length=5000)
     impact: str = Field(min_length=1, max_length=5000)
     owner_name: str = Field(min_length=1, max_length=255)
+    accountable_names: list[str] = Field(min_length=1)
+    consulted_names: list[str] = Field(default_factory=list)
+    informed_names: list[str] = Field(default_factory=list)
     severity: str = Field(pattern="^(low|medium|high|critical)$")
     due_date: date
+
+    @field_validator("accountable_names", "consulted_names", "informed_names")
+    @classmethod
+    def normalize_role_names(cls, values: list[str]) -> list[str]:
+        normalized = list(dict.fromkeys(name.strip() for name in values if name.strip()))
+        if values and not normalized:
+            raise ValueError("issue RACI member names cannot be blank")
+        return normalized
 
 
 class IssueUpdate(BaseModel):
@@ -66,12 +77,25 @@ class IssueUpdate(BaseModel):
     description: str | None = Field(default=None, min_length=1, max_length=5000)
     impact: str | None = Field(default=None, min_length=1, max_length=5000)
     owner_name: str | None = Field(default=None, min_length=1, max_length=255)
+    accountable_names: list[str] | None = Field(default=None, min_length=1)
+    consulted_names: list[str] | None = None
+    informed_names: list[str] | None = None
     severity: str | None = Field(default=None, pattern="^(low|medium|high|critical)$")
     due_date: date | None = None
     status: str | None = Field(
         default=None,
         pattern="^(待处理|处理中|待验证|已解决|已关闭)$",
     )
+
+    @field_validator("accountable_names", "consulted_names", "informed_names")
+    @classmethod
+    def normalize_role_names(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
+        normalized = list(dict.fromkeys(name.strip() for name in values if name.strip()))
+        if values and not normalized:
+            raise ValueError("issue RACI member names cannot be blank")
+        return normalized
 
 
 class IssueDelete(BaseModel):

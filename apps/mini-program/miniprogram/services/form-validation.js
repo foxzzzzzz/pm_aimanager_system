@@ -17,10 +17,11 @@ export function validateMilestoneUpdate({
   return null;
 }
 
-export function validateIssueCreate({ description, impact, ownerName, dueDate }) {
+export function validateIssueCreate({ description, impact, ownerName, accountableNames, dueDate }) {
   if (!description.trim()) return "请填写问题描述";
   if (!impact.trim()) return "请填写项目影响";
   if (!ownerName.trim()) return "请填写责任人姓名";
+  if (!accountableNames.length) return "请选择A最终负责人";
   if (!dueDate) return "请选择预计完成日期";
   return null;
 }

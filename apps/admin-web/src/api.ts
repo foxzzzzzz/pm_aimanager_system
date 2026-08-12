@@ -131,6 +131,9 @@ export const api = {
       description: string;
       impact: string;
       owner_name: string;
+      accountable_names: string[];
+      consulted_names: string[];
+      informed_names: string[];
       severity: string;
       due_date: string;
     },
@@ -150,6 +153,9 @@ export const api = {
       description?: string;
       impact?: string;
       owner_name?: string;
+      accountable_names?: string[];
+      consulted_names?: string[];
+      informed_names?: string[];
       severity?: string;
       due_date?: string;
       status?: string;

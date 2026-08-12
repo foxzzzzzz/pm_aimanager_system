@@ -238,7 +238,9 @@ class NotificationService:
                     object_id=str(issue.id),
                     title=f"{project.name}: issue reminder",
                     body=f"{issue.description} (due {issue.due_date.isoformat()})",
-                    recipient_names=(issue.owner_name,),
+                    recipient_names=tuple(dict.fromkeys(
+                        [issue.owner_name] + (issue.accountable_names if delta <= 0 else [])
+                    )),
                     critical=issue.severity == "critical" or delta <= 0,
                 )
             )

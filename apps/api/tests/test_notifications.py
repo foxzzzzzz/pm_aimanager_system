@@ -322,6 +322,7 @@ def test_resolved_issue_and_completed_milestone_do_not_generate_reminders(
             description="resolved",
             impact="none",
             owner_name="Rita",
+            accountable_names=["Alan"],
             severity="critical",
             due_date=date(2026, 8, 7),
             status="resolved",
@@ -335,6 +336,41 @@ def test_resolved_issue_and_completed_milestone_do_not_generate_reminders(
     ).scan_daily(date(2026, 8, 7))
 
     assert result.created == 1  # only M01 due-soon; M02 and the issue are closed
+
+
+def test_issue_due_today_notifies_responsible_and_accountable_without_ci(
+    notification_context,
+) -> None:
+    session, settings, users = notification_context
+    project = session.scalar(select(Project))
+    assert project is not None
+    session.add(
+        Issue(
+            project_id=project.id,
+            description="issue due today",
+            impact="delivery",
+            owner_name="Rita",
+            accountable_names=["Alan"],
+            consulted_names=["Other"],
+            informed_names=["Other"],
+            severity="high",
+            due_date=date(2026, 8, 10),
+            status="待处理",
+            created_by_actor_id="pm-001",
+        )
+    )
+    session.commit()
+
+    NotificationService(session, settings, wechat=FakeWechat(), sms=FakeSms()).scan_daily(
+        date(2026, 8, 10)
+    )
+
+    recipients = set(
+        session.scalars(
+            select(InAppMessage.user_id).where(InAppMessage.type == "issue_due_today")
+        )
+    )
+    assert recipients == {users["Rita"].id, users["Alan"].id}
 
 
 def test_weekly_summary_reaches_all_bound_project_members(notification_context) -> None:

@@ -4,6 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   listIssues: vi.fn().mockResolvedValue([]),
   listAuditLogs: vi.fn().mockResolvedValue([]),
+  projectReview: vi.fn().mockResolvedValue({ members: [
+    { name: "成员02", role: "经理", notes: null },
+    { name: "成员10", role: "执行", notes: null },
+  ] }),
   listMemberBindings: vi.fn().mockResolvedValue([
     {
       id: "binding-1",
@@ -124,6 +128,10 @@ describe("IssuesAuditPage", () => {
         description: "原问题",
         impact: "原影响",
         owner_name: "成员10",
+        accountable_names: ["成员02"],
+        consulted_names: [],
+        informed_names: [],
+        risk: "upcoming",
         severity: "high",
         due_date: "2026-08-20",
         status: "待处理",
@@ -137,6 +145,7 @@ describe("IssuesAuditPage", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: /编\s*辑/ }));
+    expect(screen.getByLabelText("A 最终负责人")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("问题描述"), { target: { value: "修正后问题" } });
     fireEvent.click(screen.getByRole("button", { name: /保\s*存/ }));
     await waitFor(() => expect(mocks.updateIssue).toHaveBeenCalledWith(

@@ -40,3 +40,18 @@ test("issue cards use a consistent compact action group", async () => {
   assert.match(template, /class="issue-action progress-action"/);
   assert.match(template, /class="issue-action danger-action"/);
 });
+
+test("issue form and cards expose complete RACI and risk state", async () => {
+  const [source, template] = await Promise.all([
+    readSource("../miniprogram/pages/issues/issues.ts"),
+    readSource("../miniprogram/pages/issues/issues.wxml"),
+  ]);
+
+  assert.match(source, /accountableNames/);
+  assert.match(source, /consultedNames/);
+  assert.match(source, /informedNames/);
+  assert.match(template, /A 最终负责人/);
+  assert.match(template, /C 协作\/咨询/);
+  assert.match(template, /I 知情/);
+  assert.match(template, /item\.riskLabel/);
+});

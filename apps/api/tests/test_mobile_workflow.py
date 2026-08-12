@@ -576,6 +576,7 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
             "description": "软件封板存在阻塞",
             "impact": "影响PVT",
             "owner_name": "成员10",
+            "accountable_names": ["成员02"],
             "severity": "high",
             "due_date": "2026-08-20",
         },
@@ -588,6 +589,7 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
             "description": "伪造责任人",
             "impact": "错误通知",
             "owner_name": "成员11",
+            "accountable_names": ["成员02"],
             "severity": "high",
             "due_date": "2026-08-21",
         },
@@ -600,6 +602,12 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
     )
     assert updated.status_code == 200
     assert updated.json()["revision"] == 2
+    forbidden_raci_update = client.patch(
+        f"/api/v1/mobile/issues/{issue.json()['id']}",
+        headers={**member_headers, "X-Idempotency-Key": "mobile-issue-raci-update"},
+        json={"expected_revision": 2, "accountable_names": ["成员03"]},
+    )
+    assert forbidden_raci_update.status_code == 403
     other_invitation = _invite(client, project_id, "成员11", "invite-other-issue-owner")
     other_headers, _ = _login(client, "dev:other-issue-owner")
     client.post(

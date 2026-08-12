@@ -448,7 +448,12 @@ def list_mobile_issues(
 ) -> list[dict[str, Any]]:
     service = MobileService(session, request.app.state.settings, user)
     service.dashboard(project_id)
-    return ProjectService(session, f"mobile:{user.id}").list_issues(project_id)
+    return ProjectService(
+        session,
+        f"mobile:{user.id}",
+        current_business_date(request.app.state.settings),
+        request.app.state.settings.mobile_upcoming_days,
+    ).list_issues(project_id)
 
 
 @router.patch("/mobile/issues/{issue_id}")
@@ -893,7 +898,12 @@ def create_issue(
         request.url.path,
         201,
         _request_hash(payload),
-        lambda: ProjectService(session, actor_id).create_issue(project_id, payload),
+        lambda: ProjectService(
+            session,
+            actor_id,
+            current_business_date(request.app.state.settings),
+            request.app.state.settings.mobile_upcoming_days,
+        ).create_issue(project_id, payload),
     )
 
 
@@ -914,7 +924,12 @@ def update_issue(
         request.url.path,
         200,
         _request_hash(payload),
-        lambda: ProjectService(session, actor_id).update_issue(issue_id, payload),
+        lambda: ProjectService(
+            session,
+            actor_id,
+            current_business_date(request.app.state.settings),
+            request.app.state.settings.mobile_upcoming_days,
+        ).update_issue(issue_id, payload),
     )
 
 
@@ -935,17 +950,28 @@ def delete_issue(
         request.url.path,
         200,
         _request_hash(payload),
-        lambda: ProjectService(session, actor_id).delete_issue(issue_id, payload),
+        lambda: ProjectService(
+            session,
+            actor_id,
+            current_business_date(request.app.state.settings),
+            request.app.state.settings.mobile_upcoming_days,
+        ).delete_issue(issue_id, payload),
     )
 
 
 @router.get("/projects/{project_id}/issues")
 def list_issues(
     project_id: uuid.UUID,
+    request: Request,
     session: SessionDependency,
     actor_id: ActorDependency,
 ) -> list[dict[str, Any]]:
-    return ProjectService(session, actor_id).list_issues(project_id)
+    return ProjectService(
+        session,
+        actor_id,
+        current_business_date(request.app.state.settings),
+        request.app.state.settings.mobile_upcoming_days,
+    ).list_issues(project_id)
 
 
 @router.get("/projects/{project_id}/audit-logs")

@@ -3,7 +3,7 @@ import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "../api";
-import type { AuditLog, ChangeProposal, Issue, MemberBinding, MemberInvitation, Project } from "../types";
+import type { AuditLog, ChangeProposal, Issue, MemberBinding, MemberInvitation, Project, ProjectMemberReview } from "../types";
 
 interface Props {
   project?: Project;
@@ -13,6 +13,9 @@ interface IssueForm {
   description: string;
   impact: string;
   owner_name: string;
+  accountable_names: string[];
+  consulted_names: string[];
+  informed_names: string[];
   severity: string;
   due_date: Dayjs;
   status?: string;
@@ -25,6 +28,7 @@ export default function IssuesAuditPage({ project }: Props) {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [bindings, setBindings] = useState<MemberBinding[]>([]);
   const [proposals, setProposals] = useState<ChangeProposal[]>([]);
+  const [members, setMembers] = useState<ProjectMemberReview[]>([]);
   const [open, setOpen] = useState(false);
   const [editingIssue, setEditingIssue] = useState<Issue>();
   const [deletingIssue, setDeletingIssue] = useState<Issue>();
@@ -40,17 +44,19 @@ export default function IssuesAuditPage({ project }: Props) {
     if (!project) return;
     const sequence = ++reloadSequence.current;
     try {
-      const [nextIssues, nextAudit, nextBindings, nextProposals] = await Promise.all([
+      const [nextIssues, nextAudit, nextBindings, nextProposals, review] = await Promise.all([
         api.listIssues(project.id),
         api.listAuditLogs(project.id),
         api.listMemberBindings(project.id),
         api.listChangeProposals(project.id),
+        api.projectReview(project.id),
       ]);
       if (sequence !== reloadSequence.current) return;
       setIssues(nextIssues);
       setAuditLogs(nextAudit);
       setBindings(nextBindings);
       setProposals(nextProposals);
+      setMembers(review.members);
       setError(undefined);
     } catch (reason) {
       if (sequence === reloadSequence.current) setError((reason as Error).message);
@@ -90,6 +96,9 @@ export default function IssuesAuditPage({ project }: Props) {
       description: issue.description,
       impact: issue.impact,
       owner_name: issue.owner_name,
+      accountable_names: issue.accountable_names,
+      consulted_names: issue.consulted_names,
+      informed_names: issue.informed_names,
       severity: issue.severity,
       due_date: dayjs(issue.due_date),
       status: issue.status,
@@ -155,7 +164,9 @@ export default function IssuesAuditPage({ project }: Props) {
                 columns={[
                   { title: "问题", dataIndex: "description" },
                   { title: "影响", dataIndex: "impact" },
-                  { title: "责任人", dataIndex: "owner_name" },
+                  { title: "R", dataIndex: "owner_name" },
+                  { title: "A", dataIndex: "accountable_names", render: (value: string[]) => value.join("、") },
+                  { title: "C/I", render: (_: unknown, issue: Issue) => [...issue.consulted_names, ...issue.informed_names].join("、") || "—" },
                   { title: "完成时间", dataIndex: "due_date" },
                   { title: "状态", dataIndex: "status", render: (value: string) => <Tag>{value}</Tag> },
                   {
@@ -249,7 +260,10 @@ export default function IssuesAuditPage({ project }: Props) {
           <Form.Item name="description" label="问题描述" rules={[{ required: true }]}><Input.TextArea /></Form.Item>
           <Form.Item name="impact" label="项目影响" rules={[{ required: true }]}><Input.TextArea /></Form.Item>
           <Space align="start">
-            <Form.Item name="owner_name" label="责任人" rules={[{ required: true }]}><Input /></Form.Item>
+            <Form.Item name="owner_name" label="R 执行负责人" rules={[{ required: true }]}><Select style={{ width: 160 }} options={members.map(({ name }) => ({ value: name, label: name }))} /></Form.Item>
+            <Form.Item name="accountable_names" label="A 最终负责人" rules={[{ required: true }]}><Select mode="multiple" style={{ width: 200 }} options={members.map(({ name }) => ({ value: name, label: name }))} /></Form.Item>
+            <Form.Item name="consulted_names" label="C 协作/咨询"><Select mode="multiple" style={{ width: 200 }} options={members.map(({ name }) => ({ value: name, label: name }))} /></Form.Item>
+            <Form.Item name="informed_names" label="I 知情"><Select mode="multiple" style={{ width: 200 }} options={members.map(({ name }) => ({ value: name, label: name }))} /></Form.Item>
             <Form.Item name="severity" label="严重程度" initialValue="high" rules={[{ required: true }]}>
               <Select style={{ width: 120 }} options={[
                 { value: "low", label: "低" },

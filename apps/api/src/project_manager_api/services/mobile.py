@@ -418,9 +418,7 @@ class MobileService:
         _, binding, _ = self._bound_project(project_id)
         if payload.owner_name != binding.member_name:
             raise ForbiddenError("mobile users can create only their own issues")
-        return ProjectService(self.session, _actor_id(self._user())).create_issue(
-            project_id, payload
-        )
+        return self._project_service().create_issue(project_id, payload)
 
     def list_messages(self) -> list[dict[str, Any]]:
         user = self._user()
@@ -458,9 +456,16 @@ class MobileService:
             raise ForbiddenError("only the issue owner can update this issue")
         if payload.owner_name is not None and payload.owner_name != issue.owner_name:
             raise ForbiddenError("the issue owner cannot reassign ownership")
-        return ProjectService(self.session, _actor_id(self._user())).update_issue_as_member(
-            issue, payload
-        )
+        if (
+            payload.accountable_names is not None
+            and payload.accountable_names != issue.accountable_names
+        ):
+            raise ForbiddenError("the issue owner cannot reassign accountability")
+        if payload.consulted_names is not None and payload.consulted_names != issue.consulted_names:
+            raise ForbiddenError("the issue owner cannot reassign consulted members")
+        if payload.informed_names is not None and payload.informed_names != issue.informed_names:
+            raise ForbiddenError("the issue owner cannot reassign informed members")
+        return self._project_service().update_issue_as_member(issue, payload)
 
     def delete_issue(self, issue_id: uuid.UUID, payload: IssueDelete) -> dict[str, Any]:
         issue = self.session.get(Issue, issue_id)
@@ -469,9 +474,7 @@ class MobileService:
         _, binding, _ = self._bound_project(issue.project_id)
         if binding.member_name != issue.owner_name:
             raise ForbiddenError("only the issue owner can delete this issue")
-        return ProjectService(self.session, _actor_id(self._user())).delete_issue_as_member(
-            issue, payload
-        )
+        return self._project_service().delete_issue_as_member(issue, payload)
 
     def mark_message_read(self, message_id: uuid.UUID) -> dict[str, Any]:
         message = self.session.get(InAppMessage, message_id)
@@ -488,6 +491,14 @@ class MobileService:
         return hmac.new(
             self.settings.phone_hmac_key.encode(), phone.encode(), hashlib.sha256
         ).hexdigest()
+
+    def _project_service(self) -> ProjectService:
+        return ProjectService(
+            self.session,
+            _actor_id(self._user()),
+            current_business_date(self.settings),
+            self.settings.mobile_upcoming_days,
+        )
 
     def _activate_binding(self, binding: MemberBinding, user: MobileUser) -> None:
         binding.status = BindingStatus.BOUND

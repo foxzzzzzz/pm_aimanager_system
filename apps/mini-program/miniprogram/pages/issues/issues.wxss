@@ -26,6 +26,15 @@ textarea.field { width: auto; min-height: 110rpx; }
 .required { color: #c53030; }
 .field-block .field { box-sizing: border-box; margin-top: 0; }
 .readonly-field { padding: 20rpx; border-radius: 14rpx; color: #53635f; background: #f0f5f3; }
+.member-options { display: flex; flex-wrap: wrap; gap: 10rpx; }
+.member-option { display: flex; align-items: center; gap: 4rpx; padding: 8rpx 14rpx; border: 1rpx solid #c9ddd8; border-radius: 999rpx; color: #53635f; background: #fff; font-size: 22rpx; }
+.member-option checkbox { transform: scale(.72); }
+.issue-tags { display: flex; align-items: center; gap: 10rpx; }
+.risk-tag { padding: 6rpx 14rpx; border-radius: 999rpx; color: #53635f; background: #eef3f1; font-size: 22rpx; }
+.risk-tag.upcoming { color: #b54708; background: #fff4e8; }
+.risk-tag.overdue { color: #c53030; background: #fff0f0; }
+.risk-tag.completed { color: #087a64; background: #e5f3ef; }
+.issue-raci { display: flex; flex-wrap: wrap; gap: 8rpx 16rpx; margin-top: 12rpx; color: #53635f; font-size: 22rpx; }
 .picker-field { display: flex; justify-content: space-between; color: #334943; }
 .picker-field text { color: #81918d; }
 .form-actions { display: flex; gap: 16rpx; margin-top: 26rpx; }
