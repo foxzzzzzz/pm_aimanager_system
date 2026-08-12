@@ -26,8 +26,8 @@
     <text class="muted">R {{item.payload.owner_name}} · A {{item.payload.accountable_names.join('、')}}</text>
     <text class="muted proposal-time">提交时间：{{item.createdAtLabel}}</text>
     <view class="proposal-actions">
-      <button size="mini" type="primary" data-id="{{item.id}}" data-action="approve" bindtap="resolveIssueCreateProposal">批准新增</button>
-      <button size="mini" type="warn" data-id="{{item.id}}" data-action="reject" bindtap="resolveIssueCreateProposal">驳回</button>
+      <button size="mini" type="primary" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="approve" bindtap="resolveIssueCreateProposal">批准新增</button>
+      <button size="mini" type="warn" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="reject" bindtap="resolveIssueCreateProposal">驳回</button>
     </view>
   </view>
   <view wx:for="{{issueDeleteProposals}}" wx:key="id" class="card milestone">
@@ -36,10 +36,11 @@
     <text class="muted">删除原因：{{item.reason}}</text>
     <text class="muted proposal-time">提交时间：{{item.createdAtLabel}}</text>
     <view class="proposal-actions">
-      <button size="mini" type="warn" data-id="{{item.id}}" data-action="approve" bindtap="resolveIssueDeleteProposal">批准删除</button>
-      <button size="mini" data-id="{{item.id}}" data-action="reject" bindtap="resolveIssueDeleteProposal">驳回</button>
+      <button size="mini" type="warn" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="approve" bindtap="resolveIssueDeleteProposal">批准删除</button>
+      <button size="mini" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="reject" bindtap="resolveIssueDeleteProposal">驳回</button>
     </view>
   </view>
+  <view wx:if="{{dashboard.is_project_manager && issueCreateProposals.length === 0 && issueDeleteProposals.length === 0}}" class="approval-empty">暂无待审批的问题申请</view>
   <view class="milestone-filters">
     <button
       wx:for="{{primaryMilestoneFilters}}"

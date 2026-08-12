@@ -24,6 +24,7 @@ export interface MobileDashboard {
   business_date: string;
   active_plan_name: string;
   member_name: string;
+  is_project_manager: boolean;
   milestones: Milestone[];
 }
 

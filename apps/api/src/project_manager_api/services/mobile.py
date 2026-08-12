@@ -291,6 +291,8 @@ class MobileService:
             "business_date": current_business_date(self.settings).isoformat(),
             "active_plan_name": active_name,
             "member_name": binding.member_name,
+            "is_project_manager": member_role(snapshot, binding.member_name)
+            == ProjectRole.MANAGER,
             "milestones": milestones,
         }
 

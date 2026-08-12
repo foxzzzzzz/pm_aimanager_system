@@ -25,11 +25,13 @@ from project_manager_api.db.models import (
     ChangeSetStatus,
     ImportRecord,
     ImportStatus,
+    InAppMessage,
     Issue,
     IssueCreateProposal,
     IssueDeleteProposal,
     IssueStatus,
     MemberBinding,
+    MobileUser,
     Project,
     ProjectChangeSet,
     ProjectMembership,
@@ -685,6 +687,13 @@ class ProjectService:
             before={"status": ProposalStatus.PENDING},
             after=result,
         )
+        self._notify_mobile_actor(
+            proposal.submitted_by_actor_id,
+            proposal.project_id,
+            "issue_create_approved",
+            "重点问题新增申请已批准",
+            f"问题“{proposal.payload['description']}”已进入正式问题列表。",
+        )
         return result
 
     def reject_issue_create_proposal(
@@ -713,6 +722,13 @@ class ProjectService:
             before={"status": ProposalStatus.PENDING},
             after=result,
             reason=reason,
+        )
+        self._notify_mobile_actor(
+            proposal.submitted_by_actor_id,
+            proposal.project_id,
+            "issue_create_rejected",
+            "重点问题新增申请已驳回",
+            f"问题“{proposal.payload['description']}”未通过审批：{reason}",
         )
         return result
 
@@ -801,6 +817,13 @@ class ProjectService:
             before={"status": ProposalStatus.PENDING},
             after=result,
         )
+        self._notify_mobile_actor(
+            proposal.submitted_by_actor_id,
+            proposal.project_id,
+            "issue_delete_approved",
+            "重点问题删除申请已批准",
+            f"问题“{proposal.issue.description}”已关闭。",
+        )
         return result
 
     def reject_issue_delete_proposal(
@@ -829,6 +852,13 @@ class ProjectService:
             before={"status": ProposalStatus.PENDING},
             after=result,
             reason=reason,
+        )
+        self._notify_mobile_actor(
+            proposal.submitted_by_actor_id,
+            proposal.project_id,
+            "issue_delete_rejected",
+            "重点问题删除申请已驳回",
+            f"问题“{proposal.issue.description}”继续保留：{reason}",
         )
         return result
 
@@ -1008,6 +1038,32 @@ class ProjectService:
         if manager and membership.role != ProjectRole.MANAGER:
             raise ForbiddenError("project-manager role is required")
         return project
+
+    def _notify_mobile_actor(
+        self,
+        actor_id: str,
+        project_id: uuid.UUID,
+        message_type: str,
+        title: str,
+        body: str,
+    ) -> None:
+        if not actor_id.startswith("mobile:"):
+            return
+        try:
+            user_id = uuid.UUID(actor_id.removeprefix("mobile:"))
+        except ValueError:
+            return
+        if self.session.get(MobileUser, user_id) is None:
+            return
+        self.session.add(
+            InAppMessage(
+                user_id=user_id,
+                project_id=project_id,
+                type=message_type,
+                title=title,
+                body=body,
+            )
+        )
 
     def _require_import(self, import_id: uuid.UUID) -> ImportRecord:
         record = self.session.get(ImportRecord, import_id)

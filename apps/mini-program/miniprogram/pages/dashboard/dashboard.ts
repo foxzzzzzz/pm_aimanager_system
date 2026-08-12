@@ -42,6 +42,7 @@ Page({
     loading: true,
     loadError: false,
     resolvingProposalId: "",
+    resolvingIssueProposalId: "",
   },
   onLoad(options: Record<string, string | undefined>) {
     const projectId = options.projectId || wx.getStorageSync<string>("current_project_id");
@@ -60,8 +61,12 @@ Page({
       const dashboard = await api.dashboard(this.data.projectId);
       const [proposals, issueCreateProposals, issueDeleteProposals] = await Promise.all([
         api.approvableProposals(this.data.projectId).catch(() => [] as ChangeProposal[]),
-        api.issueCreateProposals(this.data.projectId).catch(() => [] as IssueCreateProposal[]),
-        api.issueDeleteProposals(this.data.projectId).catch(() => [] as IssueDeleteProposal[]),
+        dashboard.is_project_manager
+          ? api.issueCreateProposals(this.data.projectId)
+          : Promise.resolve([] as IssueCreateProposal[]),
+        dashboard.is_project_manager
+          ? api.issueDeleteProposals(this.data.projectId)
+          : Promise.resolve([] as IssueDeleteProposal[]),
       ]);
       const today = dashboard.business_date;
       const upcomingDays = runtimeConfig.milestoneUpcomingDays;
@@ -116,6 +121,8 @@ Page({
   async resolveIssueCreateProposal(event: WechatMiniprogram.TouchEvent) {
     const id = event.currentTarget.dataset.id as string;
     const action = event.currentTarget.dataset.action as "approve" | "reject";
+    if (this.data.resolvingIssueProposalId) return;
+    this.setData({ resolvingIssueProposalId: id });
     try {
       if (action === "approve") {
         await api.approveIssueCreateProposal(id);
@@ -123,13 +130,18 @@ Page({
         await api.rejectIssueCreateProposal(id, "项目经理驳回");
       }
       await this.loadDashboard();
+      wx.showToast({ title: action === "approve" ? "审批已通过" : "申请已驳回", icon: "success" });
     } catch (error) {
       wx.showToast({ title: (error as Error).message, icon: "none" });
+    } finally {
+      this.setData({ resolvingIssueProposalId: "" });
     }
   },
   async resolveIssueDeleteProposal(event: WechatMiniprogram.TouchEvent) {
     const id = event.currentTarget.dataset.id as string;
     const action = event.currentTarget.dataset.action as "approve" | "reject";
+    if (this.data.resolvingIssueProposalId) return;
+    this.setData({ resolvingIssueProposalId: id });
     try {
       if (action === "approve") {
         await api.approveIssueDeleteProposal(id);
@@ -137,8 +149,11 @@ Page({
         await api.rejectIssueDeleteProposal(id, "项目经理驳回");
       }
       await this.loadDashboard();
+      wx.showToast({ title: action === "approve" ? "审批已通过" : "申请已驳回", icon: "success" });
     } catch (error) {
       wx.showToast({ title: (error as Error).message, icon: "none" });
+    } finally {
+      this.setData({ resolvingIssueProposalId: "" });
     }
   },
   selectMilestoneFilter(event: FilterTapEvent) {

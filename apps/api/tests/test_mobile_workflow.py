@@ -889,6 +889,8 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
     )
     assert approved_delete.status_code == 200
     assert approved_delete.json()["status"] == "approved"
+    approval_messages = client.get("/api/v1/mobile/messages", headers=member_headers).json()
+    assert any(item["type"] == "issue_delete_approved" for item in approval_messages)
 
     prefill = client.post(
         "/api/v1/mobile/natural-language/prefill",
@@ -999,6 +1001,8 @@ def test_mobile_issue_create_requires_manager_approval_and_allows_any_member_r(
     ).json()
     assert len(issues) == 1
     assert issues[0]["owner_name"] == "成员11"
+    messages = client.get("/api/v1/mobile/messages", headers=submitter_headers).json()
+    assert any(item["type"] == "issue_create_approved" for item in messages)
     audit = client.get(f"/api/v1/projects/{project_id}/audit-logs", headers=PM).json()
     assert "issue_create_proposal.created" in [item["action"] for item in audit]
     assert "issue_create_proposal.approved" in [item["action"] for item in audit]
@@ -1036,7 +1040,67 @@ def test_project_manager_can_reject_issue_create_proposal(
     assert rejected.status_code == 200
     assert rejected.json()["status"] == "rejected"
     assert rejected.json()["issue_id"] is None
+    messages = client.get("/api/v1/mobile/messages", headers=submitter_headers).json()
+    assert any(item["type"] == "issue_create_rejected" for item in messages)
     assert client.get(f"/api/v1/projects/{project_id}/issues", headers=PM).json() == []
+
+
+def test_project_manager_rejects_issue_delete_and_notifies_submitter(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    owner_invitation = _invite(client, project_id, "成员10", "invite-delete-reject-owner")
+    owner_headers, _ = _login(client, "dev:delete-reject-owner")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=owner_headers,
+        json={"invitation_token": owner_invitation["invitation_token"], "phone": "13800000010"},
+    )
+    manager_invitation = _invite(client, project_id, "成员01", "invite-delete-reject-manager")
+    manager_headers, _ = _login(client, "dev:delete-reject-manager")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=manager_headers,
+        json={"invitation_token": manager_invitation["invitation_token"], "phone": "13800000001"},
+    )
+    created = client.post(
+        f"/api/v1/mobile/projects/{project_id}/issue-create-proposals",
+        headers={**owner_headers, "X-Idempotency-Key": "delete-reject-create"},
+        json={
+            "description": "需要继续跟踪的问题",
+            "impact": "影响试产",
+            "owner_name": "成员10",
+            "accountable_names": ["成员02"],
+            "severity": "high",
+            "due_date": "2026-08-20",
+        },
+    )
+    approved = client.post(
+        f"/api/v1/mobile/issue-create-proposals/{created.json()['id']}/approve",
+        headers={**manager_headers, "X-Idempotency-Key": "delete-reject-create-approve"},
+    )
+    requested = client.request(
+        "DELETE",
+        f"/api/v1/mobile/issues/{approved.json()['issue_id']}",
+        headers={**owner_headers, "X-Idempotency-Key": "delete-reject-request"},
+        json={"expected_revision": 1, "reason": "误判为重复"},
+    )
+    rejected = client.post(
+        f"/api/v1/mobile/issue-delete-proposals/{requested.json()['id']}/reject",
+        headers={**manager_headers, "X-Idempotency-Key": "delete-reject-resolve"},
+        json={"reason": "仍需继续跟踪"},
+    )
+
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+    messages = client.get("/api/v1/mobile/messages", headers=owner_headers).json()
+    assert any(item["type"] == "issue_delete_rejected" for item in messages)
+    issue = client.get(
+        f"/api/v1/mobile/projects/{project_id}/issues", headers=owner_headers
+    ).json()[0]
+    assert issue["status"] != "已关闭"
+    assert issue["revision"] == 1
 
 
 def test_publishing_team_change_revokes_removed_member_access(

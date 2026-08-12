@@ -20,6 +20,10 @@ const messageTypeLabels = {
   issue_due_soon: "问题临期",
   issue_due_today: "问题今日到期",
   issue_overdue: "问题逾期",
+  issue_create_approved: "新增审批通过",
+  issue_create_rejected: "新增审批驳回",
+  issue_delete_approved: "删除审批通过",
+  issue_delete_rejected: "删除审批驳回",
 };
 
 export const labelPlanState = (value) => planStateLabels[value] || "未知状态";

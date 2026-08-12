@@ -57,16 +57,23 @@ test("issue form and cards expose complete RACI and risk state", async () => {
 });
 
 test("issue deletion submits an approval request and managers can resolve it", async () => {
-  const [issuesSource, dashboardSource, dashboardTemplate] = await Promise.all([
+  const [issuesSource, dashboardSource, dashboardTemplate, presentationSource] = await Promise.all([
     readSource("../miniprogram/pages/issues/issues.ts"),
     readSource("../miniprogram/pages/dashboard/dashboard.ts"),
     readSource("../miniprogram/pages/dashboard/dashboard.wxml"),
+    readSource("../miniprogram/services/presentation.js"),
   ]);
 
   assert.match(issuesSource, /删除申请已提交/);
   assert.match(dashboardSource, /issueDeleteProposals/);
   assert.match(dashboardSource, /approveIssueDeleteProposal/);
   assert.match(dashboardSource, /rejectIssueDeleteProposal/);
+  assert.match(dashboardSource, /resolvingIssueProposalId/);
+  assert.match(dashboardSource, /审批已通过/);
   assert.match(dashboardTemplate, /待审批删除问题/);
   assert.match(dashboardTemplate, /批准删除/);
+  assert.match(dashboardTemplate, /暂无待审批的问题申请/);
+  assert.match(dashboardTemplate, /dashboard\.is_project_manager/);
+  assert.match(presentationSource, /issue_create_approved:\s*"新增审批通过"/);
+  assert.match(presentationSource, /issue_delete_rejected:\s*"删除审批驳回"/);
 });

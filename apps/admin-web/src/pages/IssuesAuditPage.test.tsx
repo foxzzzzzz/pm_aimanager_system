@@ -128,6 +128,7 @@ describe("IssuesAuditPage", () => {
     expect(await screen.findByText("待审批问题")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "批准新增" }));
     await waitFor(() => expect(mocks.approveIssueCreateProposal).toHaveBeenCalledWith("issue-proposal-1"));
+    expect(await screen.findByText("问题新增申请已批准")).toBeInTheDocument();
   });
 
   it("creates a member invitation from the binding tab", async () => {
@@ -194,6 +195,7 @@ describe("IssuesAuditPage", () => {
     fireEvent.change(screen.getByLabelText("删除原因"), { target: { value: "记录作废" } });
     fireEvent.click(screen.getByRole("button", { name: "提交删除申请" }));
     await waitFor(() => expect(mocks.deleteIssue).toHaveBeenCalledWith("issue-1", 1, "记录作废"));
+    expect(await screen.findByText("问题删除申请已提交")).toBeInTheDocument();
   });
 
   it("lists and approves a pending issue deletion", async () => {
@@ -206,5 +208,6 @@ describe("IssuesAuditPage", () => {
     expect(await screen.findByText("待删除问题")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "批准删除" }));
     await waitFor(() => expect(mocks.approveIssueDeleteProposal).toHaveBeenCalledWith("delete-proposal-1"));
+    expect(await screen.findByText("问题删除申请已批准")).toBeInTheDocument();
   });
 });

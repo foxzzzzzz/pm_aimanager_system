@@ -38,6 +38,8 @@ export default function IssuesAuditPage({ project }: Props) {
   const [invitationOpen, setInvitationOpen] = useState(false);
   const [invitation, setInvitation] = useState<MemberInvitation>();
   const [error, setError] = useState<string>();
+  const [success, setSuccess] = useState<string>();
+  const [resolvingApproval, setResolvingApproval] = useState("");
   const [form] = Form.useForm<IssueForm>();
   const [invitationForm] = Form.useForm<InvitationForm>();
   const reloadSequence = useRef(0);
@@ -117,6 +119,7 @@ export default function IssuesAuditPage({ project }: Props) {
     await api.deleteIssue(deletingIssue.id, deletingIssue.revision, deleteReason.trim());
     setDeletingIssue(undefined);
     setDeleteReason("");
+    setSuccess("问题删除申请已提交");
     await reload();
   };
 
@@ -125,14 +128,34 @@ export default function IssuesAuditPage({ project }: Props) {
     await reload();
   };
 
-  const rejectIssueCreate = async (proposalId: string) => {
-    await api.rejectIssueCreateProposal(proposalId, "项目经理驳回");
-    await reload();
+  const resolveIssueCreate = async (proposalId: string, approve: boolean) => {
+    const actionKey = `create:${proposalId}`;
+    setResolvingApproval(actionKey);
+    try {
+      if (approve) await api.approveIssueCreateProposal(proposalId);
+      else await api.rejectIssueCreateProposal(proposalId, "项目经理驳回");
+      setSuccess(approve ? "问题新增申请已批准" : "问题新增申请已驳回");
+      await reload();
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setResolvingApproval("");
+    }
   };
 
-  const rejectIssueDelete = async (proposalId: string) => {
-    await api.rejectIssueDeleteProposal(proposalId, "项目经理驳回");
-    await reload();
+  const resolveIssueDelete = async (proposalId: string, approve: boolean) => {
+    const actionKey = `delete:${proposalId}`;
+    setResolvingApproval(actionKey);
+    try {
+      if (approve) await api.approveIssueDeleteProposal(proposalId);
+      else await api.rejectIssueDeleteProposal(proposalId, "项目经理驳回");
+      setSuccess(approve ? "问题删除申请已批准" : "问题删除申请已驳回");
+      await reload();
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setResolvingApproval("");
+    }
   };
 
   const resolveProposal = async (proposal: ChangeProposal, approve: boolean) => {
@@ -164,6 +187,7 @@ export default function IssuesAuditPage({ project }: Props) {
   return (
     <div className="page-stack">
       {error && <Alert type="error" message={error} showIcon closable onClose={() => setError(undefined)} />}
+      {success && <Alert type="success" message={success} showIcon closable onClose={() => setSuccess(undefined)} />}
       <div className="page-heading">
         <Typography.Title level={2}>问题与审计</Typography.Title>
         <Button type="primary" onClick={() => { setEditingIssue(undefined); form.resetFields(); setOpen(true); }}>登记问题</Button>
@@ -221,8 +245,8 @@ export default function IssuesAuditPage({ project }: Props) {
                     title: "操作",
                     render: (_: unknown, item: IssueCreateProposal) => item.status === "pending" ? (
                       <Space>
-                        <Button size="small" type="primary" onClick={async () => { await api.approveIssueCreateProposal(item.id); await reload(); }}>批准新增</Button>
-                        <Button size="small" danger onClick={() => void rejectIssueCreate(item.id)}>驳回</Button>
+                        <Button size="small" type="primary" loading={resolvingApproval === `create:${item.id}`} disabled={Boolean(resolvingApproval)} onClick={() => void resolveIssueCreate(item.id, true)}>批准新增</Button>
+                        <Button size="small" danger loading={resolvingApproval === `create:${item.id}`} disabled={Boolean(resolvingApproval)} onClick={() => void resolveIssueCreate(item.id, false)}>驳回</Button>
                       </Space>
                     ) : "—",
                   },
@@ -246,8 +270,8 @@ export default function IssuesAuditPage({ project }: Props) {
                     title: "操作",
                     render: (_: unknown, item: IssueDeleteProposal) => item.status === "pending" ? (
                       <Space>
-                        <Button size="small" type="primary" danger onClick={async () => { await api.approveIssueDeleteProposal(item.id); await reload(); }}>批准删除</Button>
-                        <Button size="small" onClick={() => void rejectIssueDelete(item.id)}>驳回</Button>
+                        <Button size="small" type="primary" danger loading={resolvingApproval === `delete:${item.id}`} disabled={Boolean(resolvingApproval)} onClick={() => void resolveIssueDelete(item.id, true)}>批准删除</Button>
+                        <Button size="small" loading={resolvingApproval === `delete:${item.id}`} disabled={Boolean(resolvingApproval)} onClick={() => void resolveIssueDelete(item.id, false)}>驳回</Button>
                       </Space>
                     ) : "—",
                   },
