@@ -22,6 +22,7 @@ class TeamConfig(BaseModel):
     sheet: str
     first_row: int
     last_row: int
+    project_manager_role: str
     columns: dict[str, str]
 
 

@@ -247,6 +247,32 @@ def test_same_person_with_conflicting_phone_numbers_is_rejected(
         registry.parse(changed)
 
 
+@pytest.mark.parametrize(
+    ("manager_roles", "expected_message"),
+    [
+        (("结构经理",), "exactly one project manager is required"),
+        (("项目经理", "项目经理"), "exactly one project manager is required"),
+    ],
+)
+def test_team_requires_exactly_one_project_manager(
+    registry: ParserRegistry,
+    phase1_tmp_path: Path,
+    manager_roles: tuple[str, ...],
+    expected_message: str,
+) -> None:
+    changed = phase1_tmp_path / "invalid-project-manager.xlsx"
+    shutil.copyfile(WORKBOOK, changed)
+    workbook = load_workbook(changed)
+    team = workbook["项目团队构成"]
+    team["B5"] = manager_roles[0]
+    if len(manager_roles) == 2:
+        team["B6"] = manager_roles[1]
+    workbook.save(changed)
+
+    with pytest.raises(WorkbookValidationError, match=expected_message):
+        registry.parse(changed)
+
+
 def test_semantic_validation_rejects_unknown_raci_member(
     registry: ParserRegistry,
     phase1_tmp_path: Path,

@@ -44,6 +44,7 @@ from project_manager_api.services.errors import (
     ServiceError,
 )
 from project_manager_api.services.llm import OpenAICompatibleClient
+from project_manager_api.services.member_roles import member_role
 from project_manager_api.services.operations import current_business_date
 from project_manager_api.services.projects import ProjectService, milestone_risk
 from project_manager_api.services.wechat import (
@@ -279,7 +280,11 @@ class MobileService:
     def dashboard(self, project_id: uuid.UUID) -> dict[str, Any]:
         project, binding, snapshot = self._bound_project(project_id)
         active_name = snapshot.get("active_plan_name")
-        milestones = _mobile_milestones(snapshot, binding.member_name)
+        milestones = _mobile_milestones(
+            snapshot,
+            binding.member_name,
+            member_role(snapshot, binding.member_name) == ProjectRole.MANAGER,
+        )
         return {
             "project": {"id": str(project.id), "code": project.code, "name": project.name},
             "current_version_number": project.current_version_number or 0,
@@ -431,6 +436,8 @@ class MobileService:
 
     def list_approvable_proposals(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
         _, binding, snapshot = self._bound_project(project_id)
+        actor_id = _actor_id(self._user())
+        is_manager = member_role(snapshot, binding.member_name) == ProjectRole.MANAGER
         accountable_codes = {
             item["code"]
             for item in snapshot.get("milestones", [])
@@ -441,10 +448,12 @@ class MobileService:
             .where(
                 ChangeProposal.project_id == project_id,
                 ChangeProposal.status == ProposalStatus.PENDING,
-                ChangeProposal.milestone_code.in_(accountable_codes),
+                ChangeProposal.submitted_by_actor_id != actor_id,
             )
             .order_by(ChangeProposal.created_at.desc())
         )
+        if not is_manager:
+            query = query.where(ChangeProposal.milestone_code.in_(accountable_codes))
         return [_proposal_dict(proposal) for proposal in self.session.scalars(query)]
 
     def update_issue(self, issue_id: uuid.UUID, payload: IssueUpdate) -> dict[str, Any]:
@@ -507,7 +516,7 @@ class MobileService:
         project, snapshot = self._project_snapshot(binding.project_id)
         if not any(item.get("name") == binding.member_name for item in snapshot.get("members", [])):
             raise ConflictError("member is no longer present in the current project version")
-        role = _member_role(snapshot, binding.member_name)
+        role = member_role(snapshot, binding.member_name)
         membership = self.session.scalar(
             select(ProjectMembership).where(
                 ProjectMembership.project_id == project.id,
@@ -593,7 +602,7 @@ class MobileService:
 
 
 def _mobile_milestones(
-    snapshot: dict[str, Any], member_name: str | None = None
+    snapshot: dict[str, Any], member_name: str | None = None, is_manager: bool = False
 ) -> list[dict[str, Any]]:
     active_name = snapshot.get("active_plan_name")
     plan: dict[str, Any] = next(
@@ -608,7 +617,9 @@ def _mobile_milestones(
                 member_name and member_name in milestone.get("assignments", {}).get("R", [])
             ),
             "can_approve": bool(
-                member_name and member_name in milestone.get("assignments", {}).get("A", [])
+                is_manager
+                or member_name
+                and member_name in milestone.get("assignments", {}).get("A", [])
             ),
         }
         for milestone in snapshot.get("milestones", [])
@@ -678,15 +689,6 @@ def _expired(value: datetime) -> bool:
 
 def _actor_id(user: MobileUser) -> str:
     return f"mobile:{user.id}"
-
-
-def _member_role(snapshot: dict[str, Any], member_name: str) -> str:
-    assignments = [item.get("assignments", {}) for item in snapshot.get("milestones", [])]
-    if any(member_name in item.get("A", []) for item in assignments):
-        return ProjectRole.ACCOUNTABLE
-    if any(member_name in item.get("R", []) for item in assignments):
-        return ProjectRole.RESPONSIBLE
-    return ProjectRole.COLLABORATOR
 
 
 def _milestone(snapshot: dict[str, Any], milestone_code: str) -> dict[str, Any]:

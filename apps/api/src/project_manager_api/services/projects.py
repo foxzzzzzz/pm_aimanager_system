@@ -50,6 +50,7 @@ from project_manager_api.services.errors import (
     NotFoundError,
     PersistedConflictError,
 )
+from project_manager_api.services.member_roles import member_role
 
 
 class ProjectService:
@@ -519,7 +520,7 @@ class ProjectService:
             raise NotFoundError("change proposal not found")
         project = self._require_project(proposal.project_id, lock=True)
         self.session.refresh(proposal)
-        self._require_approval_permission(project, proposal.milestone_code)
+        self._require_approval_permission(project, proposal)
         if proposal.status != ProposalStatus.PENDING:
             raise ConflictError("change proposal is already resolved")
         if project.current_version_number != expected_project_version:
@@ -581,7 +582,7 @@ class ProjectService:
             raise NotFoundError("change proposal not found")
         project = self._require_project(proposal.project_id, lock=True)
         self.session.refresh(proposal)
-        self._require_approval_permission(project, proposal.milestone_code)
+        self._require_approval_permission(project, proposal)
         if proposal.status != ProposalStatus.PENDING:
             raise ConflictError("change proposal is already resolved")
         proposal.status = ProposalStatus.REJECTED
@@ -766,7 +767,15 @@ class ProjectService:
                     )
                 )
                 if membership is not None:
-                    membership.role = _member_role(snapshot, binding.member_name)
+                    membership.role = member_role(snapshot, binding.member_name)
+                else:
+                    self.session.add(
+                        ProjectMembership(
+                            project_id=project.id,
+                            actor_id=binding.actor_id,
+                            role=member_role(snapshot, binding.member_name),
+                        )
+                    )
 
     def list_issues(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
         self._require_project(project_id)
@@ -820,7 +829,11 @@ class ProjectService:
             raise NotFoundError("change set not found")
         return change_set
 
-    def _require_approval_permission(self, project: Project, milestone_code: str) -> None:
+    def _require_approval_permission(
+        self, project: Project, proposal: ChangeProposal
+    ) -> None:
+        if proposal.submitted_by_actor_id == self.actor_id:
+            raise ForbiddenError("proposal submitter cannot approve or reject their own proposal")
         membership = self.session.scalar(
             select(ProjectMembership).where(
                 ProjectMembership.project_id == project.id,
@@ -842,7 +855,7 @@ class ProjectService:
                 (
                     item
                     for item in current.snapshot.get("milestones", [])
-                    if item.get("code") == milestone_code
+                    if item.get("code") == proposal.milestone_code
                 ),
                 None,
             )
@@ -1090,15 +1103,6 @@ def _business_hash(snapshot: dict[str, Any]) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def _member_role(snapshot: dict[str, Any], member_name: str) -> str:
-    assignments = [item.get("assignments", {}) for item in snapshot.get("milestones", [])]
-    if any(member_name in item.get("A", []) for item in assignments):
-        return ProjectRole.ACCOUNTABLE
-    if any(member_name in item.get("R", []) for item in assignments):
-        return ProjectRole.RESPONSIBLE
-    return ProjectRole.COLLABORATOR
-
-
 def _apply_project_data_operations(
     snapshot: dict[str, Any], operations: list[ProjectDataOperation]
 ) -> None:
@@ -1207,6 +1211,15 @@ def _validate_editable_snapshot(
                 raise ConflictError(
                     f"RACI references unknown members: {', '.join(unknown)}"
                 )
+    managers = [
+        item.get("name")
+        for item in snapshot.get("members", [])
+        if item.get("is_project_manager") is True
+        or "项目经理"
+        in {part.strip() for part in str(item.get("role", "")).split("/")}
+    ]
+    if len(managers) != 1:
+        raise ConflictError("project data must contain exactly one project manager")
     plans = snapshot.get("plan_versions", [])
     plan_names = [str(item.get("name")) for item in plans]
     if len(plan_names) != len(set(plan_names)):

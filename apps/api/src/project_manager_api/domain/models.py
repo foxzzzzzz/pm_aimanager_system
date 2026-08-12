@@ -61,6 +61,7 @@ class ProductSpecItem(BaseModel):
 class ProjectMemberDraft(BaseModel):
     role: str
     name: str
+    is_project_manager: bool = False
     phone: str | None = None
     email: str | None = None
     notes: str | None = None

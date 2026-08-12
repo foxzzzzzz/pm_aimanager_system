@@ -18,6 +18,8 @@ from project_manager_api.db.models import (
     IdempotencyRecord,
     MemberBinding,
     MobileUser,
+    ProjectMembership,
+    ProjectRole,
     ProjectVersion,
 )
 from project_manager_api.settings import AppSettings
@@ -177,6 +179,182 @@ def test_unbound_user_cannot_view_project_and_bound_user_can(
         assert binding.provided_phone_hash != "13800000010"
         assert "13800000010" not in str(user.__dict__)
         assert "13800000010" not in str(binding.__dict__)
+
+
+def test_bound_sheet_project_manager_receives_project_manager_role(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    invitation = _invite(client, project_id, "成员01", "invite-sheet-manager")
+    manager_headers, manager = _login(client, "dev:sheet-manager")
+
+    accepted = client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=manager_headers,
+        json={
+            "invitation_token": invitation["invitation_token"],
+            "phone": "13800000001",
+        },
+    )
+
+    assert accepted.status_code == 200
+    with client.app.state.session_factory() as session:
+        membership = session.scalar(
+            select(ProjectMembership).where(
+                ProjectMembership.project_id == uuid.UUID(project_id),
+                ProjectMembership.actor_id == f"mobile:{manager['user']['id']}",
+            )
+        )
+        assert membership is not None
+        assert membership.role == ProjectRole.MANAGER
+
+    responsible = _invite(client, project_id, "成员10", "invite-manager-review-submitter")
+    responsible_headers, _ = _login(client, "dev:manager-review-submitter")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=responsible_headers,
+        json={"invitation_token": responsible["invitation_token"], "phone": "13800000010"},
+    )
+    proposal = client.post(
+        f"/api/v1/mobile/projects/{project_id}/milestones/M23/proposals",
+        headers={**responsible_headers, "X-Idempotency-Key": "manager-review-proposal"},
+        json={
+            "kind": "delay",
+            "base_version_number": 1,
+            "start_date": "2026-11-16",
+            "end_date": "2026-11-20",
+            "reason": "请求项目经理审批",
+        },
+    )
+    assert proposal.status_code == 201
+    approvable = client.get(
+        f"/api/v1/mobile/projects/{project_id}/change-proposals",
+        headers=manager_headers,
+    )
+    assert [item["id"] for item in approvable.json()] == [proposal.json()["id"]]
+    approved = client.post(
+        f"/api/v1/mobile/change-proposals/{proposal.json()['id']}/approve",
+        headers={**manager_headers, "X-Idempotency-Key": "sheet-manager-approves"},
+        json={"expected_project_version": 1},
+    )
+    assert approved.status_code == 200
+
+
+def test_reimport_transfers_project_manager_role_without_changing_raci(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    manager_invitation = _invite(client, project_id, "成员01", "invite-old-manager")
+    old_headers, old_user = _login(client, "dev:old-manager")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=old_headers,
+        json={"invitation_token": manager_invitation["invitation_token"], "phone": "13800000001"},
+    )
+    next_invitation = _invite(client, project_id, "成员02", "invite-new-manager")
+    next_headers, next_user = _login(client, "dev:new-manager")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=next_headers,
+        json={"invitation_token": next_invitation["invitation_token"], "phone": "13800000002"},
+    )
+
+    with TemporaryDirectory(dir=ROOT / "tmp") as directory:
+        changed = Path(directory) / "new-manager.xlsx"
+        shutil.copyfile(WORKBOOK, changed)
+        workbook = load_workbook(changed)
+        team = workbook["项目团队构成"]
+        team["B5"] = "项目统筹"
+        team["B6"] = "项目经理"
+        workbook.save(changed)
+        with changed.open("rb") as source:
+            imported = client.post(
+                f"/api/v1/projects/{project_id}/imports",
+                headers=_admin_headers("import-new-manager"),
+                files={
+                    "file": (
+                        changed.name,
+                        source,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                },
+            )
+        assert imported.status_code == 201
+        published = client.post(
+            f"/api/v1/imports/{imported.json()['id']}/publish",
+            headers=_admin_headers("publish-new-manager"),
+            json={"expected_project_version": 1},
+        )
+        assert published.status_code == 200
+
+    with client.app.state.session_factory() as session:
+        roles = {
+            membership.actor_id: membership.role
+            for membership in session.scalars(
+                select(ProjectMembership).where(
+                    ProjectMembership.project_id == uuid.UUID(project_id)
+                )
+            )
+        }
+        version = session.scalar(
+            select(ProjectVersion).where(
+                ProjectVersion.project_id == uuid.UUID(project_id),
+                ProjectVersion.version_number == 2,
+            )
+        )
+        assert version is not None
+        m01 = next(item for item in version.snapshot["milestones"] if item["code"] == "M01")
+        assert m01["assignments"]["R"] == ["成员01"]
+        assert m01["assignments"]["A"] == ["成员01"]
+        assert roles[f"mobile:{old_user['user']['id']}"] == ProjectRole.ACCOUNTABLE
+        assert roles[f"mobile:{next_user['user']['id']}"] == ProjectRole.MANAGER
+
+
+def test_submitter_cannot_approve_or_reject_own_ra_proposal(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    invitation = _invite(client, project_id, "成员05", "invite-self-review")
+    member_headers, _ = _login(client, "dev:self-review")
+    client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=member_headers,
+        json={"invitation_token": invitation["invitation_token"], "phone": "13800000005"},
+    )
+    proposal = client.post(
+        f"/api/v1/mobile/projects/{project_id}/milestones/M05/proposals",
+        headers={**member_headers, "X-Idempotency-Key": "self-review-proposal"},
+        json={
+            "kind": "completed",
+            "base_version_number": 1,
+            "actual_completion_date": "2026-08-12",
+            "reason": "执行完成，等待独立审批",
+        },
+    )
+    assert proposal.status_code == 201
+
+    approved = client.post(
+        f"/api/v1/mobile/change-proposals/{proposal.json()['id']}/approve",
+        headers={**member_headers, "X-Idempotency-Key": "self-review-approve"},
+        json={"expected_project_version": 1},
+    )
+    rejected = client.post(
+        f"/api/v1/mobile/change-proposals/{proposal.json()['id']}/reject",
+        headers={**member_headers, "X-Idempotency-Key": "self-review-reject"},
+        json={"reason": "不能自审"},
+    )
+
+    assert approved.status_code == 403
+    assert rejected.status_code == 403
+    manager_approved = client.post(
+        f"/api/v1/change-proposals/{proposal.json()['id']}/approve",
+        headers=_admin_headers("manager-approves-ra-proposal"),
+        json={"expected_project_version": 1},
+    )
+    assert manager_approved.status_code == 200
 
 
 def test_my_tasks_only_returns_bound_members_ra_milestones_without_duplicates(

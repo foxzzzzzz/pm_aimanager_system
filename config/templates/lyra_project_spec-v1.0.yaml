@@ -43,6 +43,7 @@ team:
   sheet: 项目团队构成
   first_row: 5
   last_row: 26
+  project_manager_role: 项目经理
   columns:
     role: B
     name: C

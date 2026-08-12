@@ -9,11 +9,12 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from openpyxl import load_workbook
+from sqlalchemy import select
 
 from project_manager_api.api.app import create_app
 from project_manager_api.api.schemas import IssueUpdate
 from project_manager_api.db.base import Base
-from project_manager_api.db.models import Issue, IssueStatus
+from project_manager_api.db.models import ChangeProposal, Issue, IssueStatus
 from project_manager_api.services.errors import ConflictError
 from project_manager_api.services.projects import ProjectService, _issue_risk, milestone_risk
 from project_manager_api.settings import AppSettings
@@ -60,6 +61,16 @@ def _create_project(client: TestClient, key: str = "create-lyra") -> dict[str, A
     )
     assert response.status_code == 201, response.json()
     return response.json()
+
+
+def _set_proposal_submitter(client: TestClient, proposal_id: str, actor_id: str) -> None:
+    with client.app.state.session_factory() as session:
+        proposal = session.scalar(
+            select(ChangeProposal).where(ChangeProposal.id == uuid.UUID(proposal_id))
+        )
+        assert proposal is not None
+        proposal.submitted_by_actor_id = actor_id
+        session.commit()
 
 
 def _upload(
@@ -357,6 +368,7 @@ def test_historical_workbook_cannot_report_false_publish_success(
             "reason": "create v2",
         },
     ).json()
+    _set_proposal_submitter(client, proposal["id"], "mobile:responsible-member")
     approved = client.post(
         f"/api/v1/change-proposals/{proposal['id']}/approve",
         headers=_headers("history-approve"),
@@ -450,6 +462,9 @@ def test_progress_proposal_approval_is_optimistic_and_audited(
         },
     )
     assert proposal.status_code == 201
+    _set_proposal_submitter(
+        client, proposal.json()["id"], "mobile:responsible-member"
+    )
 
     first = client.post(
         f"/api/v1/change-proposals/{proposal.json()['id']}/approve",
@@ -484,6 +499,7 @@ def test_proposal_cannot_be_rebased_by_supplying_the_new_current_version(
             "reason": "old baseline",
         },
     ).json()
+    _set_proposal_submitter(client, proposal["id"], "mobile:responsible-member")
     changed = _copy_with_active_plan_date(workdir, "winner.xlsx", date(2026, 8, 2))
     winner = _upload(client, project_id, changed, "winner-import")
     assert _publish(client, winner["id"], 1, "winner-publish").status_code == 200
@@ -913,7 +929,12 @@ def test_change_set_atomically_removes_member_and_all_raci_references(
         for milestone in editable["milestones"]
         for names in milestone["assignments"].values()
         for name in names
-        if name in {member["name"] for member in editable["members"]}
+        if name
+        in {
+            member["name"]
+            for member in editable["members"]
+            if not member.get("is_project_manager")
+        }
     )
     operations = [
         {

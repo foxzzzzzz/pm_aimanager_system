@@ -174,7 +174,14 @@ class LyraTemplateV1Parser:
                 raise WorkbookValidationError(
                     f"missing team role or owner at {config.sheet}!B{row_number}:C{row_number}"
                 )
-            member = ProjectMemberDraft.model_validate(values)
+            member = ProjectMemberDraft.model_validate(
+                {
+                    **values,
+                    "is_project_manager": _has_role(
+                        values["role"], self.manifest.team.project_manager_role
+                    ),
+                }
+            )
             existing_index = member_indexes.get(member.name)
             if existing_index is None:
                 member_indexes[member.name] = len(members)
@@ -191,6 +198,9 @@ class LyraTemplateV1Parser:
             members[existing_index] = existing.model_copy(
                 update={
                     "role": _merge_distinct(existing.role, member.role),
+                    "is_project_manager": (
+                        existing.is_project_manager or member.is_project_manager
+                    ),
                     "phone": existing.phone or member.phone,
                     "email": existing.email or member.email,
                     "notes": _merge_distinct(existing.notes, member.notes),
@@ -295,6 +305,12 @@ class LyraTemplateV1Parser:
         milestone_codes = [milestone.code for milestone in milestones]
         if len(milestone_codes) != len(set(milestone_codes)):
             raise WorkbookValidationError("duplicate milestone codes in template manifest")
+        managers = [member.name for member in members if member.is_project_manager]
+        if len(managers) != 1:
+            raise WorkbookValidationError(
+                "exactly one project manager is required in "
+                f"{self.manifest.team.sheet}; found {len(managers)}"
+            )
 
         team_scope = _cell_text(workbook[self.manifest.team.sheet]["A4"].value)
         allowed_assignees = set(member_names)
@@ -327,6 +343,10 @@ def _conflicting_value(left: str | None, right: str | None) -> bool:
 def _merge_distinct(left: str | None, right: str | None) -> str | None:
     values = [value for value in (left, right) if value]
     return " / ".join(dict.fromkeys(values)) or None
+
+
+def _has_role(value: str | None, expected: str) -> bool:
+    return expected in {part.strip() for part in (value or "").split("/")}
 
 
 def _parse_plan_window(value: Any, epoch: datetime, location: str) -> PlanWindow:
