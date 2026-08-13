@@ -1,7 +1,14 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_check_script_keeps_pytest_temporary_files_in_repo_tmp() -> None:
+    script = (ROOT / "scripts" / "check.ps1").read_text(encoding="utf-8")
+
+    assert '$pytestTemp = Join-Path $repoRoot "tmp\\pytest"' in script
+    assert "New-Item -ItemType Directory -Force -Path $pytestTemp" in script
+    assert "--basetemp $pytestTemp" in script
 
 
 def test_start_backend_script_starts_compose_and_migrates_database() -> None:
