@@ -8,7 +8,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from project_manager_api.api.schemas import (
@@ -25,6 +25,9 @@ from project_manager_api.db.models import (
     ChangeProposal,
     InAppMessage,
     Issue,
+    IssueCreateProposal,
+    IssueDeleteProposal,
+    IssueStatus,
     MemberBinding,
     MobileSession,
     MobileUser,
@@ -46,7 +49,7 @@ from project_manager_api.services.errors import (
 from project_manager_api.services.llm import OpenAICompatibleClient
 from project_manager_api.services.member_roles import member_role
 from project_manager_api.services.operations import current_business_date
-from project_manager_api.services.projects import ProjectService, milestone_risk
+from project_manager_api.services.projects import ProjectService, _issue_risk, milestone_risk
 from project_manager_api.services.wechat import (
     build_invitation_path,
     exchange_wechat_code,
@@ -264,6 +267,13 @@ class MobileService:
         projects = []
         for project in self.session.scalars(query):
             _, snapshot = self._project_snapshot(project.id)
+            binding = self.session.scalar(
+                select(MemberBinding).where(
+                    MemberBinding.project_id == project.id,
+                    MemberBinding.user_id == self._user().id,
+                    MemberBinding.status == BindingStatus.BOUND,
+                )
+            )
             projects.append(
                 {
                     "id": str(project.id),
@@ -273,6 +283,11 @@ class MobileService:
                     "current_version_number": project.current_version_number or 0,
                     "business_date": business_date,
                     "milestones": _mobile_milestones(snapshot),
+                    "pending_approval_count": self._pending_approval_count(
+                        project.id,
+                        snapshot,
+                        binding.member_name if binding else "",
+                    ),
                 }
             )
         return projects
@@ -293,6 +308,9 @@ class MobileService:
             "member_name": binding.member_name,
             "is_project_manager": member_role(snapshot, binding.member_name)
             == ProjectRole.MANAGER,
+            "pending_approval_count": self._pending_approval_count(
+                project.id, snapshot, binding.member_name
+            ),
             "milestones": milestones,
         }
 
@@ -322,9 +340,56 @@ class MobileService:
                 tasks.append(
                     {
                         **milestone,
+                        "kind": "milestone",
+                        "task_key": f"milestone:{milestone['code']}",
                         "roles": roles,
                         "risk": milestone_risk(
                             milestone,
+                            business_date,
+                            self.settings.mobile_upcoming_days,
+                        ),
+                    }
+                )
+            issues = self.session.scalars(
+                select(Issue)
+                .where(Issue.project_id == project.id)
+                .order_by(Issue.due_date, Issue.created_at)
+            )
+            for issue in issues:
+                roles = []
+                if binding.member_name == issue.owner_name:
+                    roles.append("R")
+                if binding.member_name in issue.accountable_names:
+                    roles.append("A")
+                if not roles:
+                    continue
+                tasks.append(
+                    {
+                        "kind": "issue",
+                        "task_key": f"issue:{issue.id}",
+                        "code": "重点问题",
+                        "name": issue.description,
+                        "plan": {
+                            "state": "scheduled",
+                            "start_date": issue.due_date.isoformat(),
+                            "end_date": issue.due_date.isoformat(),
+                        },
+                        "actual_completion": {
+                            "state": "not_started",
+                            "start_date": None,
+                            "end_date": issue.due_date.isoformat()
+                            if issue.status in (IssueStatus.RESOLVED, IssueStatus.CLOSED)
+                            else None,
+                        },
+                        "assignments": {
+                            "R": [issue.owner_name],
+                            "A": issue.accountable_names,
+                            "C": issue.consulted_names,
+                            "I": issue.informed_names,
+                        },
+                        "roles": roles,
+                        "risk": _issue_risk(
+                            issue,
                             business_date,
                             self.settings.mobile_upcoming_days,
                         ),
@@ -505,18 +570,46 @@ class MobileService:
         _, binding, _ = self._bound_project(issue.project_id)
         if binding.member_name != issue.owner_name:
             raise ForbiddenError("only the issue owner can update this issue")
-        if payload.owner_name is not None and payload.owner_name != issue.owner_name:
-            raise ForbiddenError("the issue owner cannot reassign ownership")
-        if (
-            payload.accountable_names is not None
-            and payload.accountable_names != issue.accountable_names
-        ):
-            raise ForbiddenError("the issue owner cannot reassign accountability")
-        if payload.consulted_names is not None and payload.consulted_names != issue.consulted_names:
-            raise ForbiddenError("the issue owner cannot reassign consulted members")
-        if payload.informed_names is not None and payload.informed_names != issue.informed_names:
-            raise ForbiddenError("the issue owner cannot reassign informed members")
         return self._project_service().update_issue_as_member(issue, payload)
+
+    def _pending_approval_count(
+        self,
+        project_id: uuid.UUID,
+        snapshot: dict[str, Any],
+        member_name: str,
+    ) -> int:
+        actor_id = _actor_id(self._user())
+        is_manager = member_role(snapshot, member_name) == ProjectRole.MANAGER
+        query = select(ChangeProposal).where(
+            ChangeProposal.project_id == project_id,
+            ChangeProposal.status == ProposalStatus.PENDING,
+        )
+        proposals = list(self.session.scalars(query))
+        if is_manager:
+            node_count = len(proposals)
+            issue_count = self.session.scalar(
+                select(func.count()).select_from(IssueCreateProposal).where(
+                    IssueCreateProposal.project_id == project_id,
+                    IssueCreateProposal.status == ProposalStatus.PENDING,
+                )
+            ) or 0
+            issue_count += self.session.scalar(
+                select(func.count()).select_from(IssueDeleteProposal).where(
+                    IssueDeleteProposal.project_id == project_id,
+                    IssueDeleteProposal.status == ProposalStatus.PENDING,
+                )
+            ) or 0
+            return node_count + issue_count
+        accountable_codes = {
+            item["code"]
+            for item in snapshot.get("milestones", [])
+            if member_name in item.get("assignments", {}).get("A", [])
+        }
+        return sum(
+            proposal.milestone_code in accountable_codes
+            and proposal.submitted_by_actor_id != actor_id
+            for proposal in proposals
+        )
 
     def delete_issue(self, issue_id: uuid.UUID, payload: IssueDelete) -> dict[str, Any]:
         issue = self.session.get(Issue, issue_id)

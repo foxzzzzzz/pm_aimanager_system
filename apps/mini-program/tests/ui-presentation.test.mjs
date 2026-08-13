@@ -51,7 +51,8 @@ test("issue RACI checkboxes rely on checkbox-group values without unsupported WX
   assert.match(template, /data-name="consultedNames" bindchange="updateRaciMembers"/);
   assert.match(template, /data-name="informedNames" bindchange="updateRaciMembers"/);
   assert.doesNotMatch(template, /checked="\{\{[^}]*\.indexOf\(/);
-  assert.match(source, /this\.setData\(\{ \[field\]: event\.detail\.value \}\)/);
+  assert.match(source, /\[field\]:\s*event\.detail\.value/);
+  assert.match(source, /\[optionsField\]:\s*memberOptions/);
 });
 
 test("issue creation selects any project member as R and waits for approval", async () => {
@@ -121,7 +122,36 @@ test("my tasks groups R and A milestones by project with four risk filters", asy
   assert.match(apiSource, /mobile\/my-tasks/);
   assert.match(source, /task\.risk === selectedFilter/);
   assert.match(source, /\["todo", "upcoming", "overdue", "completed"\]/);
+  assert.match(source, /project\.tasks\.filter\(\(task\) => task\.risk === key\)\.length/);
+  assert.match(source, /label:\s*`\$\{filterLabels\[key\]\}\s\$\{count\}`/);
+  assert.match(source, /filters:\s*presentFilters\(sourceProjects\)/);
   assert.match(template, /本人角色/);
+  assert.match(template, /task\.kind === 'issue'/);
+  assert.match(template, /bindtap="openTask"/);
+  assert.match(source, /focus_issue_id/);
+  assert.match(source, /wx\.switchTab\(\{ url: "\/pages\/issues\/issues" \}\)/);
+  assert.match(template, /item\.entryLabel/);
   assert.match(template, /bindtap="openProject"/);
-  assert.match(styles, /grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(styles, /\.task-filters\s*\{[^}]*display:\s*flex/s);
+  assert.match(styles, /\.task-filter\s*\{[^}]*flex:\s*1\s+1\s+0/s);
+  assert.match(styles, /\.task-filter\s*\{[^}]*width:\s*0/s);
+  assert.match(styles, /\.task-filter\s*\{[^}]*box-sizing:\s*border-box/s);
+});
+
+test("tab bar badges expose unread messages and pending approvals", async () => {
+  const [badgeSource, appSource, projectsSource, projectsTemplate] = await Promise.all([
+    readSource("../miniprogram/services/tab-badges.ts"),
+    readSource("../miniprogram/app.ts"),
+    readSource("../miniprogram/pages/projects/projects.ts"),
+    readSource("../miniprogram/pages/projects/projects.wxml"),
+  ]);
+
+  assert.match(badgeSource, /setTabBarBadge/);
+  assert.match(badgeSource, /removeTabBarBadge/);
+  assert.match(badgeSource, /pending_approval_count/);
+  assert.match(badgeSource, /!message\.is_read/);
+  assert.match(appSource, /syncTabBarBadges/);
+  assert.match(projectsSource, /syncTabBarBadges/);
+  assert.match(projectsTemplate, /待审批/);
+  assert.match(projectsTemplate, /pending_approval_count/);
 });

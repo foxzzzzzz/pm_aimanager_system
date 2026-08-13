@@ -2,6 +2,7 @@ import { api } from "../../services/api";
 import type { Message } from "../../types";
 import { runtimeConfig } from "../../config";
 import { formatDateTime, labelMessageType } from "../../services/presentation.js";
+import { syncTabBarBadges } from "../../services/tab-badges";
 
 interface MessageTapEvent { currentTarget: { dataset: { id: string; read: boolean } } }
 
@@ -35,6 +36,7 @@ Page({
     this.setData({ loading: true, loadError: false });
     try {
       this.setData({ messages: presentMessages(await api.messages()), loadError: false });
+      void syncTabBarBadges();
     } catch {
       this.setData({ loadError: true });
     } finally {
@@ -50,6 +52,7 @@ Page({
           ? presentMessages([saved])[0]
           : message),
       });
+      void syncTabBarBadges();
     } catch (reason) {
       wx.showToast({ title: (reason as Error).message, icon: "none" });
     }

@@ -1,5 +1,6 @@
 textarea.field { width: auto; min-height: 110rpx; }
 .issue-title { display: block; margin: 14rpx 0 8rpx; font-weight: 650; }
+.focused-issue { border: 2rpx solid #20a486; box-shadow: 0 0 0 5rpx rgba(32, 164, 134, .12); }
 .card .muted { display: block; margin-top: 8rpx; }
 .context { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin: 4rpx 0 18rpx; color: #48635d; font-size: 24rpx; }
 .context-action, .add-issue, .close-form {

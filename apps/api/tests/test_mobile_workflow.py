@@ -233,6 +233,8 @@ def test_bound_sheet_project_manager_receives_project_manager_role(
         headers=manager_headers,
     )
     assert [item["id"] for item in approvable.json()] == [proposal.json()["id"]]
+    projects = client.get("/api/v1/mobile/projects", headers=manager_headers).json()
+    assert projects[0]["pending_approval_count"] == 1
     approved = client.post(
         f"/api/v1/mobile/change-proposals/{proposal.json()['id']}/approve",
         headers={**manager_headers, "X-Idempotency-Key": "sheet-manager-approves"},
@@ -839,12 +841,13 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
     )
     assert updated.status_code == 200
     assert updated.json()["revision"] == 2
-    forbidden_raci_update = client.patch(
+    raci_update = client.patch(
         f"/api/v1/mobile/issues/{issue_id}",
         headers={**member_headers, "X-Idempotency-Key": "mobile-issue-raci-update"},
         json={"expected_revision": 2, "accountable_names": ["成员03"]},
     )
-    assert forbidden_raci_update.status_code == 403
+    assert raci_update.status_code == 200
+    assert raci_update.json()["accountable_names"] == ["成员03"]
     other_invitation = _invite(client, project_id, "成员11", "invite-other-issue-owner")
     other_headers, _ = _login(client, "dev:other-issue-owner")
     client.post(
@@ -856,21 +859,21 @@ def test_mobile_issue_message_center_and_natural_language_prefill(
         "DELETE",
         f"/api/v1/mobile/issues/{issue_id}",
         headers={**other_headers, "X-Idempotency-Key": "mobile-issue-delete-forbidden"},
-        json={"expected_revision": 2, "reason": "越权作废"},
+        json={"expected_revision": 3, "reason": "越权作废"},
     )
     assert forbidden_delete.status_code == 403
     requested_delete = client.request(
         "DELETE",
         f"/api/v1/mobile/issues/{issue_id}",
         headers={**member_headers, "X-Idempotency-Key": "mobile-issue-delete"},
-        json={"expected_revision": 2, "reason": "问题已作废"},
+        json={"expected_revision": 3, "reason": "问题已作废"},
     )
     assert requested_delete.status_code == 201
     assert requested_delete.json()["status"] == "pending"
     active_issue = client.get(
         f"/api/v1/mobile/projects/{project_id}/issues", headers=member_headers
     ).json()[0]
-    assert active_issue["revision"] == 2
+    assert active_issue["revision"] == 3
     manager_invitation = _invite(client, project_id, "成员01", "invite-delete-manager")
     manager_headers, _ = _login(client, "dev:delete-manager")
     client.post(
@@ -1080,11 +1083,32 @@ def test_project_manager_rejects_issue_delete_and_notifies_submitter(
         f"/api/v1/mobile/issue-create-proposals/{created.json()['id']}/approve",
         headers={**manager_headers, "X-Idempotency-Key": "delete-reject-create-approve"},
     )
+    updated = client.patch(
+        f"/api/v1/mobile/issues/{approved.json()['issue_id']}",
+        headers={**owner_headers, "X-Idempotency-Key": "update-issue-raci"},
+        json={
+            "expected_revision": 1,
+            "accountable_names": ["成员03"],
+            "consulted_names": ["成员04"],
+            "informed_names": ["成员05"],
+        },
+    )
+    assert updated.status_code == 200, updated.json()
+    assert updated.json()["accountable_names"] == ["成员03"]
+    my_tasks = client.get("/api/v1/mobile/my-tasks", headers=owner_headers).json()
+    issue_tasks = [
+        task
+        for project in my_tasks
+        for task in project["tasks"]
+        if task["kind"] == "issue"
+    ]
+    assert issue_tasks[0]["name"] == "需要继续跟踪的问题"
+    assert issue_tasks[0]["roles"] == ["R"]
     requested = client.request(
         "DELETE",
         f"/api/v1/mobile/issues/{approved.json()['issue_id']}",
         headers={**owner_headers, "X-Idempotency-Key": "delete-reject-request"},
-        json={"expected_revision": 1, "reason": "误判为重复"},
+        json={"expected_revision": 2, "reason": "误判为重复"},
     )
     rejected = client.post(
         f"/api/v1/mobile/issue-delete-proposals/{requested.json()['id']}/reject",
@@ -1100,7 +1124,14 @@ def test_project_manager_rejects_issue_delete_and_notifies_submitter(
         f"/api/v1/mobile/projects/{project_id}/issues", headers=owner_headers
     ).json()[0]
     assert issue["status"] != "已关闭"
-    assert issue["revision"] == 1
+    assert issue["revision"] == 2
+    reassigned = client.patch(
+        f"/api/v1/mobile/issues/{approved.json()['issue_id']}",
+        headers={**owner_headers, "X-Idempotency-Key": "reassign-issue-owner"},
+        json={"expected_revision": 2, "owner_name": "成员11"},
+    )
+    assert reassigned.status_code == 200, reassigned.json()
+    assert reassigned.json()["owner_name"] == "成员11"
 
 
 def test_publishing_team_change_revokes_removed_member_access(

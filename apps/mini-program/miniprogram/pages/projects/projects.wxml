@@ -11,7 +11,7 @@
   <view wx:if="{{!loading && !loadError && projects.length === 0}}" class="card empty">暂无已绑定项目，请从邀请链接进入。</view>
   <view wx:if="{{!loading && !loadError}}" wx:for="{{projects}}" wx:key="id" class="card project" data-id="{{item.id}}" data-code="{{item.code}}" data-name="{{item.name}}" bindtap="openProject">
     <text class="tag">{{item.code}}</text>
-    <text class="project-name">{{item.name}}</text>
+    <view class="project-title-row"><text class="project-name">{{item.name}}</text><text wx:if="{{item.pending_approval_count > 0}}" class="approval-count">待审批 {{item.pending_approval_count}}</text></view>
     <text class="muted">当前正式版本 v{{item.current_version_number}}</text>
     <view wx:if="{{item.overdueMilestones.length > 0}}" class="alert-section overdue-section">
       <text class="alert-heading overdue-heading">逾期节点 {{item.overdueMilestones.length}}</text>

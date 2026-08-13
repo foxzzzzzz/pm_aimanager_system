@@ -1,0 +1,9 @@
+.page { padding: 24rpx; }
+.card { padding: 30rpx; border: 1rpx solid #d5e3de; border-radius: 22rpx; background: #fff; box-shadow: 0 12rpx 28rpx rgba(20, 108, 90, .08); }
+.tag { display: inline-block; padding: 8rpx 18rpx; border-radius: 999rpx; color: #9a4b08; background: #fff1e6; }
+.title { display: block; margin: 24rpx 0 12rpx; color: #12342e; font-size: 38rpx; font-weight: 700; }
+.section { display: flex; flex-direction: column; gap: 10rpx; padding: 22rpx 0; border-top: 1rpx solid #e4ece9; }
+.label { color: #6d7b77; font-size: 25rpx; }
+.value { color: #183b35; font-size: 30rpx; line-height: 1.55; word-break: break-all; }
+.danger-section .label, .danger-section .value { color: #b42318; }
+.empty { color: #77827f; text-align: center; }

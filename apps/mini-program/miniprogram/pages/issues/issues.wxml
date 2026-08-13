@@ -30,20 +30,19 @@
       </view>
       <view class="field-block">
         <text class="field-label">R 执行负责人 <text class="required">*</text></text>
-        <picker wx:if="{{!editingIssueId}}" range="{{projectMembers}}" bindchange="onOwner"><view class="field picker-field">{{ownerName || '请选择执行负责人'}} <text>›</text></view></picker>
-        <view wx:else class="readonly-field">{{ownerName}}</view>
+        <picker range="{{projectMembers}}" bindchange="onOwner"><view class="field picker-field">{{ownerName || '请选择执行负责人'}} <text>›</text></view></picker>
       </view>
-      <view wx:if="{{!editingIssueId}}" class="field-block">
+      <view class="field-block">
         <text class="field-label">A 最终负责人 <text class="required">*</text></text>
-        <checkbox-group class="member-options" data-name="accountableNames" bindchange="updateRaciMembers"><label wx:for="{{projectMembers}}" wx:key="*this" wx:for-item="member" class="member-option"><checkbox value="{{member}}" color="#146c5a" />{{member}}</label></checkbox-group>
+        <checkbox-group class="member-options" data-name="accountableNames" bindchange="updateRaciMembers"><label wx:for="{{accountableOptions}}" wx:key="name" wx:for-item="member" class="member-option"><checkbox value="{{member.name}}" checked="{{member.checked}}" color="#146c5a" />{{member.name}}</label></checkbox-group>
       </view>
-      <view wx:if="{{!editingIssueId}}" class="field-block">
+      <view class="field-block">
         <text class="field-label">C 协作/咨询</text>
-        <checkbox-group class="member-options" data-name="consultedNames" bindchange="updateRaciMembers"><label wx:for="{{projectMembers}}" wx:key="*this" wx:for-item="member" class="member-option"><checkbox value="{{member}}" color="#146c5a" />{{member}}</label></checkbox-group>
+        <checkbox-group class="member-options" data-name="consultedNames" bindchange="updateRaciMembers"><label wx:for="{{consultedOptions}}" wx:key="name" wx:for-item="member" class="member-option"><checkbox value="{{member.name}}" checked="{{member.checked}}" color="#146c5a" />{{member.name}}</label></checkbox-group>
       </view>
-      <view wx:if="{{!editingIssueId}}" class="field-block">
+      <view class="field-block">
         <text class="field-label">I 知情</text>
-        <checkbox-group class="member-options" data-name="informedNames" bindchange="updateRaciMembers"><label wx:for="{{projectMembers}}" wx:key="*this" wx:for-item="member" class="member-option"><checkbox value="{{member}}" color="#146c5a" />{{member}}</label></checkbox-group>
+        <checkbox-group class="member-options" data-name="informedNames" bindchange="updateRaciMembers"><label wx:for="{{informedOptions}}" wx:key="name" wx:for-item="member" class="member-option"><checkbox value="{{member.name}}" checked="{{member.checked}}" color="#146c5a" />{{member.name}}</label></checkbox-group>
       </view>
       <view class="field-block">
         <text class="field-label">严重程度 <text class="required">*</text></text>
@@ -69,12 +68,14 @@
       <button class="retry-action" bindtap="loadIssues">重新加载</button>
     </view>
     <view wx:if="{{!loading && !loadError && issues.length === 0}}" class="card empty-state">当前项目暂无重难点问题</view>
-    <view wx:if="{{!loading && !loadError}}" wx:for="{{issues}}" wx:key="id" class="card issue-card">
+    <view wx:if="{{!loading && !loadError}}" wx:for="{{issues}}" wx:key="id" id="issue-{{item.id}}" class="card issue-card {{focusedIssueId === item.id ? 'focused-issue' : ''}}">
       <view class="issue-tags"><text class="tag">{{item.status}}</text><text class="risk-tag {{item.risk}}">{{item.riskLabel}}</text></view>
       <text class="issue-title">{{item.description}}</text>
       <text class="muted">影响：{{item.impact}}</text>
-      <text class="muted">{{item.severityLabel}} · {{item.dueDateLabel}}</text>
-      <view class="issue-raci"><text>R {{item.owner_name}}</text><text>A {{item.accountable_names.join('、')}}</text><text wx:if="{{item.consulted_names.length}}">C {{item.consulted_names.join('、')}}</text><text wx:if="{{item.informed_names.length}}">I {{item.informed_names.join('、')}}</text></view>
+      <text class="muted">提交时间：{{item.createdAtLabel}}</text>
+      <text class="muted">完成时间：{{item.dueDateLabel}}</text>
+      <text class="muted">严重程度：{{item.severityLabel}}</text>
+      <view class="issue-raci"><text>R {{item.owner_name}}</text><text>A {{item.accountableLabel}}</text><text wx:if="{{item.consultedLabel}}">C {{item.consultedLabel}}</text><text wx:if="{{item.informedLabel}}">I {{item.informedLabel}}</text></view>
       <view wx:if="{{item.owner_name === currentMemberName && item.status !== '已关闭'}}" class="issue-actions">
         <button class="issue-action edit-action" disabled="{{actionIssueId !== ''}}" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="editIssue">编辑</button>
         <button wx:if="{{item.status === '待处理'}}" class="issue-action progress-action" loading="{{actionIssueId === item.id}}" disabled="{{actionIssueId !== ''}}" data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="startIssue">开始处理</button>

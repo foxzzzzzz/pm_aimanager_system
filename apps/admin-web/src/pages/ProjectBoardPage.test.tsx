@@ -25,6 +25,13 @@ mocks.dashboard.mockResolvedValue({
       assignments: { R: ["成员08"], A: ["成员02"], C: ["成员03"], I: [] },
       risk: "upcoming",
     },
+    {
+      code: "M07",
+      name: "模具T0",
+      plan: { state: "not_applicable", start_date: null, end_date: null },
+      assignments: { R: ["成员10"], A: ["成员02"], C: [], I: [] },
+      risk: "todo",
+    },
   ],
   issues: [
     {
@@ -70,6 +77,7 @@ describe("ProjectBoardPage", () => {
     );
 
     await screen.findByText("Docker阻塞");
+    expect(screen.getByRole("tab", { name: "待办 0" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: /逾期/ }));
     expect(screen.getByText("M01 · 正式立项")).toBeInTheDocument();
     expect(screen.getAllByText("R 成员10").length).toBeGreaterThan(0);

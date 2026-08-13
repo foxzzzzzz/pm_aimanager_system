@@ -2,6 +2,7 @@ import { api } from "../../services/api";
 import { runtimeConfig } from "../../config";
 import { filterMilestones } from "../../services/milestone-view.js";
 import type { ProjectSummary } from "../../types";
+import { syncTabBarBadges } from "../../services/tab-badges";
 
 interface ProjectTapEvent {
   currentTarget: { dataset: { id: string; code: string; name: string } };
@@ -61,6 +62,7 @@ Page({
     this.setData({ loading: true, loadError: false });
     try {
       this.setData({ projects: presentProjects(await api.projects()), loadError: false });
+      void syncTabBarBadges();
     } catch {
       this.setData({ loadError: true });
     } finally {

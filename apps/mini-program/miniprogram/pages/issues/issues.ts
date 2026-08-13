@@ -1,7 +1,9 @@
 import { api } from "../../services/api";
 import { validateIssueCreate } from "../../services/form-validation.js";
-import { formatDate, labelSeverity } from "../../services/presentation.js";
+import { runtimeConfig } from "../../config";
+import { formatDate, formatDateTime, labelSeverity } from "../../services/presentation.js";
 import type { Issue } from "../../types";
+import { syncTabBarBadges } from "../../services/tab-badges";
 
 interface InputEvent { detail: { value: string } }
 interface PickerEvent { detail: { value: string } }
@@ -12,7 +14,16 @@ interface IssueView extends Issue {
   severityLabel: string;
   dueDateLabel: string;
   riskLabel: string;
+  createdAtLabel: string;
+  accountableLabel: string;
+  consultedLabel: string;
+  informedLabel: string;
 }
+
+interface MemberOption { name: string; checked: boolean }
+
+const memberOptions = (members: string[], selected: string[]): MemberOption[] =>
+  members.map((name) => ({ name, checked: selected.includes(name) }));
 
 const riskLabels = { todo: "待办", upcoming: "近期", overdue: "逾期", completed: "已完成" };
 
@@ -21,6 +32,13 @@ const presentIssues = (issues: Issue[]): IssueView[] => issues.map((issue) => ({
   severityLabel: labelSeverity(issue.severity),
   dueDateLabel: formatDate(issue.due_date),
   riskLabel: riskLabels[issue.risk],
+  createdAtLabel: formatDateTime(
+    issue.created_at,
+    runtimeConfig.presentationTimezoneOffsetMinutes,
+  ),
+  accountableLabel: issue.accountable_names.join("、"),
+  consultedLabel: issue.consulted_names.join("、"),
+  informedLabel: issue.informed_names.join("、"),
 }));
 
 Page({
@@ -37,6 +55,9 @@ Page({
     accountableNames: [] as string[],
     consultedNames: [] as string[],
     informedNames: [] as string[],
+    accountableOptions: [] as MemberOption[],
+    consultedOptions: [] as MemberOption[],
+    informedOptions: [] as MemberOption[],
     dueDate: "",
     severityOptions: ["low", "medium", "high", "critical"],
     severityLabels: ["低", "中", "高", "重大"],
@@ -44,6 +65,7 @@ Page({
     statusOptions: ["待处理", "处理中", "待验证", "已解决"],
     statusIndex: 0,
     editingIssueId: "",
+    focusedIssueId: "",
     editingRevision: 0,
     formVisible: false,
     creating: false,
@@ -78,6 +100,15 @@ Page({
       return;
     }
     await this.loadIssues();
+    const focusedIssueId = wx.getStorageSync<string>("focus_issue_id");
+    if (focusedIssueId && this.data.issues.some((issue) => issue.id === focusedIssueId)) {
+      wx.removeStorageSync("focus_issue_id");
+      this.setData({ focusedIssueId });
+      setTimeout(() => {
+        wx.pageScrollTo({ selector: `#issue-${focusedIssueId}`, duration: 250 });
+      }, 80);
+    }
+    void syncTabBarBadges();
   },
   async loadIssues() {
     if (!this.data.projectId) return;
@@ -90,6 +121,18 @@ Page({
       this.setData({
         issues: presentIssues(issues),
         projectMembers: review.members.map((member) => member.name),
+        accountableOptions: memberOptions(
+          review.members.map((member) => member.name),
+          this.data.accountableNames,
+        ),
+        consultedOptions: memberOptions(
+          review.members.map((member) => member.name),
+          this.data.consultedNames,
+        ),
+        informedOptions: memberOptions(
+          review.members.map((member) => member.name),
+          this.data.informedNames,
+        ),
         loadError: false,
       });
     } catch {
@@ -108,7 +151,12 @@ Page({
   onStatus(event: PickerEvent) { this.setData({ statusIndex: Number(event.detail.value) }); },
   updateRaciMembers(event: MultiSelectEvent) {
     const field = event.currentTarget.dataset.name as "accountableNames" | "consultedNames" | "informedNames";
-    this.setData({ [field]: event.detail.value });
+    const optionsField = field.replace("Names", "Options") as
+      "accountableOptions" | "consultedOptions" | "informedOptions";
+    this.setData({
+      [field]: event.detail.value,
+      [optionsField]: memberOptions(this.data.projectMembers, event.detail.value),
+    });
   },
   selectProject() { wx.switchTab({ url: "/pages/projects/projects" }); },
   openCreateForm() {
@@ -120,6 +168,9 @@ Page({
       impact: "",
       ownerName: this.data.currentMemberName,
       accountableNames: [], consultedNames: [], informedNames: [],
+      accountableOptions: memberOptions(this.data.projectMembers, []),
+      consultedOptions: memberOptions(this.data.projectMembers, []),
+      informedOptions: memberOptions(this.data.projectMembers, []),
       dueDate: "",
       severityIndex: 2,
       statusIndex: 0,
@@ -139,6 +190,9 @@ Page({
       accountableNames: issue.accountable_names,
       consultedNames: issue.consulted_names,
       informedNames: issue.informed_names,
+      accountableOptions: memberOptions(this.data.projectMembers, issue.accountable_names),
+      consultedOptions: memberOptions(this.data.projectMembers, issue.consulted_names),
+      informedOptions: memberOptions(this.data.projectMembers, issue.informed_names),
       dueDate: issue.due_date,
       severityIndex: Math.max(0, this.data.severityOptions.indexOf(issue.severity)),
       statusIndex: Math.max(0, this.data.statusOptions.indexOf(issue.status)),
@@ -180,6 +234,10 @@ Page({
           expected_revision: this.data.editingRevision,
           description: this.data.description,
           impact: this.data.impact,
+          owner_name: this.data.ownerName,
+          accountable_names: this.data.accountableNames,
+          consulted_names: this.data.consultedNames,
+          informed_names: this.data.informedNames,
           severity: this.data.severityOptions[this.data.severityIndex],
           due_date: this.data.dueDate,
           status: this.data.statusOptions[this.data.statusIndex],

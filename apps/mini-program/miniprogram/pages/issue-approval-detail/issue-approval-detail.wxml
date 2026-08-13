@@ -1,0 +1,26 @@
+<view class="page" wx:if="{{issue}}">
+  <view class="card">
+    <text class="tag">{{approvalTypeLabel}}</text>
+    <text class="title">{{issue.description}}</text>
+    <view class="section">
+      <text class="label">问题影响</text>
+      <text class="value">{{issue.impact}}</text>
+    </view>
+    <view class="section">
+      <text class="label">R 执行负责人</text>
+      <text class="value">{{issue.owner_name}}</text>
+    </view>
+    <view class="section"><text class="label">A 最终负责人</text><text class="value">{{accountableLabel}}</text></view>
+    <view class="section"><text class="label">C 协作/咨询</text><text class="value">{{consultedLabel}}</text></view>
+    <view class="section"><text class="label">I 知情</text><text class="value">{{informedLabel}}</text></view>
+    <view class="section"><text class="label">严重程度</text><text class="value">{{issue.severity}}</text></view>
+    <view class="section"><text class="label">预计完成时间</text><text class="value">{{issue.due_date}}</text></view>
+    <view wx:if="{{deleteReason}}" class="section danger-section">
+      <text class="label">删除原因</text>
+      <text class="value">{{deleteReason}}</text>
+    </view>
+  </view>
+</view>
+<view class="page" wx:else>
+  <view class="card empty">审批详情已失效，请返回项目看板刷新后重试。</view>
+</view>

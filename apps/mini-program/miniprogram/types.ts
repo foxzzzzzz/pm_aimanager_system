@@ -6,6 +6,7 @@ export interface ProjectSummary {
   current_version_number: number;
   business_date: string;
   milestones: Milestone[];
+  pending_approval_count: number;
 }
 
 export interface Milestone {
@@ -25,10 +26,13 @@ export interface MobileDashboard {
   active_plan_name: string;
   member_name: string;
   is_project_manager: boolean;
+  pending_approval_count: number;
   milestones: Milestone[];
 }
 
 export interface MyTask extends Milestone {
+  kind: "milestone" | "issue";
+  task_key: string;
   roles: Array<"R" | "A">;
   risk: "todo" | "upcoming" | "overdue" | "completed";
 }
@@ -87,12 +91,14 @@ export interface Issue {
   due_date: string;
   status: string;
   revision: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface IssueCreateProposal {
   id: string;
   project_id: string;
-  payload: Omit<Issue, "id" | "risk" | "status" | "revision">;
+  payload: Omit<Issue, "id" | "risk" | "status" | "revision" | "created_at" | "updated_at">;
   status: "pending" | "approved" | "rejected";
   issue_id: string | null;
   created_at: string;
@@ -104,6 +110,7 @@ export interface IssueDeleteProposal {
   project_id: string;
   issue_id: string;
   issue_description: string;
+  issue: Issue;
   expected_revision: number;
   reason: string;
   status: "pending" | "approved" | "rejected";

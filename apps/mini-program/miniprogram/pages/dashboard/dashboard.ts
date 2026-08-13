@@ -1,5 +1,6 @@
 import { api } from "../../services/api";
 import { runtimeConfig } from "../../config";
+import { syncTabBarBadges } from "../../services/tab-badges";
 import {
   buildMilestoneFilters,
   filterMilestones,
@@ -11,6 +12,7 @@ import type { ChangeProposal, IssueCreateProposal, IssueDeleteProposal, Mileston
 interface MilestoneTapEvent { currentTarget: { dataset: { code: string } } }
 interface ProposalTapEvent { currentTarget: { dataset: { id: string; version: number } } }
 interface FilterTapEvent { currentTarget: { dataset: { key: MilestoneFilterKey } } }
+interface IssueProposalTapEvent { currentTarget: { dataset: { id: string } } }
 
 interface MilestoneView extends Milestone {
   planLabel: string;
@@ -86,6 +88,10 @@ Page({
             item.created_at,
             runtimeConfig.presentationTimezoneOffsetMinutes,
           ),
+          dueDateLabel: item.payload.due_date,
+          accountableLabel: item.payload.accountable_names.join("、"),
+          consultedLabel: item.payload.consulted_names.join("、"),
+          informedLabel: item.payload.informed_names.join("、"),
         })),
         issueDeleteProposals: issueDeleteProposals.map((item) => ({
           ...item,
@@ -93,6 +99,7 @@ Page({
             item.created_at,
             runtimeConfig.presentationTimezoneOffsetMinutes,
           ),
+          dueDateLabel: item.issue.due_date,
         })),
         milestoneFilters,
         primaryMilestoneFilters: milestoneFilters.filter(
@@ -109,6 +116,7 @@ Page({
         loadError: false,
       });
       wx.setStorageSync("current_member_name", dashboard.member_name);
+      void syncTabBarBadges();
       return true;
     } catch {
       this.setData({ loadError: true });
@@ -117,6 +125,22 @@ Page({
     } finally {
       this.setData({ loading: false });
     }
+  },
+  showIssueCreateDetail(event: IssueProposalTapEvent) {
+    const item = this.data.issueCreateProposals.find(
+      (proposal) => proposal.id === event.currentTarget.dataset.id,
+    );
+    if (!item) return;
+    wx.setStorageSync("issue_approval_detail", { kind: "create", proposal: item });
+    wx.navigateTo({ url: "/pages/issue-approval-detail/issue-approval-detail" });
+  },
+  showIssueDeleteDetail(event: IssueProposalTapEvent) {
+    const item = this.data.issueDeleteProposals.find(
+      (proposal) => proposal.id === event.currentTarget.dataset.id,
+    );
+    if (!item) return;
+    wx.setStorageSync("issue_approval_detail", { kind: "delete", proposal: item });
+    wx.navigateTo({ url: "/pages/issue-approval-detail/issue-approval-detail" });
   },
   async resolveIssueCreateProposal(event: WechatMiniprogram.TouchEvent) {
     const id = event.currentTarget.dataset.id as string;

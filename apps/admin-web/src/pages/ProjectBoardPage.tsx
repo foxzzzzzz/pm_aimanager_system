@@ -36,6 +36,10 @@ export default function ProjectBoardPage({ project, onNavigate }: Props) {
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [risk, setRisk] = useState<Risk>("todo");
   const [error, setError] = useState<string>();
+  const applicableTasks = useMemo(
+    () => dashboard?.tasks.filter((task) => task.plan?.state !== "not_applicable") ?? [],
+    [dashboard],
+  );
 
   useEffect(() => {
     setDashboard(undefined);
@@ -45,18 +49,18 @@ export default function ProjectBoardPage({ project, onNavigate }: Props) {
   }, [project]);
 
   const tasks = useMemo(
-    () => dashboard?.tasks.filter((task) => task.risk === risk) ?? [],
-    [dashboard, risk],
+    () => applicableTasks.filter((task) => task.risk === risk),
+    [applicableTasks, risk],
   );
   const counts = useMemo(
     () =>
       Object.fromEntries(
         (["todo", "upcoming", "overdue", "completed"] as Risk[]).map((item) => [
           item,
-          dashboard?.tasks.filter((task) => task.risk === item).length ?? 0,
+          applicableTasks.filter((task) => task.risk === item).length,
         ]),
       ) as Record<Risk, number>,
-    [dashboard],
+    [applicableTasks],
   );
 
   if (!project) return <Empty description="先新建或选择一个项目" />;

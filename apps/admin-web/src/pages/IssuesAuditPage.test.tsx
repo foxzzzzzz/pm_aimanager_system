@@ -174,6 +174,7 @@ describe("IssuesAuditPage", () => {
         due_date: "2026-08-20",
         status: "待处理",
         revision: 1,
+        created_at: "2026-08-13T02:30:00Z",
       },
     ]);
     render(
@@ -181,6 +182,9 @@ describe("IssuesAuditPage", () => {
         project={{ id: "project-1", code: "ZPD1322", name: "Lyra Pro", status: "active", current_version_number: 1 }}
       />,
     );
+
+    expect(await screen.findByText("2026-08-13 10:30")).toBeInTheDocument();
+    expect(screen.getByText("2026-08-20")).toBeInTheDocument();
 
     fireEvent.click(await screen.findByRole("button", { name: /编\s*辑/ }));
     expect(screen.getByLabelText("A 最终负责人")).toBeInTheDocument();

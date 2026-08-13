@@ -207,6 +207,7 @@ export default function IssuesAuditPage({ project }: Props) {
                   { title: "R", dataIndex: "owner_name" },
                   { title: "A", dataIndex: "accountable_names", render: (value: string[]) => value.join("、") },
                   { title: "C/I", render: (_: unknown, issue: Issue) => [...issue.consulted_names, ...issue.informed_names].join("、") || "—" },
+                  { title: "提交时间", dataIndex: "created_at", render: (value: string) => dayjs(value).format("YYYY-MM-DD HH:mm") },
                   { title: "完成时间", dataIndex: "due_date" },
                   { title: "状态", dataIndex: "status", render: (value: string) => <Tag>{value}</Tag> },
                   {

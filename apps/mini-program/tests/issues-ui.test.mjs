@@ -54,6 +54,47 @@ test("issue form and cards expose complete RACI and risk state", async () => {
   assert.match(template, /C 协作\/咨询/);
   assert.match(template, /I 知情/);
   assert.match(template, /item\.riskLabel/);
+  assert.match(template, /item\.accountableLabel/);
+  assert.doesNotMatch(template, /\.join\(/);
+});
+
+test("issue editing keeps A C and I selectable and submits changed RACI", async () => {
+  const [source, template] = await Promise.all([
+    readSource("../miniprogram/pages/issues/issues.ts"),
+    readSource("../miniprogram/pages/issues/issues.wxml"),
+  ]);
+
+  assert.doesNotMatch(template, /wx:if="\{\{!editingIssueId\}\}" class="field-block"/);
+  assert.doesNotMatch(template, /wx:if="\{\{!editingIssueId\}\}" range="\{\{projectMembers\}\}"/);
+  assert.match(template, /checked="\{\{member\.checked\}\}"/);
+  assert.match(source, /owner_name:\s*this\.data\.ownerName/);
+  assert.match(source, /accountable_names:\s*this\.data\.accountableNames/);
+  assert.match(source, /consulted_names:\s*this\.data\.consultedNames/);
+  assert.match(source, /informed_names:\s*this\.data\.informedNames/);
+});
+
+test("issue and approval cards expose complete details and both timestamps", async () => {
+  const [issueTemplate, dashboardTemplate, dashboardSource, detailTemplate, appConfig] = await Promise.all([
+    readSource("../miniprogram/pages/issues/issues.wxml"),
+    readSource("../miniprogram/pages/dashboard/dashboard.wxml"),
+    readSource("../miniprogram/pages/dashboard/dashboard.ts"),
+    readSource("../miniprogram/pages/issue-approval-detail/issue-approval-detail.wxml"),
+    readSource("../miniprogram/app.json"),
+  ]);
+
+  assert.match(issueTemplate, /提交时间：\{\{item\.createdAtLabel\}\}/);
+  assert.match(issueTemplate, /完成时间：\{\{item\.dueDateLabel\}\}/);
+  assert.match(dashboardTemplate, /bindtap="showIssueCreateDetail"/);
+  assert.match(dashboardTemplate, /bindtap="showIssueDeleteDetail"/);
+  assert.match(dashboardTemplate, /完成时间：\{\{item\.dueDateLabel\}\}/);
+  assert.match(dashboardTemplate, /class="approval-raci"/);
+  assert.match(dashboardSource, /showIssueCreateDetail/);
+  assert.match(dashboardSource, /showIssueDeleteDetail/);
+  assert.match(dashboardSource, /wx\.navigateTo/);
+  assert.match(appConfig, /pages\/issue-approval-detail\/issue-approval-detail/);
+  assert.match(detailTemplate, /问题影响/);
+  assert.match(detailTemplate, /A 最终负责人/);
+  assert.match(detailTemplate, /删除原因/);
 });
 
 test("issue deletion submits an approval request and managers can resolve it", async () => {

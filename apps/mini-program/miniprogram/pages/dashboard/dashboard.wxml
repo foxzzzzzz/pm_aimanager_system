@@ -20,24 +20,30 @@
       <button size="mini" type="warn" loading="{{resolvingProposalId === item.id}}" disabled="{{resolvingProposalId !== ''}}" data-id="{{item.id}}" bindtap="rejectProposal">驳回</button>
     </view>
   </view>
-  <view wx:for="{{issueCreateProposals}}" wx:key="id" class="card milestone">
+  <view wx:for="{{issueCreateProposals}}" wx:key="id" class="card milestone approval-card" data-id="{{item.id}}" bindtap="showIssueCreateDetail">
     <text class="tag approval-tag">待审批新增问题</text>
     <text class="name">{{item.payload.description}}</text>
-    <text class="muted">R {{item.payload.owner_name}} · A {{item.payload.accountable_names.join('、')}}</text>
+    <view class="approval-raci">
+      <text>R {{item.payload.owner_name}}</text><text>A {{item.accountableLabel}}</text>
+      <text wx:if="{{item.consultedLabel}}">C {{item.consultedLabel}}</text>
+      <text wx:if="{{item.informedLabel}}">I {{item.informedLabel}}</text>
+    </view>
     <text class="muted proposal-time">提交时间：{{item.createdAtLabel}}</text>
+    <text class="muted">完成时间：{{item.dueDateLabel}}</text>
     <view class="proposal-actions">
-      <button size="mini" type="primary" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="approve" bindtap="resolveIssueCreateProposal">批准新增</button>
-      <button size="mini" type="warn" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="reject" bindtap="resolveIssueCreateProposal">驳回</button>
+      <button size="mini" type="primary" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="approve" catchtap="resolveIssueCreateProposal">批准新增</button>
+      <button size="mini" type="warn" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="reject" catchtap="resolveIssueCreateProposal">驳回</button>
     </view>
   </view>
-  <view wx:for="{{issueDeleteProposals}}" wx:key="id" class="card milestone">
+  <view wx:for="{{issueDeleteProposals}}" wx:key="id" class="card milestone approval-card" data-id="{{item.id}}" bindtap="showIssueDeleteDetail">
     <text class="tag approval-tag">待审批删除问题</text>
     <text class="name">{{item.issue_description}}</text>
     <text class="muted">删除原因：{{item.reason}}</text>
     <text class="muted proposal-time">提交时间：{{item.createdAtLabel}}</text>
+    <text class="muted">完成时间：{{item.dueDateLabel}}</text>
     <view class="proposal-actions">
-      <button size="mini" type="warn" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="approve" bindtap="resolveIssueDeleteProposal">批准删除</button>
-      <button size="mini" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="reject" bindtap="resolveIssueDeleteProposal">驳回</button>
+      <button size="mini" type="warn" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="approve" catchtap="resolveIssueDeleteProposal">批准删除</button>
+      <button size="mini" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="reject" catchtap="resolveIssueDeleteProposal">驳回</button>
     </view>
   </view>
   <view wx:if="{{dashboard.is_project_manager && issueCreateProposals.length === 0 && issueDeleteProposals.length === 0}}" class="approval-empty">暂无待审批的问题申请</view>

@@ -1,7 +1,7 @@
 import shutil
 import uuid
 from collections.abc import Iterator
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -232,6 +232,11 @@ def test_project_dashboard_exposes_server_classified_tasks_and_issue_summary(
 ) -> None:
     client, _ = workflow
     project_id, _ = _published_project(client)
+    business_date = date.fromisoformat(
+        client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM_HEADERS).json()[
+            "business_date"
+        ]
+    )
     _create_approved_issue(
         client,
         project_id,
@@ -243,7 +248,7 @@ def test_project_dashboard_exposes_server_classified_tasks_and_issue_summary(
             "consulted_names": ["成员03"],
             "informed_names": ["成员04"],
             "severity": "high",
-            "due_date": "2026-08-20",
+            "due_date": (business_date + timedelta(days=7)).isoformat(),
         },
         "dashboard-issue",
     )
@@ -252,8 +257,12 @@ def test_project_dashboard_exposes_server_classified_tasks_and_issue_summary(
 
     assert response.status_code == 200
     dashboard = response.json()
-    assert dashboard["business_date"] == "2026-08-12"
+    assert dashboard["business_date"] == business_date.isoformat()
     assert dashboard["tasks"]
+    assert all(
+        task.get("plan", {}).get("state") != "not_applicable"
+        for task in dashboard["tasks"]
+    )
     assert set(dashboard["tasks"][0]) >= {
         "code",
         "name",

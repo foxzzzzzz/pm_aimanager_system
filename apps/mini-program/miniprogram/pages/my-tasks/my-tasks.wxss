@@ -1,5 +1,5 @@
-.task-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10rpx; margin-bottom: 20rpx; }
-.task-filter { width: 100%; min-width: 0; margin: 0; padding: 0 4rpx; border: 1rpx solid #c9ddd8; border-radius: 999rpx; color: #53635f; background: #fff; font-size: 23rpx; line-height: 58rpx; }
+.task-filters { display: flex; width: 100%; gap: 10rpx; margin-bottom: 20rpx; }
+.task-filter { flex: 1 1 0; width: 0; min-width: 0; box-sizing: border-box; margin: 0; padding: 0 4rpx; border: 1rpx solid #c9ddd8; border-radius: 999rpx; color: #53635f; background: #fff; font-size: 23rpx; line-height: 58rpx; white-space: nowrap; overflow: hidden; }
 .task-filter::after { border: 0; }
 .task-filter.active { color: #fff; background: #146c5a; }
 .task-filter.overdue { color: #c53030; border-color: #f5b9b6; }
@@ -13,4 +13,5 @@
 .task-date { flex-shrink: 0; color: #63716d; font-size: 22rpx; }
 .task-role { display: flex; align-items: center; gap: 8rpx; margin-top: 12rpx; color: #63716d; font-size: 22rpx; }
 .role-tag { padding: 3rpx 12rpx; border-radius: 999rpx; color: #146c5a; background: #dff2ec; font-weight: 700; }
+.task-kind { display: inline-block; margin-top: 10rpx; padding: 3rpx 12rpx; border-radius: 999rpx; color: #b54708; background: #fff1e6; font-size: 21rpx; }
 .overdue-task .task-title, .overdue-task .task-date { color: #c53030; }

@@ -5,6 +5,9 @@
 .done { color: #146c5a; font-size: 22rpx; }
 .approval-tag { color: #b54708; background: #fff1e6; }
 .approval-empty { margin-bottom: 18rpx; color: #6f7b78; font-size: 24rpx; text-align: center; }
+.approval-card { cursor: pointer; }
+.approval-card .name { display: block; }
+.approval-raci { display: flex; flex-wrap: wrap; gap: 8rpx 18rpx; margin-top: 10rpx; color: #53635f; font-size: 22rpx; }
 .proposal-time { display: block; margin-top: 10rpx; }
 .card-action-row {
   display: flex;

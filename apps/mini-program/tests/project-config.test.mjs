@@ -22,6 +22,7 @@ test("mini program declares TypeScript and required pages", async () => {
     "pages/index/index",
     "pages/projects/projects",
     "pages/dashboard/dashboard",
+    "pages/issue-approval-detail/issue-approval-detail",
     "pages/project-review/project-review",
     "pages/milestone-update/milestone-update",
     "pages/issues/issues",

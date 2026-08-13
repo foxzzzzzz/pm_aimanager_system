@@ -278,6 +278,8 @@ class ProjectService:
                 ),
             }
             for milestone in snapshot.get("milestones", [])
+            if active_milestones.get(milestone.get("name"), {}).get("state")
+            != "not_applicable"
         ]
         issues = list(
             self.session.scalars(
@@ -767,7 +769,9 @@ class ProjectService:
         )
         self.session.add(proposal)
         self.session.flush()
-        result = _issue_delete_proposal_dict(proposal)
+        result = _issue_delete_proposal_dict(
+            proposal, self.business_date, self.upcoming_days
+        )
         self._audit(
             issue.project_id,
             "issue_delete_proposal.created",
@@ -785,7 +789,10 @@ class ProjectService:
             .where(IssueDeleteProposal.project_id == project_id)
             .order_by(IssueDeleteProposal.created_at.desc())
         )
-        return [_issue_delete_proposal_dict(item) for item in self.session.scalars(query)]
+        return [
+            _issue_delete_proposal_dict(item, self.business_date, self.upcoming_days)
+            for item in self.session.scalars(query)
+        ]
 
     def approve_issue_delete_proposal(self, proposal_id: uuid.UUID) -> dict[str, Any]:
         proposal = self.session.scalar(
@@ -808,7 +815,9 @@ class ProjectService:
         proposal.status = ProposalStatus.APPROVED
         proposal.resolved_by_actor_id = self.actor_id
         proposal.resolved_at = datetime.now(UTC)
-        result = _issue_delete_proposal_dict(proposal)
+        result = _issue_delete_proposal_dict(
+            proposal, self.business_date, self.upcoming_days
+        )
         self._audit(
             proposal.project_id,
             "issue_delete_proposal.approved",
@@ -843,7 +852,9 @@ class ProjectService:
         proposal.resolved_by_actor_id = self.actor_id
         proposal.resolution_reason = reason
         proposal.resolved_at = datetime.now(UTC)
-        result = _issue_delete_proposal_dict(proposal)
+        result = _issue_delete_proposal_dict(
+            proposal, self.business_date, self.upcoming_days
+        )
         self._audit(
             proposal.project_id,
             "issue_delete_proposal.rejected",
@@ -1236,12 +1247,15 @@ def _issue_create_proposal_dict(proposal: IssueCreateProposal) -> dict[str, Any]
     }
 
 
-def _issue_delete_proposal_dict(proposal: IssueDeleteProposal) -> dict[str, Any]:
+def _issue_delete_proposal_dict(
+    proposal: IssueDeleteProposal, business_date: date, upcoming_days: int
+) -> dict[str, Any]:
     return {
         "id": str(proposal.id),
         "project_id": str(proposal.project_id),
         "issue_id": str(proposal.issue_id),
         "issue_description": proposal.issue.description,
+        "issue": _issue_dict(proposal.issue, business_date, upcoming_days),
         "expected_revision": proposal.expected_revision,
         "reason": proposal.reason,
         "status": proposal.status,
