@@ -8,7 +8,7 @@
     <text class="muted">身份：{{dashboard.member_name}} · 正式版本 v{{dashboard.current_version_number}}</text>
     <text class="plan">当前计划：{{dashboard.active_plan_name}}</text>
     <view class="card-action-row">
-      <button class="card-action summary-action" size="mini" type="primary" bindtap="openProjectReview">查看项目资料</button>
+      <button class="card-action dashboard-action dashboard-action-primary summary-action" size="mini" bindtap="openProjectReview">查看项目资料</button>
     </view>
   </view>
   <view wx:for="{{proposals}}" wx:key="id" class="card milestone">
@@ -31,8 +31,8 @@
     <text class="muted proposal-time">提交时间：{{item.createdAtLabel}}</text>
     <text class="muted">完成时间：{{item.dueDateLabel}}</text>
     <view class="proposal-actions">
-      <button size="mini" type="primary" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="approve" catchtap="resolveIssueCreateProposal">批准新增</button>
-      <button size="mini" type="warn" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="reject" catchtap="resolveIssueCreateProposal">驳回</button>
+      <button class="dashboard-action dashboard-action-primary" size="mini" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="approve" catchtap="resolveIssueCreateProposal">批准新增</button>
+      <button class="dashboard-action dashboard-action-secondary" size="mini" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="reject" catchtap="resolveIssueCreateProposal">驳回</button>
     </view>
   </view>
   <view wx:for="{{issueDeleteProposals}}" wx:key="id" class="card milestone approval-card" data-id="{{item.id}}" bindtap="showIssueDeleteDetail">
@@ -42,8 +42,8 @@
     <text class="muted proposal-time">提交时间：{{item.createdAtLabel}}</text>
     <text class="muted">完成时间：{{item.dueDateLabel}}</text>
     <view class="proposal-actions">
-      <button size="mini" type="warn" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="approve" catchtap="resolveIssueDeleteProposal">批准删除</button>
-      <button size="mini" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="reject" catchtap="resolveIssueDeleteProposal">驳回</button>
+      <button class="dashboard-action dashboard-action-primary" size="mini" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="approve" catchtap="resolveIssueDeleteProposal">批准删除</button>
+      <button class="dashboard-action dashboard-action-secondary" size="mini" loading="{{resolvingIssueProposalId === item.id}}" disabled="{{resolvingIssueProposalId !== ''}}" data-id="{{item.id}}" data-action="reject" catchtap="resolveIssueDeleteProposal">驳回</button>
     </view>
   </view>
   <view wx:if="{{dashboard.is_project_manager && issueCreateProposals.length === 0 && issueDeleteProposals.length === 0}}" class="approval-empty">暂无待审批的问题申请</view>
@@ -51,7 +51,7 @@
     <button
       wx:for="{{primaryMilestoneFilters}}"
       wx:key="key"
-      class="milestone-filter {{selectedMilestoneFilter === item.key ? 'active' : ''}} {{item.key === 'overdue' && item.count > 0 ? 'overdue' : ''}}"
+      class="milestone-filter {{item.key}} {{selectedMilestoneFilter === item.key ? 'active' : ''}}"
       data-key="{{item.key}}"
       bindtap="selectMilestoneFilter"
     >{{item.label}} {{item.count}}</button>
@@ -66,7 +66,7 @@
     </view>
     <text class="muted">计划：{{item.planLabel}}</text>
     <view wx:if="{{item.can_update}}" class="card-action-row">
-      <button class="card-action milestone-action" size="mini" type="primary" data-code="{{item.code}}" bindtap="updateMilestone">更新进度</button>
+      <button class="card-action dashboard-action dashboard-action-primary milestone-action" size="mini" data-code="{{item.code}}" bindtap="updateMilestone">更新进度</button>
     </view>
   </view>
 </view>

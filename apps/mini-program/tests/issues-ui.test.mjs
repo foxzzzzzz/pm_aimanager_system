@@ -118,3 +118,11 @@ test("issue deletion submits an approval request and managers can resolve it", a
   assert.match(presentationSource, /issue_create_approved:\s*"新增审批通过"/);
   assert.match(presentationSource, /issue_delete_rejected:\s*"删除审批驳回"/);
 });
+
+test("issue cancellation starts with an empty reason field", async () => {
+  const source = await readSource("../miniprogram/pages/issues/issues.ts");
+
+  const cancellationModal = source.match(/async deleteIssue[\s\S]*?confirmColor:\s*"#c53030"/);
+  assert.match(cancellationModal?.[0] ?? "", /editable:\s*true/);
+  assert.match(cancellationModal?.[0] ?? "", /placeholderText:\s*""/);
+});

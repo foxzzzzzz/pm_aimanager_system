@@ -17,6 +17,17 @@
 .card-action {
   margin: 0;
 }
+.dashboard-action {
+  min-width: 152rpx;
+  margin: 0;
+  padding: 0 24rpx;
+  border-radius: 10rpx;
+  font-weight: 650;
+  line-height: 64rpx;
+}
+.dashboard-action::after { border: 0; }
+.dashboard-action-primary { background: #146c5a; color: #fff; }
+.dashboard-action-secondary { border: 1rpx solid #146c5a; background: #fff; color: #146c5a; }
 .milestone-card .muted { display: block; }
 .proposal-actions { display: flex; justify-content: flex-end; gap: 16rpx; margin-top: 14rpx; }
 .proposal-actions button { margin: 0; }
@@ -40,7 +51,10 @@
 }
 .milestone-filter::after { border: 0; }
 .milestone-filter.active { background: #146c5a; color: #fff; }
+.milestone-filter.upcoming { border-color: #f7cda7; color: #b54708; background: #fff8f1; }
 .milestone-filter.overdue { border-color: #f5b9b6; color: #c53030; background: #fff5f5; }
+.milestone-filter.upcoming.active,
 .milestone-filter.overdue.active { color: #fff; background: #c53030; }
+.milestone-filter.upcoming.active { background: #146c5a; }
 .milestone-filter.more { flex-grow: 1.3; font-size: 21rpx; }
 .empty-state { color: #6f7b78; text-align: center; }

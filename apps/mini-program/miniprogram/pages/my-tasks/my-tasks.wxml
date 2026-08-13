@@ -1,6 +1,6 @@
 <view class="page">
   <view class="task-filters">
-    <button wx:for="{{filters}}" wx:key="key" class="task-filter {{selectedFilter === item.key ? 'active' : ''}} {{item.key === 'overdue' ? 'overdue' : ''}}" data-key="{{item.key}}" bindtap="selectFilter">{{item.label}}</button>
+    <button wx:for="{{filters}}" wx:key="key" class="task-filter {{item.key}} {{selectedFilter === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="selectFilter">{{item.label}}</button>
   </view>
   <view wx:if="{{loading}}" class="card loading-state">正在加载我的任务…</view>
   <view wx:if="{{!loading && loadError}}" class="card error-state">

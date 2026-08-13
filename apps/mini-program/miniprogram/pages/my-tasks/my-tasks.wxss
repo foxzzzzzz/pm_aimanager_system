@@ -2,8 +2,11 @@
 .task-filter { flex: 1 1 0; width: 0; min-width: 0; box-sizing: border-box; margin: 0; padding: 0 4rpx; border: 1rpx solid #c9ddd8; border-radius: 999rpx; color: #53635f; background: #fff; font-size: 23rpx; line-height: 58rpx; white-space: nowrap; overflow: hidden; }
 .task-filter::after { border: 0; }
 .task-filter.active { color: #fff; background: #146c5a; }
+.task-filter.upcoming { color: #b54708; border-color: #f7cda7; background: #fff8f1; }
 .task-filter.overdue { color: #c53030; border-color: #f5b9b6; }
+.task-filter.upcoming.active,
 .task-filter.overdue.active { color: #fff; background: #c53030; }
+.task-filter.upcoming.active { background: #146c5a; }
 .project-head { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; padding-bottom: 14rpx; }
 .project-name { margin-left: 12rpx; font-size: 30rpx; font-weight: 700; }
 .project-entry { flex-shrink: 0; color: #087a64; font-size: 23rpx; font-weight: 650; }

@@ -11,12 +11,12 @@ test("dashboard uses right-aligned primary mini actions consistent with approval
     readSource("../miniprogram/pages/dashboard/dashboard.wxss"),
   ]);
 
-  assert.match(template, /class="card-action summary-action"/);
-  assert.match(template, /class="card-action milestone-action"/);
+  assert.match(template, /class="card-action dashboard-action dashboard-action-primary summary-action"/);
+  assert.match(template, /class="card-action dashboard-action dashboard-action-primary milestone-action"/);
   assert.match(template, /查看项目资料/);
   assert.match(template, /更新进度/);
-  assert.match(template, /class="card-action summary-action" size="mini" type="primary" bindtap="openProjectReview"/);
-  assert.match(template, /class="card-action milestone-action" size="mini" type="primary" data-code=.*bindtap="updateMilestone"/);
+  assert.match(template, /class="card-action dashboard-action dashboard-action-primary summary-action" size="mini" bindtap="openProjectReview"/);
+  assert.match(template, /class="card-action dashboard-action dashboard-action-primary milestone-action" size="mini" data-code=.*bindtap="updateMilestone"/);
   assert.doesNotMatch(template, /class="action-arrow"/);
   assert.match(styles, /\.card-action-row\s*\{[^}]*justify-content:\s*flex-end/s);
   assert.match(styles, /\.card-action\s*\{[^}]*margin:\s*0/s);
@@ -29,6 +29,21 @@ test("dashboard uses right-aligned primary mini actions consistent with approval
   assert.match(source, /formatDateTime\(\s*item\.created_at/s);
   assert.match(styles, /\.approval-tag\s*\{[^}]*color:\s*#b54708/s);
   assert.match(styles, /\.approval-tag\s*\{[^}]*background:\s*#fff1e6/s);
+});
+
+test("dashboard project and issue approval actions share the paired button treatment", async () => {
+  const [template, styles] = await Promise.all([
+    readSource("../miniprogram/pages/dashboard/dashboard.wxml"),
+    readSource("../miniprogram/pages/dashboard/dashboard.wxss"),
+  ]);
+
+  assert.match(template, /class="card-action dashboard-action dashboard-action-primary summary-action"/);
+  assert.match(template, /class="dashboard-action dashboard-action-primary"[^>]*>批准新增<\/button>/);
+  assert.match(template, /class="dashboard-action dashboard-action-primary"[^>]*>批准删除<\/button>/);
+  assert.match(template, /class="dashboard-action dashboard-action-secondary"[^>]*>驳回<\/button>/);
+  assert.match(styles, /\.dashboard-action\s*\{[^}]*border-radius:\s*10rpx/s);
+  assert.match(styles, /\.dashboard-action-primary\s*\{[^}]*background:\s*#146c5a/s);
+  assert.match(styles, /\.dashboard-action-secondary\s*\{[^}]*border:\s*1rpx solid #146c5a/s);
 });
 
 test("list pages avoid duplicate native navigation titles", async () => {
@@ -94,6 +109,9 @@ test("dashboard keeps todo upcoming and overdue visible while moving secondary f
   assert.match(styles, /\.milestone-filter\s*\{[^}]*flex:\s*1\s+1\s+0/s);
   assert.match(styles, /\.milestone-filter\s*\{[^}]*width:\s*0/s);
   assert.match(styles, /\.milestone-filter\.more\s*\{[^}]*flex-grow:\s*1\.3/s);
+  assert.match(template, /\{\{item\.key\}\}/);
+  assert.match(styles, /\.milestone-filter\.upcoming\s*\{[^}]*color:\s*#b54708/s);
+  assert.match(styles, /\.milestone-filter\.overdue\s*\{[^}]*color:\s*#c53030/s);
 });
 
 test("project cards expose upcoming and overdue milestones with RACI", async () => {
@@ -136,6 +154,9 @@ test("my tasks groups R and A milestones by project with four risk filters", asy
   assert.match(styles, /\.task-filter\s*\{[^}]*flex:\s*1\s+1\s+0/s);
   assert.match(styles, /\.task-filter\s*\{[^}]*width:\s*0/s);
   assert.match(styles, /\.task-filter\s*\{[^}]*box-sizing:\s*border-box/s);
+  assert.match(template, /\{\{item\.key\}\}/);
+  assert.match(styles, /\.task-filter\.upcoming\s*\{[^}]*color:\s*#b54708/s);
+  assert.match(styles, /\.task-filter\.overdue\s*\{[^}]*color:\s*#c53030/s);
 });
 
 test("tab bar badges expose unread messages and pending approvals", async () => {
