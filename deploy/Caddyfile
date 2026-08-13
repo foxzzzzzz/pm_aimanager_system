@@ -1,0 +1,9 @@
+{$API_PUBLIC_DOMAIN} {
+    tls {$TLS_EMAIL}
+    reverse_proxy api:8000
+}
+
+{$ADMIN_PUBLIC_DOMAIN} {
+    tls {$TLS_EMAIL}
+    reverse_proxy admin-web:80
+}

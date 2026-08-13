@@ -30,6 +30,23 @@ bash ./scripts/start-backend.sh
 - 管理端容器使用Nginx提供生产构建产物；非本机部署时通过`ADMIN_WEB_API_BASE_URL`设置浏览器可访问的API地址。
 - 微信小程序使用微信开发者工具打开 `apps/mini-program`。
 
+## 腾讯云生产部署
+
+生产环境继续使用Docker Compose中的PostgreSQL、Redis、MinIO和通知Worker，新增Caddy作为唯一公网HTTPS入口。部署服务器只需开放`22`、`80`和`443`；其余服务端口仅绑定到服务器回环地址。
+
+在已安装Docker Engine与Compose插件的Linux服务器上执行：
+
+```bash
+git pull
+chmod +x scripts/init-production.sh scripts/deploy-production.sh
+bash ./scripts/init-production.sh
+bash ./scripts/deploy-production.sh
+```
+
+初始化脚本只会询问公网域名、证书邮箱、微信与腾讯云短信配置；管理员令牌、数据库、MinIO及手机号加密密钥自动生成并保存到受忽略且权限为`600`的`.env.production`。首次运行短信默认关闭，只有完成签名、模板与小范围通道验证后才在脚本中选择启用。
+
+部署前请确认一级域名下的`api`、`admin`子域名已经解析到服务器公网IP，并在微信公众平台将`https://api.<你的域名>`加入request合法域名。部署成功后，才将小程序的`apps/mini-program/miniprogram/config.ts`更新为真实HTTPS API、关闭`useDevelopmentLogin`，并填入正式订阅消息模板ID后上传体验版。
+
 ## Phase 1 固定模板解析
 
 - 模板清单：`config/templates/lyra_project_spec-v1.0.yaml`

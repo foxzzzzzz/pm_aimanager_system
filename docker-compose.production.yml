@@ -1,0 +1,38 @@
+services:
+  postgres:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  minio:
+    ports: !reset []
+
+  api:
+    ports: !reset []
+
+  admin-web:
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      API_PUBLIC_DOMAIN: ${API_PUBLIC_DOMAIN:?API_PUBLIC_DOMAIN is required}
+      ADMIN_PUBLIC_DOMAIN: ${ADMIN_PUBLIC_DOMAIN:?ADMIN_PUBLIC_DOMAIN is required}
+      TLS_EMAIL: ${TLS_EMAIL:?TLS_EMAIL is required}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      admin-web:
+        condition: service_healthy
+
+volumes:
+  caddy-data:
+  caddy-config:
