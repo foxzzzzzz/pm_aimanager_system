@@ -79,11 +79,6 @@ prompt_value "TLS_EMAIL" "TLS certificate notification email"
 prompt_value "WECHAT_APP_ID" "WeChat Mini Program AppID"
 prompt_value "WECHAT_APP_SECRET" "WeChat Mini Program AppSecret" true
 prompt_value "WECHAT_SUBSCRIPTION_TEMPLATE_ID" "WeChat subscription template ID"
-prompt_value "TENCENT_SECRET_ID" "Tencent Cloud SMS SecretId"
-prompt_value "TENCENT_SECRET_KEY" "Tencent Cloud SMS SecretKey" true
-prompt_value "TENCENT_SMS_SDK_APP_ID" "Tencent Cloud SMS SDK AppID"
-prompt_value "TENCENT_SMS_SIGN_NAME" "Approved Tencent SMS sign name"
-prompt_value "TENCENT_SMS_CRITICAL_TEMPLATE_ID" "Approved critical-alert SMS template ID"
 
 set_value "ADMIN_WEB_API_BASE_URL" "https://$(get_value API_PUBLIC_DOMAIN)/api/v1"
 set_value "PROJECT_MANAGER_CORS_ORIGINS" "https://$(get_value ADMIN_PUBLIC_DOMAIN)"
@@ -92,8 +87,16 @@ generate_secret_if_missing "ADMIN_API_TOKEN"
 generate_secret_if_missing "PHONE_HMAC_KEY"
 generate_secret_if_missing "PHONE_ENCRYPTION_KEY"
 
-read -r -p "Enable real Tencent SMS delivery now? [y/N]: " enable_sms
-if [[ "${enable_sms}" =~ ^[Yy]$ ]]; then
+read -r -p "Configure Tencent Cloud SMS now? [y/N]: " configure_sms
+if [[ "${configure_sms}" =~ ^[Yy]$ ]]; then
+    prompt_value "TENCENT_SECRET_ID" "Tencent Cloud SMS SecretId"
+    prompt_value "TENCENT_SECRET_KEY" "Tencent Cloud SMS SecretKey" true
+    prompt_value "TENCENT_SMS_SDK_APP_ID" "Tencent Cloud SMS SDK AppID"
+    prompt_value "TENCENT_SMS_SIGN_NAME" "Approved Tencent SMS sign name"
+    prompt_value "TENCENT_SMS_CRITICAL_TEMPLATE_ID" "Approved critical-alert SMS template ID"
+    read -r -p "Enable real Tencent SMS delivery now? [y/N]: " enable_sms
+fi
+if [[ "${configure_sms}" =~ ^[Yy]$ && "${enable_sms}" =~ ^[Yy]$ ]]; then
     set_value "PROJECT_MANAGER_SMS_ENABLED" "true"
 else
     set_value "PROJECT_MANAGER_SMS_ENABLED" "false"

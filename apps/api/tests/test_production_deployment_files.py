@@ -25,7 +25,7 @@ def test_production_environment_example_keeps_internal_ports_on_loopback() -> No
     assert "PROJECT_MANAGER_SMS_ENABLED=false" in environment
 
 
-def test_production_initializer_prompts_for_external_values_and_generates_keys() -> None:
+def test_production_initializer_defaults_to_a_wechat_only_deployment() -> None:
     script = (ROOT / "scripts" / "init-production.sh").read_text(encoding="utf-8")
 
     for name in (
@@ -35,13 +35,11 @@ def test_production_initializer_prompts_for_external_values_and_generates_keys()
         "WECHAT_APP_ID",
         "WECHAT_APP_SECRET",
         "WECHAT_SUBSCRIPTION_TEMPLATE_ID",
-        "TENCENT_SECRET_ID",
-        "TENCENT_SECRET_KEY",
-        "TENCENT_SMS_SDK_APP_ID",
-        "TENCENT_SMS_SIGN_NAME",
-        "TENCENT_SMS_CRITICAL_TEMPLATE_ID",
     ):
         assert name in script
+    assert 'read -r -p "Configure Tencent Cloud SMS now? [y/N]: " configure_sms' in script
+    assert 'set_value "PROJECT_MANAGER_SMS_ENABLED" "false"' in script
+    assert 'if [[ "${configure_sms}" =~ ^[Yy]$ ]]; then' in script
     assert "openssl rand -base64 32" in script
     assert 'generate_secret_if_missing "POSTGRES_PASSWORD"' in script
     assert 'generate_secret_if_missing "MINIO_ROOT_PASSWORD"' in script

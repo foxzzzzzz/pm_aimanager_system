@@ -43,7 +43,7 @@ bash ./scripts/init-production.sh
 bash ./scripts/deploy-production.sh
 ```
 
-初始化脚本只会询问公网域名、证书邮箱、微信与腾讯云短信配置；管理员令牌、数据库、MinIO及手机号加密密钥自动生成并保存到受忽略且权限为`600`的`.env.production`。首次运行短信默认关闭，只有完成签名、模板与小范围通道验证后才在脚本中选择启用。
+初始化脚本只会询问公网域名、证书邮箱和微信配置；腾讯云短信默认跳过。管理员令牌、数据库、MinIO及手机号加密密钥自动生成并保存到受忽略且权限为`600`的`.env.production`。只有选择配置短信、并完成签名、模板与小范围通道验证后，脚本才会询问短信凭证并允许启用。
 
 部署前请确认一级域名下的`api`、`admin`子域名已经解析到服务器公网IP，并在微信公众平台将`https://api.<你的域名>`加入request合法域名。部署成功后，才将小程序的`apps/mini-program/miniprogram/config.ts`更新为真实HTTPS API、关闭`useDevelopmentLogin`，并填入正式订阅消息模板ID后上传体验版。
 
