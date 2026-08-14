@@ -123,12 +123,6 @@ class InvitationAccept(BaseModel):
     phone: str | None = Field(default=None, min_length=6, max_length=32)
     phone_code: str | None = Field(default=None, min_length=1, max_length=512)
 
-    @model_validator(mode="after")
-    def require_phone_source(self) -> InvitationAccept:
-        if not self.phone and not self.phone_code:
-            raise ValueError("phone or phone_code is required")
-        return self
-
 
 class MilestoneUpdateCreate(BaseModel):
     kind: str = Field(pattern="^(completed|delay)$")

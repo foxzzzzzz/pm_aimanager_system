@@ -13,6 +13,7 @@ Page({
   data: {
     loggedIn: false,
     invitationToken: "",
+    allowInvitationOnlyBinding: runtimeConfig.allowInvitationOnlyBinding,
     phone: "",
     bindingStatus: "",
     busy: false,
@@ -52,6 +53,9 @@ Page({
   },
   async bindWithPhone() {
     await this.acceptInvitation(this.data.phone, undefined);
+  },
+  async bindWithInvitationOnly() {
+    await this.acceptInvitation(undefined, undefined);
   },
   async onGetPhoneNumber(event: PhoneEvent) {
     if (!event.detail.code) {

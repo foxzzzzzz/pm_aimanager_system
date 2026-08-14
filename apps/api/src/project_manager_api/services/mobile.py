@@ -170,12 +170,6 @@ class MobileService:
             raise NotFoundError("invitation is invalid")
         if _expired(binding.invitation_expires_at):
             raise ConflictError("invitation has expired")
-        if payload.phone:
-            if not self.settings.allow_development_wechat_login:
-                raise ServiceError("direct phone input is allowed only in development")
-            phone = payload.phone
-        else:
-            phone = exchange_wechat_phone(payload.phone_code or "", self.settings)
         other_binding = self.session.scalar(
             select(MemberBinding).where(
                 MemberBinding.project_id == binding.project_id,
@@ -186,6 +180,23 @@ class MobileService:
         )
         if other_binding is not None:
             raise ConflictError("user is already bound to another member in this project")
+        if not payload.phone and not payload.phone_code:
+            if not self.settings.allow_invitation_only_binding:
+                raise ServiceError("invitation-only binding is disabled")
+            binding.user_id = user.id
+            binding.actor_id = _actor_id(user)
+            if binding.expected_phone_hash:
+                binding.status = BindingStatus.PENDING_REVIEW
+            else:
+                self._activate_binding(binding, user)
+            self.session.flush()
+            return _binding_dict(binding)
+        if payload.phone:
+            if not self.settings.allow_development_wechat_login:
+                raise ServiceError("direct phone input is allowed only in development")
+            phone = payload.phone
+        else:
+            phone = exchange_wechat_phone(payload.phone_code or "", self.settings)
         phone_hash = self._phone_hash(phone)
         binding.user_id = user.id
         binding.actor_id = _actor_id(user)

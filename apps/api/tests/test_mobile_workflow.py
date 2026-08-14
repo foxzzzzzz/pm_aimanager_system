@@ -181,6 +181,68 @@ def test_unbound_user_cannot_view_project_and_bound_user_can(
         assert "13800000010" not in str(binding.__dict__)
 
 
+def test_invitation_only_binding_requires_the_feature_flag(mobile_workflow: TestClient) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    invitation = _invite(client, project_id, "成员10", "invite-only-disabled")
+    member_headers, _ = _login(client, "dev:invite-only-disabled")
+
+    accepted = client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=member_headers,
+        json={"invitation_token": invitation["invitation_token"]},
+    )
+
+    assert accepted.status_code == 400
+    assert accepted.json()["detail"] == "invitation-only binding is disabled"
+
+
+def test_invitation_only_binding_activates_an_invitation_without_expected_phone(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    client.app.state.settings.allow_invitation_only_binding = True
+    project_id = _published_project(client)
+    invitation = _invite(client, project_id, "成员10", "invite-only-bound")
+    member_headers, _ = _login(client, "dev:invite-only-bound")
+
+    accepted = client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=member_headers,
+        json={"invitation_token": invitation["invitation_token"]},
+    )
+
+    assert accepted.status_code == 200
+    assert accepted.json()["status"] == "bound"
+    assert client.get("/api/v1/mobile/projects", headers=member_headers).json()
+
+
+def test_invitation_only_binding_with_expected_phone_requires_review(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    client.app.state.settings.allow_invitation_only_binding = True
+    project_id = _published_project(client)
+    invitation = _invite(
+        client,
+        project_id,
+        "成员08",
+        "invite-only-review",
+        expected_phone="13800000009",
+    )
+    member_headers, _ = _login(client, "dev:invite-only-review")
+
+    accepted = client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=member_headers,
+        json={"invitation_token": invitation["invitation_token"]},
+    )
+
+    assert accepted.status_code == 200
+    assert accepted.json()["status"] == "pending_review"
+    assert client.get("/api/v1/mobile/projects", headers=member_headers).json() == []
+
+
 def test_bound_sheet_project_manager_receives_project_manager_role(
     mobile_workflow: TestClient,
 ) -> None:

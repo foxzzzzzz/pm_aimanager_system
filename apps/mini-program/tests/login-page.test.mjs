@@ -43,3 +43,21 @@ test("login page checks bound projects and exposes their entry", async () => {
   assert.match(template, /进入我的项目/);
   assert.match(template, /!hasProjects \|\| invitationToken/);
 });
+
+test("login page keeps invitation-only binding behind its runtime switch", async () => {
+  const source = await readFile(
+    new URL("../miniprogram/pages/index/index.ts", import.meta.url),
+    "utf8",
+  );
+  const template = await readFile(
+    new URL("../miniprogram/pages/index/index.wxml", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /bindWithInvitationOnly/);
+  assert.match(source, /acceptInvitation\(undefined, undefined\)/);
+  assert.match(source, /runtimeConfig\.allowInvitationOnlyBinding/);
+  assert.match(template, /allowInvitationOnlyBinding/);
+  assert.match(template, /使用邀请码直接绑定/);
+  assert.match(template, /授权手机号并绑定/);
+});

@@ -55,6 +55,7 @@ def test_production_channel_and_cors_settings_can_be_overridden_by_environment(
     monkeypatch.setenv("WECHAT_INVITATION_PAGE", "pages/index/index")
     monkeypatch.setenv("WECHAT_INVITATION_ENV_VERSION", "trial")
     monkeypatch.setenv("WECHAT_INVITATION_CODE_WIDTH", "500")
+    monkeypatch.setenv("WECHAT_ALLOW_INVITATION_ONLY_BINDING", "true")
     monkeypatch.setenv("WECHAT_SUBSCRIPTION_TITLE_FIELD", "thing5")
     monkeypatch.setenv("WECHAT_SUBSCRIPTION_BODY_FIELD", "thing8")
     monkeypatch.setenv("TENCENT_SMS_REGION", "ap-shanghai")
@@ -70,6 +71,7 @@ def test_production_channel_and_cors_settings_can_be_overridden_by_environment(
     assert settings.wechat_invitation_page == "pages/index/index"
     assert settings.wechat_invitation_env_version == "trial"
     assert settings.wechat_invitation_code_width == 500
+    assert settings.allow_invitation_only_binding is True
     assert settings.wechat_subscription_title_field == "thing5"
     assert settings.wechat_subscription_body_field == "thing8"
     assert settings.sms_region == "ap-shanghai"

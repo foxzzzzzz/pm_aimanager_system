@@ -30,6 +30,7 @@ class AppSettings(BaseModel):
     wechat_app_secret: str | None = None
     mobile_session_days: int = 30
     mobile_invitation_days: int = Field(default=7, ge=1, le=30)
+    allow_invitation_only_binding: bool = False
     mobile_upcoming_days: int = Field(default=14, ge=1, le=90)
     wechat_invitation_page: str = Field(default="pages/index/index", min_length=1, pattern=r"^[^/]")
     wechat_invitation_env_version: Literal["release", "trial", "develop"] = "release"
@@ -142,6 +143,11 @@ class AppSettings(BaseModel):
                     str(wechat.get("invitation_days", 7)),
                 )
             ),
+            allow_invitation_only_binding=os.environ.get(
+                "WECHAT_ALLOW_INVITATION_ONLY_BINDING",
+                str(wechat.get("allow_invitation_only_binding", False)),
+            ).lower()
+            == "true",
             mobile_upcoming_days=int(config["mobile"]["upcoming_days"]),
             wechat_invitation_page=os.environ.get(
                 "WECHAT_INVITATION_PAGE",

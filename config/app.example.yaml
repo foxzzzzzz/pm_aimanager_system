@@ -106,6 +106,9 @@ wechat:
   session_days: 30
   # One-time member invitation and generated URL Link validity in days.
   invitation_days: 7
+  # Temporary fallback: bind a signed-in WeChat user with an invitation that has no expected phone.
+  # Keep false unless the WeChat phone-number capability is unavailable.
+  allow_invitation_only_binding: false
   # Mini-program page opened by invitation links and codes, without a leading slash.
   invitation_page: pages/index/index
   # Invitation target version: release, trial, or develop.

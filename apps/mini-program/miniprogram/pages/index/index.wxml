@@ -11,6 +11,7 @@
   <view wx:if="{{loggedIn && (!hasProjects || invitationToken)}}" class="card">
     <text class="section-title">绑定项目成员</text>
     <input class="field" value="{{invitationToken}}" placeholder="邀请令牌" bindinput="onTokenInput" />
+    <button wx:if="{{allowInvitationOnlyBinding}}" class="primary" bindtap="bindWithInvitationOnly">使用邀请码直接绑定</button>
     <button class="primary" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber">授权手机号并绑定</button>
     <view class="divider">开发环境备用</view>
     <input class="field" type="number" value="{{phone}}" placeholder="测试手机号" bindinput="onPhoneInput" />

@@ -1,10 +1,12 @@
 // Replace the base URL and disable development login before a real WeChat build.
 export const runtimeConfig = {
-  apiBaseUrl: "http://192.168.11.127:18000/api/v1",
-  useDevelopmentLogin: true,
-  developmentLoginCode: "dev:mini-program-user",
+  apiBaseUrl: "https://api.ereader.fun/api/v1",
+  useDevelopmentLogin: false,
+  developmentLoginCode: "",
+  // Temporary fallback while the WeChat phone-number capability is unavailable.
+  allowInvitationOnlyBinding: true,
   // Replace with the approved WeChat subscription-message template before release.
-  subscriptionTemplateId: "replace-with-template-id",
+  subscriptionTemplateId: "SUkrUyXH_lnu4grmZ6OyyuahFu8oMfTqXSWKVmBQZQ0",
   // 节点结束日期距今天不超过该天数时，归入“近期”筛选。
   milestoneUpcomingDays: 14,
   // API 时间戳展示使用的业务时区偏移量，当前为 UTC+8。
