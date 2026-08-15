@@ -6,3 +6,4 @@ export function projectAccessState(projects: unknown[]): {
 };
 
 export function invitationErrorMessage(error: unknown): string;
+export function mobileSessionErrorMessage(error: unknown): string | null;

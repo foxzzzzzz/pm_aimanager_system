@@ -171,6 +171,24 @@ def test_xlsx_06_reports_precise_missing_structure(
         registry.parse(changed)
 
 
+def test_xlsx_allows_missing_optional_customer_product_specification_sheet(
+    registry: ParserRegistry,
+    phase1_tmp_path: Path,
+) -> None:
+    changed = phase1_tmp_path / "without-customer-product-specification.xlsx"
+    shutil.copyfile(WORKBOOK, changed)
+    workbook = load_workbook(changed)
+    del workbook["客户-产品规格书"]
+    workbook.save(changed)
+    workbook.close()
+
+    result = registry.parse(changed)
+
+    assert result.draft.project.code == EXPECTED["project"]["code"]
+    assert len(result.draft.product_specs) == 70
+    assert len(result.draft.milestones) == 24
+
+
 @pytest.mark.parametrize("filename", ["legacy.xls", "disguised.xlsx"])
 def test_xlsx_07_rejects_xls_and_disguised_files(
     registry: ParserRegistry,

@@ -3,6 +3,7 @@ import { api } from "../../services/api";
 import {
   INVALID_INVITATION_MESSAGE,
   invitationErrorMessage,
+  mobileSessionErrorMessage,
   projectAccessState,
 } from "../../services/login-page.js";
 
@@ -74,6 +75,7 @@ Page({
       this.setData({ bindingStatus: result.status });
       if (result.status === "bound") wx.switchTab({ url: "/pages/projects/projects" });
     } catch (error) {
+      if (this.resetInvalidMobileSession(error)) return;
       const message = invitationErrorMessage(error);
       if (message === INVALID_INVITATION_MESSAGE) {
         wx.showModal({
@@ -91,6 +93,7 @@ Page({
     try {
       this.setData(projectAccessState(await api.projects()));
     } catch (error) {
+      if (this.resetInvalidMobileSession(error)) return;
       this.showError(error);
     } finally {
       this.setData({ checkingProjects: false });
@@ -98,6 +101,14 @@ Page({
   },
   openProjects() {
     wx.switchTab({ url: "/pages/projects/projects" });
+  },
+  resetInvalidMobileSession(error: unknown): boolean {
+    const message = mobileSessionErrorMessage(error);
+    if (!message) return false;
+    wx.removeStorageSync("access_token");
+    this.setData({ loggedIn: false, hasProjects: false, projectCount: 0 });
+    wx.showModal({ title: "请重新登录", content: message, showCancel: false });
+    return true;
   },
   showError(error: unknown) {
     wx.showToast({ title: error instanceof Error ? error.message : "操作失败", icon: "none" });

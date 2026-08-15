@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   invitationErrorMessage,
+  mobileSessionErrorMessage,
   projectAccessState,
 } from "../miniprogram/services/login-page.js";
 
@@ -25,6 +26,14 @@ test("invalid invitation errors use an actionable localized message", () => {
   assert.equal(invitationErrorMessage(new Error("Request failed: 404")), expected);
   assert.equal(invitationErrorMessage(new Error("手机号不匹配")), "手机号不匹配");
   assert.equal(invitationErrorMessage("unknown"), "操作失败");
+});
+
+test("invalid mobile sessions require a fresh login", () => {
+  assert.equal(
+    mobileSessionErrorMessage(new Error("mobile session is invalid or expired")),
+    "登录会话已失效，请重新登录后继续绑定",
+  );
+  assert.equal(mobileSessionErrorMessage(new Error("other failure")), null);
 });
 
 test("login page checks bound projects and exposes their entry", async () => {

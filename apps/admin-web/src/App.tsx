@@ -41,6 +41,8 @@ export function App() {
   const [page, setPage] = useState<PageKey>("overview");
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [projectModalMode, setProjectModalMode] = useState<"create" | "edit">("create");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [refreshToken, setRefreshToken] = useState(0);
@@ -101,19 +103,24 @@ export function App() {
     setProjectModalOpen(true);
   };
 
-  const deleteProject = () => {
+  const openDeleteProject = () => {
     if (!selectedProject) return;
-    Modal.confirm({
-      title: "删除空项目",
-      content: `确定删除项目“${selectedProject.code} · ${selectedProject.name}”吗？此操作无法恢复。`,
-      okText: "删除",
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        await api.deleteProject(selectedProject.id);
-        setProjects((current) => current.filter((item) => item.id !== selectedProject.id));
-        setSelectedProjectId((current) => current === selectedProject.id ? undefined : current);
-      },
-    });
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteProject = async () => {
+    if (!selectedProject) return;
+    setDeletingProject(true);
+    try {
+      await api.deleteProject(selectedProject.id);
+      setProjects((current) => current.filter((item) => item.id !== selectedProject.id));
+      setSelectedProjectId((current) => current === selectedProject.id ? undefined : current);
+      setDeleteConfirmOpen(false);
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setDeletingProject(false);
+    }
   };
 
   const content = {
@@ -198,7 +205,7 @@ export function App() {
             {selectedProject?.current_version_number === 0 && (
               <>
                 <Button onClick={openEditProject}>编辑项目</Button>
-                <Button danger onClick={deleteProject}>删除项目</Button>
+                <Button danger onClick={openDeleteProject}>删除项目</Button>
               </>
             )}
             <Button type="primary" onClick={openCreateProject}>新建项目</Button>
@@ -257,6 +264,17 @@ export function App() {
             <Input autoComplete="off" placeholder="例如 Lyra Pro" />
           </Form.Item>
         </Form>
+      </Modal>
+      <Modal
+        title="删除空项目"
+        open={deleteConfirmOpen}
+        okText="删除"
+        okButtonProps={{ danger: true }}
+        confirmLoading={deletingProject}
+        onOk={confirmDeleteProject}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      >
+        <p>确定删除项目“{selectedProject?.code} · {selectedProject?.name}”吗？此操作无法恢复。</p>
       </Modal>
     </ConfigProvider>
   );

@@ -4,7 +4,6 @@ required_sheets:
   产品规格书: A1:I75
   项目团队构成: A1:F26
   项目进度表: A1:Y15
-  客户-产品规格书: A1:F84
 identity_markers:
   - sheet: 产品规格书
     cell: A1
