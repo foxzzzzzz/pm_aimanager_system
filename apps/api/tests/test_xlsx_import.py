@@ -57,7 +57,7 @@ def test_xlsx_01_parses_lyra_baseline_to_canonical_draft(registry: ParserRegistr
     assert result.report.errors == []
 
 
-def test_xlsx_02_uses_last_plan_snapshot_as_candidate_current_plan(
+def test_xlsx_02_uses_latest_non_empty_plan_snapshot_as_candidate_current_plan(
     registry: ParserRegistry,
 ) -> None:
     result = registry.parse(WORKBOOK)
@@ -74,6 +74,38 @@ def test_xlsx_02_uses_last_plan_snapshot_as_candidate_current_plan(
         for name, window in result.draft.active_plan.milestones.items()
     }
     assert actual_plan == EXPECTED["active_plan"]
+
+
+@pytest.mark.parametrize(
+    ("blank_rows", "expected_active_plan"),
+    [
+        ([5], "变更计划1（改板）"),
+        ([4, 5], "原计划(不改板-库存500个PCB)"),
+    ],
+)
+def test_xlsx_plan_selection_falls_back_when_later_change_plan_is_empty(
+    registry: ParserRegistry,
+    phase1_tmp_path: Path,
+    blank_rows: list[int],
+    expected_active_plan: str,
+) -> None:
+    changed = phase1_tmp_path / "empty-later-plan.xlsx"
+    shutil.copyfile(WORKBOOK, changed)
+    workbook = load_workbook(changed)
+    sheet = workbook["项目进度表"]
+    for row_number in blank_rows:
+        for column in range(2, 26):
+            sheet.cell(row_number, column).value = None
+    workbook.save(changed)
+    workbook.close()
+
+    result = registry.parse(changed)
+
+    assert result.draft.active_plan_name == expected_active_plan
+    assert any(
+        window.state is not PlanDateState.TBD
+        for window in result.draft.active_plan.milestones.values()
+    )
 
 
 def test_xlsx_03_distinguishes_blank_from_not_applicable(registry: ParserRegistry) -> None:

@@ -48,7 +48,7 @@ class LyraTemplateV1Parser:
         plan_versions = self._parse_plan_versions(workbook)
         milestones = self._parse_milestones(workbook)
         self._validate_semantics(workbook, members, milestones)
-        active_plan_name = plan_versions[-1].name
+        active_plan_name = self._select_active_plan(plan_versions).name
         draft = CanonicalProjectDraft(
             template_id=self.manifest.template_id,
             template_version=self.manifest.template_version,
@@ -229,6 +229,17 @@ class LyraTemplateV1Parser:
         if not versions:
             raise WorkbookValidationError(f"no plan versions found in {progress.sheet}")
         return versions
+
+    @staticmethod
+    def _select_active_plan(plan_versions: list[PlanVersionDraft]) -> PlanVersionDraft:
+        return next(
+            (
+                plan
+                for plan in reversed(plan_versions)
+                if any(window.state is not PlanDateState.TBD for window in plan.milestones.values())
+            ),
+            plan_versions[0],
+        )
 
     def _parse_milestones(self, workbook: Workbook) -> list[MilestoneDefinition]:
         progress = self.manifest.progress
