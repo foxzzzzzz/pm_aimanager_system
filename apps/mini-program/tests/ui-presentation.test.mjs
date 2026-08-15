@@ -38,8 +38,10 @@ test("dashboard project and issue approval actions share the paired button treat
   ]);
 
   assert.match(template, /class="card-action dashboard-action dashboard-action-primary summary-action"/);
+  assert.match(template, /class="dashboard-action dashboard-action-primary"[^>]*bindtap="approveProposal"[^>]*>批准变更<\/button>/);
   assert.match(template, /class="dashboard-action dashboard-action-primary"[^>]*>批准新增<\/button>/);
   assert.match(template, /class="dashboard-action dashboard-action-primary"[^>]*>批准删除<\/button>/);
+  assert.match(template, /class="dashboard-action dashboard-action-secondary"[^>]*bindtap="rejectProposal"[^>]*>驳回<\/button>/);
   assert.match(template, /class="dashboard-action dashboard-action-secondary"[^>]*>驳回<\/button>/);
   assert.match(styles, /\.dashboard-action\s*\{[^}]*border-radius:\s*10rpx/s);
   assert.match(styles, /\.dashboard-action-primary\s*\{[^}]*background:\s*#146c5a/s);

@@ -16,8 +16,8 @@
     <text class="name">{{item.milestone_code}} · {{item.reason}}</text>
     <text class="muted proposal-time">提交时间：{{item.createdAtLabel}}</text>
     <view wx:if="{{item.can_resolve}}" class="proposal-actions">
-      <button size="mini" type="primary" loading="{{resolvingProposalId === item.id}}" disabled="{{resolvingProposalId !== ''}}" data-id="{{item.id}}" data-version="{{item.base_version_number}}" bindtap="approveProposal">批准变更</button>
-      <button size="mini" type="warn" loading="{{resolvingProposalId === item.id}}" disabled="{{resolvingProposalId !== ''}}" data-id="{{item.id}}" bindtap="rejectProposal">驳回</button>
+      <button class="dashboard-action dashboard-action-primary" size="mini" loading="{{resolvingProposalId === item.id}}" disabled="{{resolvingProposalId !== ''}}" data-id="{{item.id}}" data-version="{{item.base_version_number}}" bindtap="approveProposal">批准变更</button>
+      <button class="dashboard-action dashboard-action-secondary" size="mini" loading="{{resolvingProposalId === item.id}}" disabled="{{resolvingProposalId !== ''}}" data-id="{{item.id}}" bindtap="rejectProposal">驳回</button>
     </view>
   </view>
   <view wx:for="{{issueCreateProposals}}" wx:key="id" class="card milestone approval-card" data-id="{{item.id}}" bindtap="showIssueCreateDetail">
