@@ -1,4 +1,4 @@
-import { Alert, Button, DatePicker, Empty, Form, Image, Input, Modal, Select, Space, Table, Tabs, Tag, Typography } from "antd";
+import { Alert, Button, Col, DatePicker, Empty, Form, Image, Input, Modal, Row, Select, Space, Table, Tabs, Tag, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useRef, useState } from "react";
 
@@ -353,21 +353,43 @@ export default function IssuesAuditPage({ project }: Props) {
         <Form form={form} layout="vertical">
           <Form.Item name="description" label="问题描述" rules={[{ required: true }]}><Input.TextArea /></Form.Item>
           <Form.Item name="impact" label="项目影响" rules={[{ required: true }]}><Input.TextArea /></Form.Item>
-          <Space align="start">
-            <Form.Item name="owner_name" label="R 执行负责人" rules={[{ required: true }]}><Select style={{ width: 160 }} options={members.map(({ name }) => ({ value: name, label: name }))} /></Form.Item>
-            <Form.Item name="accountable_names" label="A 最终负责人" rules={[{ required: true }]}><Select mode="multiple" style={{ width: 200 }} options={members.map(({ name }) => ({ value: name, label: name }))} /></Form.Item>
-            <Form.Item name="consulted_names" label="C 协作/咨询"><Select mode="multiple" style={{ width: 200 }} options={members.map(({ name }) => ({ value: name, label: name }))} /></Form.Item>
-            <Form.Item name="informed_names" label="I 知情"><Select mode="multiple" style={{ width: 200 }} options={members.map(({ name }) => ({ value: name, label: name }))} /></Form.Item>
-            <Form.Item name="severity" label="严重程度" initialValue="high" rules={[{ required: true }]}>
-              <Select style={{ width: 120 }} options={[
-                { value: "low", label: "低" },
-                { value: "medium", label: "中" },
-                { value: "high", label: "高" },
-                { value: "critical", label: "重大" },
-              ]} />
-            </Form.Item>
-            <Form.Item name="due_date" label="预计完成" rules={[{ required: true }]}><DatePicker /></Form.Item>
-          </Space>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="owner_name" label="R 执行负责人" rules={[{ required: true }]}>
+                <Select options={members.map(({ name }) => ({ value: name, label: name }))} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="accountable_names" label="A 最终负责人" rules={[{ required: true }]}>
+                <Select mode="multiple" options={members.map(({ name }) => ({ value: name, label: name }))} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="consulted_names" label="C 协作/咨询">
+                <Select mode="multiple" options={members.map(({ name }) => ({ value: name, label: name }))} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="informed_names" label="I 知情">
+                <Select mode="multiple" options={members.map(({ name }) => ({ value: name, label: name }))} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="severity" label="严重程度" initialValue="high" rules={[{ required: true }]}>
+                <Select options={[
+                  { value: "low", label: "低" },
+                  { value: "medium", label: "中" },
+                  { value: "high", label: "高" },
+                  { value: "critical", label: "重大" },
+                ]} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="due_date" label="预计完成" rules={[{ required: true }]}>
+                <DatePicker style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+          </Row>
           {editingIssue && (
             <Form.Item name="status" label="状态" rules={[{ required: true }]}>
               <Select options={["待处理", "处理中", "待验证", "已解决", "已关闭"].map((value) => ({ value, label: value }))} />

@@ -16,6 +16,14 @@ Docker 容器已经创建或正在运行时，可使用后台启动脚本；它�
 .\scripts\start-backend.ps1
 ```
 
+测试阶段如需清空当前本地 Docker Compose 项目的全部业务数据（PostgreSQL、Redis、MinIO 中的原始Excel），使用显式确认参数执行：
+
+```powershell
+.\scripts\reset-test-environment.ps1 -ConfirmTestReset
+```
+
+该命令不可恢复；它只针对默认本地 Compose 环境，不能用于生产环境。
+
 Linux 环境使用对应的 Shell 脚本：
 
 ```bash

@@ -188,6 +188,9 @@ describe("IssuesAuditPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /编\s*辑/ }));
     expect(screen.getByLabelText("A 最终负责人")).toBeInTheDocument();
+    ["R 执行负责人", "A 最终负责人", "C 协作/咨询", "I 知情", "严重程度", "预计完成"].forEach((label) => {
+      expect(screen.getByLabelText(label).closest(".ant-col-12")).not.toBeNull();
+    });
     fireEvent.change(screen.getByLabelText("问题描述"), { target: { value: "修正后问题" } });
     fireEvent.click(screen.getByRole("button", { name: /保\s*存/ }));
     await waitFor(() => expect(mocks.updateIssue).toHaveBeenCalledWith(
