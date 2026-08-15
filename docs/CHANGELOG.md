@@ -4,7 +4,7 @@
 
 ### 本地测试环境重置
 
-- 新增带显式确认参数的本地 Docker Compose 重置脚本，清除 PostgreSQL、Redis 和 MinIO 数据卷后重建服务并执行数据库迁移，方便重复导入验收。
+- 新增 PowerShell 与 Linux Shell 两个带显式确认参数的本地 Docker Compose 重置脚本，清除 PostgreSQL、Redis 和 MinIO 数据卷后重建服务并执行数据库迁移，方便重复导入验收。
 
 ### Web问题登记弹窗布局
 
