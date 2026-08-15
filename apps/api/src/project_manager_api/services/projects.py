@@ -102,6 +102,37 @@ class ProjectService:
         )
         return [_project_dict(project) for project in self.session.scalars(query)]
 
+    def update_empty_project(
+        self, project_id: uuid.UUID, code: str, name: str
+    ) -> dict[str, Any]:
+        project = self._require_project(project_id, manager=True, lock=True)
+        if project.current_version_number is not None:
+            raise ConflictError("published projects cannot be edited")
+        existing = self.session.scalar(
+            select(Project).where(Project.code == code, Project.id != project_id)
+        )
+        if existing is not None:
+            raise ConflictError("project code already exists")
+        before = {"code": project.code, "name": project.name}
+        project.code = code
+        project.name = name
+        self._audit(
+            project.id,
+            "project.updated",
+            "project",
+            str(project.id),
+            before=before,
+            after={"code": code, "name": name},
+        )
+        return _project_dict(project)
+
+    def delete_empty_project(self, project_id: uuid.UUID) -> dict[str, Any]:
+        project = self._require_project(project_id, manager=True, lock=True)
+        if project.current_version_number is not None:
+            raise ConflictError("published projects cannot be deleted")
+        self.session.delete(project)
+        return {}
+
     def create_import(
         self,
         project_id: uuid.UUID,
@@ -112,6 +143,8 @@ class ProjectService:
         project = self._require_project(project_id, manager=True)
         if result.draft.project.code.strip().casefold() != project.code.strip().casefold():
             raise ConflictError("workbook project code does not match the target project")
+        if result.draft.project.name.strip().casefold() != project.name.strip().casefold():
+            raise ConflictError("workbook project name does not match the target project")
         current = self._current_version(project)
         current_snapshot: dict[str, Any] = current.snapshot if current is not None else {}
         draft = result.draft.model_dump(mode="json")
@@ -142,6 +175,20 @@ class ProjectService:
             after={"filename": filename, "diff_count": len(changes)},
         )
         return _import_dict(record)
+
+    def create_project_from_import(
+        self, filename: str, object_key: str, result: ParseResult
+    ) -> dict[str, Any]:
+        existing = self.session.scalar(
+            select(Project).where(Project.code == result.draft.project.code)
+        )
+        if existing is not None:
+            raise ConflictError(
+                "project code already exists; select the existing project to import"
+            )
+        project = self.create_project(result.draft.project.code, result.draft.project.name)
+        imported = self.create_import(uuid.UUID(project["id"]), filename, object_key, result)
+        return {"project": project, "import": imported}
 
     def get_import(self, import_id: uuid.UUID) -> dict[str, Any]:
         record = self.session.get(ImportRecord, import_id)

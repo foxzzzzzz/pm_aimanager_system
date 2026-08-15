@@ -11,9 +11,11 @@ describe("ImportPage", () => {
   it("clears an analyzed record when the selected project changes", async () => {
     const first = { id: "one", code: "ONE", name: "One", status: "active", current_version_number: 1 };
     const second = { id: "two", code: "TWO", name: "Two", status: "active", current_version_number: 1 };
-    const { rerender } = render(<ImportPage project={first} onPublished={vi.fn()} />);
+    const { rerender } = render(
+      <ImportPage project={first} onPublished={vi.fn()} onProjectCreated={vi.fn()} />,
+    );
 
-    rerender(<ImportPage project={second} onPublished={vi.fn()} />);
+    rerender(<ImportPage project={second} onPublished={vi.fn()} onProjectCreated={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText("TWO")).toBeInTheDocument());
     expect(screen.queryByText("ONE")).not.toBeInTheDocument();

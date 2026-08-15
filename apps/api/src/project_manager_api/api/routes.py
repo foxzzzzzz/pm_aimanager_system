@@ -9,7 +9,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, Header, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Header, Request, Response, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
@@ -28,6 +28,7 @@ from project_manager_api.api.schemas import (
     ProgressProposalCreate,
     ProjectChangeSetCreate,
     ProjectCreate,
+    ProjectUpdate,
     PublishRequest,
     RejectRequest,
     SubscriptionGrantCreate,
@@ -697,6 +698,106 @@ def create_project(
         _request_hash(payload),
         lambda: ProjectService(session, actor_id).create_project(payload.code, payload.name),
     )
+
+
+@router.patch("/projects/{project_id}")
+def update_project(
+    project_id: uuid.UUID,
+    payload: ProjectUpdate,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        _request_hash(payload),
+        lambda: ProjectService(session, actor_id).update_empty_project(
+            project_id, payload.code, payload.name
+        ),
+    )
+
+
+@router.delete("/projects/{project_id}", status_code=204)
+def delete_project(
+    project_id: uuid.UUID,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> Response:
+    _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        204,
+        _request_hash({}),
+        lambda: ProjectService(session, actor_id).delete_empty_project(project_id),
+    )
+    return Response(status_code=204)
+
+
+@router.post("/imports", status_code=201)
+async def create_project_from_import(
+    request: Request,
+    file: UploadDependency,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    content = await file.read(request.app.state.settings.max_import_size_bytes + 1)
+    if len(content) > request.app.state.settings.max_import_size_bytes:
+        raise ServiceError("uploaded workbook exceeds configured size limit")
+    filename = file.filename or "upload.xlsx"
+    if Path(filename).suffix.lower() not in request.app.state.settings.allowed_import_extensions:
+        raise ServiceError("uploaded workbook extension is not allowed")
+    request_hash = _request_hash(
+        {"filename": filename, "sha256": hashlib.sha256(content).hexdigest()}
+    )
+    cached = _cached_response(
+        session, actor_id, request_key, request.method, request.url.path, request_hash
+    )
+    if cached is not None:
+        return cached
+    object_key, stored_path = request.app.state.import_storage.put(filename, content)
+    try:
+        parsed = await asyncio.to_thread(
+            request.app.state.parser_registry.parse_isolated,
+            stored_path,
+            timeout_seconds=request.app.state.settings.import_timeout_seconds,
+            max_uncompressed_size_bytes=(
+                request.app.state.settings.max_import_uncompressed_size_bytes
+            ),
+            max_archive_entries=request.app.state.settings.max_import_archive_entries,
+        )
+        return _execute_idempotent(
+            session,
+            actor_id,
+            request_key,
+            request.method,
+            request.url.path,
+            201,
+            request_hash,
+            lambda: ProjectService(session, actor_id).create_project_from_import(
+                filename, object_key, parsed
+            ),
+            on_concurrent_replay=lambda: request.app.state.import_storage.delete(object_key),
+        )
+    except ImportErrorBase as exc:
+        request.app.state.import_storage.delete(object_key)
+        raise ServiceError(str(exc)) from exc
+    except Exception:
+        request.app.state.import_storage.delete(object_key)
+        raise
+    finally:
+        request.app.state.import_storage.release(stored_path)
 
 
 @router.post("/projects/{project_id}/imports", status_code=201)

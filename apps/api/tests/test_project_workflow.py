@@ -164,6 +164,114 @@ def test_project_creation_is_idempotent_and_scoped_to_creator(
     assert forbidden.status_code == 403
 
 
+def test_empty_project_can_be_edited_or_deleted_but_published_project_is_protected(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project = _create_project(client)
+    project_id = str(project["id"])
+
+    updated = client.patch(
+        f"/api/v1/projects/{project_id}",
+        headers=_headers("edit-empty-project"),
+        json={"code": "ZPD1322-R", "name": "Lyra Pro Revised"},
+    )
+    assert updated.status_code == 200, updated.json()
+    assert updated.json()["code"] == "ZPD1322-R"
+    assert updated.json()["name"] == "Lyra Pro Revised"
+
+    deleted = client.delete(
+        f"/api/v1/projects/{project_id}", headers=_headers("delete-empty-project")
+    )
+    assert deleted.status_code == 204
+    assert client.get("/api/v1/projects", headers=PM_HEADERS).json() == []
+
+    published_project = _create_project(client, key="create-published-project")
+    published_project_id = str(published_project["id"])
+    imported = _upload(client, published_project_id, key="import-published-project")
+    assert _publish(client, str(imported["id"]), 0, "publish-protected-project").status_code == 200
+    protected = client.patch(
+        f"/api/v1/projects/{published_project_id}",
+        headers=_headers("edit-published-project"),
+        json={"code": "ZPD1322-R", "name": "Lyra Pro Revised"},
+    )
+    assert protected.status_code == 409
+    assert protected.json()["detail"] == "published projects cannot be edited"
+    protected = client.delete(
+        f"/api/v1/projects/{published_project_id}",
+        headers=_headers("delete-published-project"),
+    )
+    assert protected.status_code == 409
+    assert protected.json()["detail"] == "published projects cannot be deleted"
+
+
+def test_workbook_can_create_a_project_and_rejects_existing_project_code(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+
+    with WORKBOOK.open("rb") as source:
+        created = client.post(
+            "/api/v1/imports",
+            headers=_headers("create-project-from-workbook"),
+            files={
+                "file": (
+                    WORKBOOK.name,
+                    source,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+    assert created.status_code == 201, created.json()
+    assert created.json()["project"]["code"] == "ZPD1322"
+    assert created.json()["project"]["name"] == "Lyra Pro"
+    assert created.json()["import"]["status"] == "validated"
+    assert created.json()["import"]["project_id"] == created.json()["project"]["id"]
+
+    with WORKBOOK.open("rb") as source:
+        conflict = client.post(
+            "/api/v1/imports",
+            headers=_headers("duplicate-workbook-project"),
+            files={
+                "file": (
+                    WORKBOOK.name,
+                    source,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"] == (
+        "project code already exists; select the existing project to import"
+    )
+
+
+def test_existing_project_import_rejects_a_name_mismatch(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project = client.post(
+        "/api/v1/projects",
+        headers=_headers("create-name-mismatch-project"),
+        json={"code": "ZPD1322", "name": "Incorrect Name"},
+    ).json()
+
+    with WORKBOOK.open("rb") as source:
+        response = client.post(
+            f"/api/v1/projects/{project['id']}/imports",
+            headers=_headers("reject-name-mismatch"),
+            files={
+                "file": (
+                    WORKBOOK.name,
+                    source,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "workbook project name does not match the target project"
+
+
 def test_idempotency_key_rejects_a_different_request_body(
     workflow: tuple[TestClient, Path],
 ) -> None:

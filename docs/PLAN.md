@@ -72,6 +72,9 @@ tmp/                # 不提交的临时文件
 | 方法与路径 | 用途 |
 |------------|------|
 | `POST /api/v1/projects` | 创建项目 |
+| `PATCH /api/v1/projects/{id}` | 更正未发布项目的编号和名称 |
+| `DELETE /api/v1/projects/{id}` | 删除未发布项目 |
+| `POST /api/v1/imports` | 解析Excel后自动创建项目和待确认导入记录 |
 | `POST /api/v1/projects/{id}/imports` | 上传 `.xlsx` 并创建导入任务 |
 | `GET /api/v1/imports/{id}` | 查看解析、校验和差异结果 |
 | `POST /api/v1/imports/{id}/publish` | 确认并发布导入版本 |

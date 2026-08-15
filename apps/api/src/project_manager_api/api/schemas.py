@@ -11,6 +11,10 @@ class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
 
 
+class ProjectUpdate(ProjectCreate):
+    pass
+
+
 class PublishRequest(BaseModel):
     expected_project_version: int = Field(ge=0)
 

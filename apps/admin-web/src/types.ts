@@ -46,6 +46,7 @@ export interface DiffEntry {
 
 export interface ImportRecord {
   id: string;
+  project_id: string;
   filename: string;
   status: string;
   base_version_number: number;
@@ -60,6 +61,11 @@ export interface ImportRecord {
     };
     warnings: string[];
   };
+}
+
+export interface ProjectImportCreateResult {
+  project: Project;
+  import: ImportRecord;
 }
 
 export interface ProjectVersion {

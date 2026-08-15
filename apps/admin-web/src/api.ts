@@ -14,6 +14,7 @@ import type {
   Project,
   ProjectChangeSet,
   ProjectDataOperation,
+  ProjectImportCreateResult,
   ProjectReview,
   ProjectVersion,
 } from "./types";
@@ -71,6 +72,20 @@ export const api = {
       },
       body: JSON.stringify(payload),
     }),
+  updateProject: (projectId: string, payload: { code: string; name: string }) =>
+    request<Project>(`/projects/${projectId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": requestKey("project-update"),
+      },
+      body: JSON.stringify(payload),
+    }),
+  deleteProject: (projectId: string) =>
+    request<void>(`/projects/${projectId}`, {
+      method: "DELETE",
+      headers: { "X-Idempotency-Key": requestKey("project-delete") },
+    }),
   dashboard: (projectId: string) => request<Dashboard>(`/projects/${projectId}/dashboard`),
   projectReview: (projectId: string) =>
     request<ProjectReview>(`/projects/${projectId}/review`),
@@ -112,6 +127,15 @@ export const api = {
     return request<ImportRecord>(`/projects/${projectId}/imports`, {
       method: "POST",
       headers: { "X-Idempotency-Key": requestKey("import") },
+      body: form,
+    });
+  },
+  createProjectFromImport: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<ProjectImportCreateResult>("/imports", {
+      method: "POST",
+      headers: { "X-Idempotency-Key": requestKey("project-import") },
       body: form,
     });
   },

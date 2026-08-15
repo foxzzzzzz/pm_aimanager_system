@@ -40,6 +40,7 @@ export function App() {
   const [selectedProjectId, setSelectedProjectId] = useState<string>();
   const [page, setPage] = useState<PageKey>("overview");
   const [projectModalOpen, setProjectModalOpen] = useState(false);
+  const [projectModalMode, setProjectModalMode] = useState<"create" | "edit">("create");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [refreshToken, setRefreshToken] = useState(0);
@@ -72,10 +73,12 @@ export function App() {
     [projects, selectedProjectId],
   );
 
-  const createProject = async () => {
+  const saveProject = async () => {
     const values = await form.validateFields();
     try {
-      const project = await api.createProject(values);
+      const project = projectModalMode === "edit" && selectedProject
+        ? await api.updateProject(selectedProject.id, values)
+        : await api.createProject(values);
       setProjects((current) => [project, ...current.filter((item) => item.id !== project.id)]);
       setSelectedProjectId(project.id);
       setProjectModalOpen(false);
@@ -83,6 +86,34 @@ export function App() {
     } catch (reason) {
       setError((reason as Error).message);
     }
+  };
+
+  const openCreateProject = () => {
+    setProjectModalMode("create");
+    form.resetFields();
+    setProjectModalOpen(true);
+  };
+
+  const openEditProject = () => {
+    if (!selectedProject) return;
+    setProjectModalMode("edit");
+    form.setFieldsValue({ code: selectedProject.code, name: selectedProject.name });
+    setProjectModalOpen(true);
+  };
+
+  const deleteProject = () => {
+    if (!selectedProject) return;
+    Modal.confirm({
+      title: "删除空项目",
+      content: `确定删除项目“${selectedProject.code} · ${selectedProject.name}”吗？此操作无法恢复。`,
+      okText: "删除",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        await api.deleteProject(selectedProject.id);
+        setProjects((current) => current.filter((item) => item.id !== selectedProject.id));
+        setSelectedProjectId((current) => current === selectedProject.id ? undefined : current);
+      },
+    });
   };
 
   const content = {
@@ -97,6 +128,10 @@ export function App() {
     imports: (
       <ImportPage
         project={selectedProject}
+        onProjectCreated={(project) => {
+          setProjects((current) => [project, ...current.filter((item) => item.id !== project.id)]);
+          setSelectedProjectId(project.id);
+        }}
         onPublished={() => {
           setRefreshToken((value) => value + 1);
           setPage("overview");
@@ -160,7 +195,13 @@ export function App() {
                 label: `${project.code} · ${project.name}`,
               }))}
             />
-            <Button type="primary" onClick={() => setProjectModalOpen(true)}>新建项目</Button>
+            {selectedProject?.current_version_number === 0 && (
+              <>
+                <Button onClick={openEditProject}>编辑项目</Button>
+                <Button danger onClick={deleteProject}>删除项目</Button>
+              </>
+            )}
+            <Button type="primary" onClick={openCreateProject}>新建项目</Button>
           </Layout.Header>
           <Layout.Content className="workspace">
             {error && (
@@ -198,12 +239,15 @@ export function App() {
         />
       </Modal>
       <Modal
-        title="新建项目"
+        title={projectModalMode === "edit" ? "编辑空项目" : "新建项目"}
         open={projectModalOpen}
         okText="创建"
         cancelText="取消"
-        onOk={createProject}
-        onCancel={() => setProjectModalOpen(false)}
+        onOk={saveProject}
+        onCancel={() => {
+          setProjectModalOpen(false);
+          form.resetFields();
+        }}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="code" label="项目编号" rules={[{ required: true, message: "请输入项目编号" }]}>
