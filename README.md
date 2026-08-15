@@ -34,7 +34,13 @@ Linux 环境执行：
 bash ./scripts/reset-test-environment.sh --confirm-test-reset
 ```
 
-该命令不可恢复；它只针对默认本地 Compose 环境，不能用于生产环境。
+若服务器使用 `.env.production` 和生产 Compose 覆盖文件，但确认可清空当前验收数据，则使用更强确认参数：
+
+```bash
+bash ./scripts/reset-test-environment.sh --confirm-production-data-reset
+```
+
+该命令不可恢复。生产 Compose 模式只清 PostgreSQL、Redis 和 MinIO 项目数据，保留 `.env.production`、Caddy 配置和 TLS 证书。
 
 - API健康检查：`http://localhost:18000/health`
 - 管理端：`http://localhost:15173`

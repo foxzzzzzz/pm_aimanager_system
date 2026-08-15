@@ -5,6 +5,7 @@
 ### 本地测试环境重置
 
 - 新增 PowerShell 与 Linux Shell 两个带显式确认参数的本地 Docker Compose 重置脚本，清除 PostgreSQL、Redis 和 MinIO 数据卷后重建服务并执行数据库迁移，方便重复导入验收。
+- Linux 脚本增加生产 Compose 验收数据重置模式：仅清 PostgreSQL、Redis 和 MinIO，保留 Caddy 配置及TLS证书，避免使用 `down -v` 误删HTTPS运行依赖。
 
 ### Web问题登记弹窗布局
 
