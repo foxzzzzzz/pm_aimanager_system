@@ -2,7 +2,7 @@ import { api } from "../../services/api";
 import { validateIssueCreate } from "../../services/form-validation.js";
 import { runtimeConfig } from "../../config";
 import { formatDate, formatDateTime, labelSeverity } from "../../services/presentation.js";
-import type { Issue } from "../../types";
+import type { Issue, ProjectSummary } from "../../types";
 import { syncTabBarBadges } from "../../services/tab-badges";
 
 interface InputEvent { detail: { value: string } }
@@ -158,7 +158,47 @@ Page({
       [optionsField]: memberOptions(this.data.projectMembers, event.detail.value),
     });
   },
-  selectProject() { wx.switchTab({ url: "/pages/projects/projects" }); },
+  async selectProject() {
+    let projects: ProjectSummary[];
+    try {
+      projects = await api.projects();
+    } catch (error) {
+      wx.showToast({ title: (error as Error).message, icon: "none" });
+      return;
+    }
+    if (!projects.length) return;
+    try {
+      const { tapIndex } = await wx.showActionSheet({
+        itemList: projects.map((project) => `${project.code} · ${project.name}`),
+      });
+      const project = projects[tapIndex];
+      if (!project || project.id === this.data.projectId) return;
+      const currentMemberName = wx.getStorageSync<string>("current_member_name");
+      wx.setStorageSync("current_project_id", project.id);
+      wx.setStorageSync("current_project_code", project.code);
+      wx.setStorageSync("current_project_name", project.name);
+      this.setData({
+        projectId: project.id,
+        projectCode: project.code,
+        projectName: project.name,
+        currentMemberName,
+        issues: [],
+        formVisible: false,
+        editingIssueId: "",
+        editingRevision: 0,
+        description: "",
+        impact: "",
+        ownerName: currentMemberName,
+        dueDate: "",
+        severityIndex: 2,
+        statusIndex: 0,
+      });
+      await this.loadIssues();
+      void syncTabBarBadges();
+    } catch {
+      // The user dismissed the action sheet.
+    }
+  },
   openCreateForm() {
     this.setData({
       formVisible: true,

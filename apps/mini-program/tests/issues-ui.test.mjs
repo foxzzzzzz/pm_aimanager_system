@@ -17,6 +17,17 @@ test("issues page keeps the creation form collapsed until requested", async () =
   assert.match(template, /wx:if="\{\{formVisible\}\}"[^>]*id="issue-form"/);
 });
 
+test("issue page switches bound projects in a native selection sheet", async () => {
+  const source = await readSource("../miniprogram/pages/issues/issues.ts");
+
+  const selection = source.match(/async selectProject\(\)[\s\S]*?\n  },\n  openCreateForm/);
+  assert.match(selection?.[0] ?? "", /api\.projects\(\)/);
+  assert.match(selection?.[0] ?? "", /wx\.showActionSheet/);
+  assert.match(selection?.[0] ?? "", /current_project_id/);
+  assert.match(selection?.[0] ?? "", /await this\.loadIssues\(\)/);
+  assert.doesNotMatch(selection?.[0] ?? "", /switchTab/);
+});
+
 test("issue editing opens the labeled form and cancellation returns to the list", async () => {
   const [source, template] = await Promise.all([
     readSource("../miniprogram/pages/issues/issues.ts"),
