@@ -21,12 +21,14 @@ Page({
     checkingProjects: false,
     hasProjects: false,
     projectCount: 0,
+    joinMode: false,
   },
   onLoad(options: Record<string, string | undefined>) {
     const loggedIn = Boolean(wx.getStorageSync("access_token"));
     this.setData({
       loggedIn,
       invitationToken: options.invitation || options.scene || "",
+      joinMode: options.mode === "join",
     });
     if (loggedIn) void this.refreshProjectAccess();
   },

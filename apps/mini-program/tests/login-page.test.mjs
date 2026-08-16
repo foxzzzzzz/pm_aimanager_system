@@ -37,20 +37,31 @@ test("invalid mobile sessions require a fresh login", () => {
 });
 
 test("login page checks bound projects and exposes their entry", async () => {
-  const source = await readFile(
-    new URL("../miniprogram/pages/index/index.ts", import.meta.url),
-    "utf8",
-  );
-  const template = await readFile(
-    new URL("../miniprogram/pages/index/index.wxml", import.meta.url),
-    "utf8",
-  );
+  const [source, template, projectsSource, projectsTemplate] = await Promise.all([
+    readFile(new URL("../miniprogram/pages/index/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../miniprogram/pages/index/index.wxml", import.meta.url), "utf8"),
+    readFile(new URL("../miniprogram/pages/projects/projects.ts", import.meta.url), "utf8"),
+    readFile(new URL("../miniprogram/pages/projects/projects.wxml", import.meta.url), "utf8"),
+  ]);
 
   assert.match(source, /refreshProjectAccess/);
   assert.match(source, /await api\.projects\(\)/);
   assert.match(source, /wx\.switchTab\(\{ url: "\/pages\/projects\/projects" \}\)/);
   assert.match(template, /进入我的项目/);
   assert.match(template, /!hasProjects \|\| invitationToken/);
+  assert.match(projectsTemplate, /加入其他项目/);
+  assert.match(projectsSource, /openJoinProject/);
+  assert.match(projectsSource, /pages\/index\/index\?mode=join/);
+});
+
+test("logged-in users can open the invitation form to join another project", async () => {
+  const [source, template] = await Promise.all([
+    readFile(new URL("../miniprogram/pages/index/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../miniprogram/pages/index/index.wxml", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(source, /joinMode:\s*options\.mode === "join"/);
+  assert.match(template, /!hasProjects \|\| invitationToken \|\| joinMode/);
 });
 
 test("login page keeps invitation-only binding behind its runtime switch", async () => {

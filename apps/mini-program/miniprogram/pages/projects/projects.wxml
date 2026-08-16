@@ -1,6 +1,7 @@
 <view class="page">
   <view class="page-head">
     <text class="muted">仅显示已完成身份绑定的项目</text>
+    <button class="join-project" size="mini" bindtap="openJoinProject">加入其他项目</button>
   </view>
   <view wx:if="{{loading}}" class="card loading-state">正在加载项目…</view>
   <view wx:if="{{!loading && loadError}}" class="card error-state">

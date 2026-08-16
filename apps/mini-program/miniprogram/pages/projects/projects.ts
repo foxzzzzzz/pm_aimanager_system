@@ -76,4 +76,7 @@ Page({
     wx.setStorageSync("current_project_name", name);
     wx.navigateTo({ url: `/pages/dashboard/dashboard?projectId=${projectId}` });
   },
+  openJoinProject() {
+    wx.navigateTo({ url: "/pages/index/index?mode=join" });
+  },
 });

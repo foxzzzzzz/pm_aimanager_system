@@ -8,8 +8,8 @@
     <text wx:if="{{loggedIn && checkingProjects}}" class="project-checking">正在检查项目权限…</text>
     <button wx:if="{{loggedIn && hasProjects}}" class="primary project-entry" bindtap="openProjects">进入我的项目（{{projectCount}}）</button>
   </view>
-  <view wx:if="{{loggedIn && (!hasProjects || invitationToken)}}" class="card">
-    <text class="section-title">绑定项目成员</text>
+  <view wx:if="{{loggedIn && (!hasProjects || invitationToken || joinMode)}}" class="card">
+    <text class="section-title">{{joinMode ? '加入其他项目' : '绑定项目成员'}}</text>
     <input class="field" value="{{invitationToken}}" placeholder="邀请令牌" bindinput="onTokenInput" />
     <button wx:if="{{allowInvitationOnlyBinding}}" class="primary" bindtap="bindWithInvitationOnly">使用邀请码直接绑定</button>
     <button class="primary" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber">授权手机号并绑定</button>
