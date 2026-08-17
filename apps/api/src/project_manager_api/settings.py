@@ -60,6 +60,7 @@ class AppSettings(BaseModel):
     wechat_subscription_template_id: str | None = None
     wechat_subscription_title_field: str = "thing1"
     wechat_subscription_body_field: str = "thing2"
+    wechat_subscription_field_max_length: int = Field(default=20, ge=2, le=100)
     sms_enabled: bool = False
     sms_region: str = "ap-guangzhou"
     sms_sdk_app_id: str | None = None
@@ -202,6 +203,12 @@ class AppSettings(BaseModel):
             ),
             wechat_subscription_body_field=os.environ.get(
                 "WECHAT_SUBSCRIPTION_BODY_FIELD", str(wechat["subscription_body_field"])
+            ),
+            wechat_subscription_field_max_length=int(
+                os.environ.get(
+                    "WECHAT_SUBSCRIPTION_FIELD_MAX_LENGTH",
+                    str(wechat["subscription_field_max_length"]),
+                )
             ),
             sms_enabled=os.environ.get("PROJECT_MANAGER_SMS_ENABLED", str(sms["enabled"])).lower()
             == "true",

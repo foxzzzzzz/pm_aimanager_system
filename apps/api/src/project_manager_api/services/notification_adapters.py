@@ -22,13 +22,17 @@ class WechatSubscriptionSender:
         message = {
             "touser": openid,
             "template_id": self.settings.wechat_subscription_template_id,
-            "page": "pages/messages/messages",
+            "page": str(payload.get("page", "pages/messages/messages")),
             "data": {
                 self.settings.wechat_subscription_title_field: {
-                    "value": str(payload["title"])[:20]
+                    "value": _template_value(
+                        payload["title"], self.settings.wechat_subscription_field_max_length
+                    )
                 },
                 self.settings.wechat_subscription_body_field: {
-                    "value": str(payload["body"])[:20]
+                    "value": _template_value(
+                        payload["body"], self.settings.wechat_subscription_field_max_length
+                    )
                 },
             },
         }
@@ -116,3 +120,10 @@ class TencentSmsSender:
 
 def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def _template_value(value: object, max_length: int) -> str:
+    text = str(value)
+    if len(text) <= max_length:
+        return text
+    return f"{text[: max_length - 1]}…"

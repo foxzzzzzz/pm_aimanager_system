@@ -121,6 +121,8 @@ wechat:
   subscription_title_field: thing1
   # Keyword field carrying the notification detail in the approved template.
   subscription_body_field: thing2
+  # Maximum characters accepted by each field in the approved subscription template.
+  subscription_field_max_length: 20
 
 # Tencent Cloud SMS fallback. Credentials are supplied through environment variables.
 sms:

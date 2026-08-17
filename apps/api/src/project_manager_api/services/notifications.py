@@ -5,6 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Protocol
+from urllib.parse import urlencode
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
@@ -124,7 +125,7 @@ class NotificationService:
                     event_type="weekly_summary",
                     object_type="project",
                     object_id=str(project.id),
-                    title=f"{project.name} weekly plan",
+                    title=f"{project.code}｜本周计划摘要",
                     body=summary,
                     recipient_names=names,
                     critical=False,
@@ -205,8 +206,8 @@ class NotificationService:
                     event_type=event_type,
                     object_type="milestone",
                     object_id=str(milestone["code"]),
-                    title=f"{project.name}: {milestone['name']}",
-                    body=f"Planned completion {due_date.isoformat()}",
+                    title=f"{project.code}｜{milestone['code']} {milestone['name']}",
+                    body=self._deadline_detail(delta, due_date),
                     recipient_names=tuple(dict.fromkeys(names)),
                     critical=critical,
                 )
@@ -236,8 +237,8 @@ class NotificationService:
                     event_type=event_type,
                     object_type="issue",
                     object_id=str(issue.id),
-                    title=f"{project.name}: issue reminder",
-                    body=f"{issue.description} (due {issue.due_date.isoformat()})",
+                    title=f"{project.code}｜{issue.description}",
+                    body=self._deadline_detail(delta, issue.due_date),
                     recipient_names=tuple(dict.fromkeys(
                         [issue.owner_name] + (issue.accountable_names if delta <= 0 else [])
                     )),
@@ -474,7 +475,11 @@ class NotificationService:
             business_date=business_date,
             idempotency_key=key,
             status="pending",
-            payload={"title": reminder.title, "body": reminder.body},
+            payload={
+                "title": reminder.title,
+                "body": reminder.body,
+                "page": self._notification_page(reminder),
+            },
         )
         try:
             with self.session.begin_nested():
@@ -483,6 +488,28 @@ class NotificationService:
         except IntegrityError:
             return None
         return delivery
+
+    @staticmethod
+    def _deadline_detail(delta: int, due_date: date) -> str:
+        due = due_date.strftime("%m-%d")
+        if delta > 0:
+            return f"{delta}天后到期｜截止 {due}"
+        if delta == 0:
+            return f"今日到期｜截止 {due}"
+        return f"已逾期 {-delta} 天｜截止 {due}"
+
+    @staticmethod
+    def _notification_page(reminder: Reminder) -> str:
+        query = urlencode(
+            {
+                "projectId": str(reminder.project.id),
+                "projectCode": reminder.project.code,
+                "projectName": reminder.project.name,
+                "objectType": reminder.object_type,
+                "objectId": reminder.object_id,
+            }
+        )
+        return f"pages/notification-target/notification-target?{query}"
 
     @staticmethod
     def _delivery_result(delivery: NotificationDelivery) -> dict[str, Any]:

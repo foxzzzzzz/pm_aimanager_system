@@ -205,6 +205,36 @@ def test_due_today_falls_back_to_sms_without_subscription(notification_context) 
     assert channels == {"in_app", "wechat", "sms"}
 
 
+def test_wechat_deadline_reminder_prioritizes_status_and_opens_the_target(
+    notification_context,
+) -> None:
+    session, settings, users = notification_context
+    session.add(
+        WechatSubscriptionGrant(
+            user_id=users["Rita"].id,
+            template_id="template-1",
+            remaining_uses=1,
+        )
+    )
+    session.commit()
+    wechat = FakeWechat()
+
+    NotificationService(session, settings, wechat=wechat, sms=FakeSms()).scan_daily(
+        date(2026, 8, 12)
+    )
+
+    message = wechat.sent[0]
+    assert message["title"] == "LYRA｜M01 Prototype"
+    assert message["body"] == "已逾期 2 天｜截止 08-10"
+    assert str(message["page"]).startswith(
+        "pages/notification-target/notification-target?projectId="
+    )
+    assert "objectType=milestone" in str(message["page"])
+    assert "objectId=M01" in str(message["page"])
+    assert "projectCode=LYRA" in str(message["page"])
+    assert "projectName=Lyra" in str(message["page"])
+
+
 def test_overdue_day_two_escalates_to_accountable(notification_context) -> None:
     session, settings, users = notification_context
 

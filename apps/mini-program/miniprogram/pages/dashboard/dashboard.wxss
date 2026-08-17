@@ -29,6 +29,7 @@
 .dashboard-action-primary { background: #146c5a; color: #fff; }
 .dashboard-action-secondary { border: 1rpx solid #146c5a; background: #fff; color: #146c5a; }
 .milestone-card .muted { display: block; }
+.focused-milestone { border: 2rpx solid #20a486; box-shadow: 0 0 0 5rpx rgba(32, 164, 134, .12); }
 .proposal-actions { display: flex; justify-content: flex-end; gap: 16rpx; margin-top: 14rpx; }
 .proposal-actions button { margin: 0; }
 .milestone-filters { display: flex; width: 100%; gap: 10rpx; margin-bottom: 20rpx; }

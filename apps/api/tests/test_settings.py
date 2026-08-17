@@ -27,6 +27,7 @@ def test_example_config_contains_required_external_parameters() -> None:
     assert config["wechat"]["invitation_page"] == "pages/index/index"
     assert config["wechat"]["invitation_env_version"] == "release"
     assert config["wechat"]["invitation_code_width"] == 430
+    assert config["wechat"]["subscription_field_max_length"] == 20
     assert config["llm"]["base_url"]
     assert config["llm"]["model"]
     assert config["llm"]["max_retries"] == 2
@@ -58,6 +59,7 @@ def test_production_channel_and_cors_settings_can_be_overridden_by_environment(
     monkeypatch.setenv("WECHAT_ALLOW_INVITATION_ONLY_BINDING", "true")
     monkeypatch.setenv("WECHAT_SUBSCRIPTION_TITLE_FIELD", "thing5")
     monkeypatch.setenv("WECHAT_SUBSCRIPTION_BODY_FIELD", "thing8")
+    monkeypatch.setenv("WECHAT_SUBSCRIPTION_FIELD_MAX_LENGTH", "16")
     monkeypatch.setenv("TENCENT_SMS_REGION", "ap-shanghai")
     monkeypatch.setenv("TENCENT_SMS_SDK_APP_ID", "1400000000")
     monkeypatch.setenv("TENCENT_SMS_SIGN_NAME", "approved-sign")
@@ -74,6 +76,7 @@ def test_production_channel_and_cors_settings_can_be_overridden_by_environment(
     assert settings.allow_invitation_only_binding is True
     assert settings.wechat_subscription_title_field == "thing5"
     assert settings.wechat_subscription_body_field == "thing8"
+    assert settings.wechat_subscription_field_max_length == 16
     assert settings.sms_region == "ap-shanghai"
     assert settings.sms_sdk_app_id == "1400000000"
     assert settings.sms_sign_name == "approved-sign"

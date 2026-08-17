@@ -22,6 +22,7 @@ test("mini program declares TypeScript and required pages", async () => {
     "pages/index/index",
     "pages/projects/projects",
     "pages/dashboard/dashboard",
+    "pages/notification-target/notification-target",
     "pages/issue-approval-detail/issue-approval-detail",
     "pages/project-review/project-review",
     "pages/milestone-update/milestone-update",
@@ -36,6 +37,28 @@ test("mini program declares TypeScript and required pages", async () => {
     "pages/my-tasks/my-tasks",
   ]);
   assert.deepEqual(sitemapConfig.rules, [{ action: "allow", page: "*" }]);
+});
+
+test("notification target routes subscribed messages to their matching task", async () => {
+  const [targetSource, dashboardSource, dashboardTemplate, appConfig] = await Promise.all([
+    readFile(new URL("../miniprogram/pages/notification-target/notification-target.ts", import.meta.url), "utf8"),
+    readFile(new URL("../miniprogram/pages/dashboard/dashboard.ts", import.meta.url), "utf8"),
+    readFile(new URL("../miniprogram/pages/dashboard/dashboard.wxml", import.meta.url), "utf8"),
+    readFile(new URL("../miniprogram/app.json", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(appConfig, /pages\/notification-target\/notification-target/);
+  assert.match(targetSource, /objectType === "issue"/);
+  assert.match(targetSource, /focus_issue_id/);
+  assert.match(targetSource, /current_project_code/);
+  assert.match(targetSource, /current_project_name/);
+  assert.match(targetSource, /focusMilestoneCode/);
+  assert.match(dashboardSource, /focusedMilestoneCode/);
+  assert.match(dashboardSource, /current_project_id/);
+  assert.match(dashboardSource, /current_project_code/);
+  assert.match(dashboardSource, /current_project_name/);
+  assert.match(dashboardSource, /wx\.pageScrollTo/);
+  assert.match(dashboardTemplate, /id="milestone-\{\{item\.code\}\}"/);
 });
 
 test("mini program has one canonical developer-tools project root", async () => {

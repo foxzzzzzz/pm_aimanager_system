@@ -41,6 +41,7 @@ Page({
     moreFilterLabel: "更多筛选",
     visibleMilestones: [] as MilestoneView[],
     selectedMilestoneFilter: "todo" as MilestoneFilterKey,
+    focusedMilestoneCode: "",
     loading: true,
     loadError: false,
     resolvingProposalId: "",
@@ -48,7 +49,11 @@ Page({
   },
   onLoad(options: Record<string, string | undefined>) {
     const projectId = options.projectId || wx.getStorageSync<string>("current_project_id");
-    this.setData({ projectId });
+    this.setData({
+      projectId,
+      focusedMilestoneCode: options.focusMilestoneCode || "",
+      selectedMilestoneFilter: options.focusMilestoneCode ? "all" : "todo",
+    });
   },
   async onShow() {
     if (this.data.projectId) await this.loadDashboard();
@@ -73,6 +78,7 @@ Page({
       const today = dashboard.business_date;
       const upcomingDays = runtimeConfig.milestoneUpcomingDays;
       const milestoneFilters = buildMilestoneFilters(dashboard.milestones, today, upcomingDays);
+      const selectedMilestoneFilter = this.data.selectedMilestoneFilter;
       this.setData({
         dashboard,
         proposals: proposals.map((item) => ({
@@ -105,16 +111,22 @@ Page({
         primaryMilestoneFilters: milestoneFilters.filter(
           (filter) => ["todo", "upcoming", "overdue"].includes(filter.key),
         ),
-        visibleMilestones: presentMilestones(
-          filterMilestones(
-            dashboard.milestones,
-            this.data.selectedMilestoneFilter,
-            today,
-            upcomingDays,
-          ),
-        ),
+        visibleMilestones: presentMilestones(filterMilestones(
+          dashboard.milestones, selectedMilestoneFilter, today, upcomingDays,
+        )),
         loadError: false,
       });
+      if (this.data.focusedMilestoneCode) {
+        wx.nextTick(() => {
+          wx.pageScrollTo({
+            selector: `#milestone-${this.data.focusedMilestoneCode}`,
+            duration: 250,
+          });
+        });
+      }
+      wx.setStorageSync("current_project_id", dashboard.project.id);
+      wx.setStorageSync("current_project_code", dashboard.project.code);
+      wx.setStorageSync("current_project_name", dashboard.project.name);
       wx.setStorageSync("current_member_name", dashboard.member_name);
       void syncTabBarBadges();
       return true;

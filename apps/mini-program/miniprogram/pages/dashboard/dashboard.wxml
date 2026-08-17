@@ -58,7 +58,7 @@
     <button class="milestone-filter more {{selectedMilestoneFilter === 'completed' || selectedMilestoneFilter === 'all' ? 'active' : ''}}" bindtap="openMoreFilters">{{moreFilterLabel}}</button>
   </view>
   <view wx:if="{{visibleMilestones.length === 0}}" class="card empty-state">当前分类暂无节点</view>
-  <view wx:for="{{visibleMilestones}}" wx:key="code" class="card milestone milestone-card">
+  <view wx:for="{{visibleMilestones}}" wx:key="code" id="milestone-{{item.code}}" class="card milestone milestone-card {{focusedMilestoneCode === item.code ? 'focused-milestone' : ''}}">
     <view class="row">
       <text class="code">{{item.code}}</text>
       <text class="name">{{item.name}}</text>
