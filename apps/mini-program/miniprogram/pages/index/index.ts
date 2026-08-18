@@ -4,6 +4,7 @@ import {
   INVALID_INVITATION_MESSAGE,
   invitationErrorMessage,
   mobileSessionErrorMessage,
+  projectAccessErrorState,
   projectAccessState,
 } from "../../services/login-page.js";
 
@@ -19,6 +20,8 @@ Page({
     bindingStatus: "",
     busy: false,
     checkingProjects: false,
+    projectAccessChecked: false,
+    projectAccessError: false,
     hasProjects: false,
     projectCount: 0,
     joinMode: false,
@@ -91,12 +94,16 @@ Page({
     }
   },
   async refreshProjectAccess() {
-    this.setData({ checkingProjects: true });
+    this.setData({
+      checkingProjects: true,
+      projectAccessChecked: false,
+      projectAccessError: false,
+    });
     try {
       this.setData(projectAccessState(await api.projects()));
     } catch (error) {
       if (this.resetInvalidMobileSession(error)) return;
-      this.showError(error);
+      this.setData(projectAccessErrorState());
     } finally {
       this.setData({ checkingProjects: false });
     }
@@ -108,7 +115,13 @@ Page({
     const message = mobileSessionErrorMessage(error);
     if (!message) return false;
     wx.removeStorageSync("access_token");
-    this.setData({ loggedIn: false, hasProjects: false, projectCount: 0 });
+    this.setData({
+      loggedIn: false,
+      hasProjects: false,
+      projectCount: 0,
+      projectAccessChecked: false,
+      projectAccessError: false,
+    });
     wx.showModal({ title: "请重新登录", content: message, showCancel: false });
     return true;
   },

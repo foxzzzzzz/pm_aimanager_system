@@ -4,5 +4,7 @@
 .success { margin-top: 20rpx; color: #146c5a; }
 .project-checking { display: block; margin-top: 20rpx; color: #8a9692; }
 .project-entry { margin-top: 24rpx; }
+.access-error { border: 1rpx solid #f0c7a4; }
+.access-error-message { display: block; margin: 16rpx 0 24rpx; line-height: 1.5; }
 .warning { display: block; margin-top: 20rpx; color: #a46116; line-height: 1.5; }
 .divider { margin: 26rpx 0 10rpx; color: #8a9692; font-size: 22rpx; text-align: center; }

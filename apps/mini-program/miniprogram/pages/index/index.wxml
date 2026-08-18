@@ -8,7 +8,12 @@
     <text wx:if="{{loggedIn && checkingProjects}}" class="project-checking">正在检查项目权限…</text>
     <button wx:if="{{loggedIn && hasProjects}}" class="primary project-entry" bindtap="openProjects">进入我的项目（{{projectCount}}）</button>
   </view>
-  <view wx:if="{{loggedIn && (!hasProjects || invitationToken || joinMode)}}" class="card">
+  <view wx:if="{{loggedIn && projectAccessError}}" class="card access-error">
+    <text class="section-title">项目权限加载失败</text>
+    <text class="muted access-error-message">现有绑定不会受影响，请检查网络后重试。</text>
+    <button class="primary" loading="{{checkingProjects}}" bindtap="refreshProjectAccess">重新检查</button>
+  </view>
+  <view wx:if="{{loggedIn && projectAccessChecked && !projectAccessError && (!hasProjects || invitationToken || joinMode)}}" class="card">
     <text class="section-title">{{joinMode ? '加入其他项目' : '绑定项目成员'}}</text>
     <input class="field" value="{{invitationToken}}" placeholder="邀请令牌" bindinput="onTokenInput" />
     <button wx:if="{{allowInvitationOnlyBinding}}" class="primary" bindtap="bindWithInvitationOnly">使用邀请码直接绑定</button>

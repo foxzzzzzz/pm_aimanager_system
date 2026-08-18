@@ -5,6 +5,17 @@ export function projectAccessState(projects) {
   return {
     hasProjects: projects.length > 0,
     projectCount: projects.length,
+    projectAccessChecked: true,
+    projectAccessError: false,
+  };
+}
+
+export function projectAccessErrorState() {
+  return {
+    hasProjects: false,
+    projectCount: 0,
+    projectAccessChecked: true,
+    projectAccessError: true,
   };
 }
 

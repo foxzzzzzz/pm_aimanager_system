@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   invitationErrorMessage,
   mobileSessionErrorMessage,
+  projectAccessErrorState,
   projectAccessState,
 } from "../miniprogram/services/login-page.js";
 
@@ -12,10 +13,20 @@ test("project access state exposes the projects entry for bound users", () => {
   assert.deepEqual(projectAccessState([{ id: "project-1" }]), {
     hasProjects: true,
     projectCount: 1,
+    projectAccessChecked: true,
+    projectAccessError: false,
   });
   assert.deepEqual(projectAccessState([]), {
     hasProjects: false,
     projectCount: 0,
+    projectAccessChecked: true,
+    projectAccessError: false,
+  });
+  assert.deepEqual(projectAccessErrorState(), {
+    hasProjects: false,
+    projectCount: 0,
+    projectAccessChecked: true,
+    projectAccessError: true,
   });
 });
 
@@ -48,7 +59,10 @@ test("login page checks bound projects and exposes their entry", async () => {
   assert.match(source, /await api\.projects\(\)/);
   assert.match(source, /wx\.switchTab\(\{ url: "\/pages\/projects\/projects" \}\)/);
   assert.match(template, /进入我的项目/);
-  assert.match(template, /!hasProjects \|\| invitationToken/);
+  assert.match(template, /projectAccessChecked && !projectAccessError/);
+  assert.match(template, /项目权限加载失败/);
+  assert.match(template, /bindtap="refreshProjectAccess"/);
+  assert.doesNotMatch(template, /loggedIn && \(!hasProjects/);
   assert.match(projectsTemplate, /加入其他项目/);
   assert.match(projectsSource, /openJoinProject/);
   assert.match(projectsSource, /pages\/index\/index\?mode=join/);
@@ -61,7 +75,10 @@ test("logged-in users can open the invitation form to join another project", asy
   ]);
 
   assert.match(source, /joinMode:\s*options\.mode === "join"/);
-  assert.match(template, /!hasProjects \|\| invitationToken \|\| joinMode/);
+  assert.match(
+    template,
+    /projectAccessChecked && !projectAccessError && \(!hasProjects \|\| invitationToken \|\| joinMode\)/,
+  );
 });
 
 test("login page keeps invitation-only binding behind its runtime switch", async () => {
