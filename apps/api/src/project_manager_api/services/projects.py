@@ -31,6 +31,7 @@ from project_manager_api.db.models import (
     IssueDeleteProposal,
     IssueStatus,
     MemberBinding,
+    MilestoneRuntimeState,
     MobileUser,
     Project,
     ProjectChangeSet,
@@ -55,6 +56,12 @@ from project_manager_api.services.errors import (
     PersistedConflictError,
 )
 from project_manager_api.services.member_roles import member_role
+from project_manager_api.services.milestone_runtime import (
+    clear_runtime_overrides,
+    effective_project_snapshot,
+    runtime_reset_diff,
+    target_runtime_revision,
+)
 
 
 class ProjectService:
@@ -152,6 +159,7 @@ class ProjectService:
             entry.model_dump(mode="json")
             for entry in _business_diff(current_snapshot, draft)
         ]
+        changes.extend(runtime_reset_diff(self.session, project.id, current_snapshot, draft))
         record = ImportRecord(
             project_id=project.id,
             filename=filename,
@@ -258,6 +266,17 @@ class ProjectService:
                     "conflict_paths": conflict_paths,
                 }
             )
+        runtime_changes = runtime_reset_diff(
+            self.session,
+            project.id,
+            current.snapshot if current is not None else {},
+            record.draft,
+        )
+        if runtime_changes != _runtime_diff_entries(record.diff or []):
+            record.status = ImportStatus.CONFLICT
+            raise PersistedConflictError(
+                "milestone runtime state changed after import preview; analyze the import again"
+            )
         version = ProjectVersion(
             project_id=project.id,
             version_number=current_number + 1,
@@ -271,7 +290,9 @@ class ProjectService:
         self.session.flush()
         project.current_version_number = version.version_number
         record.status = ImportStatus.PUBLISHED
+        clear_runtime_overrides(self.session, project.id, runtime_changes)
         self._reconcile_member_bindings(project, record.draft)
+        self._reconcile_milestone_runtime_states(project, record.draft)
         self._audit(
             project.id,
             "import.published",
@@ -294,7 +315,11 @@ class ProjectService:
     def dashboard(self, project_id: uuid.UUID) -> dict[str, Any]:
         project = self._require_project(project_id)
         version = self._current_version(project)
-        snapshot = version.snapshot if version is not None else {}
+        snapshot = (
+            effective_project_snapshot(self.session, project.id, version.snapshot)
+            if version is not None
+            else {}
+        )
         open_issue_count = self.session.scalar(
             select(func.count(Issue.id)).where(
                 Issue.project_id == project.id,
@@ -354,7 +379,11 @@ class ProjectService:
     def review(self, project_id: uuid.UUID) -> dict[str, Any]:
         project = self._require_project(project_id)
         version = self._current_version(project)
-        snapshot = version.snapshot if version is not None else {}
+        snapshot = (
+            effective_project_snapshot(self.session, project.id, version.snapshot)
+            if version is not None
+            else {}
+        )
         active_plan_name = snapshot.get("active_plan_name")
         active_plan = next(
             (
@@ -422,6 +451,7 @@ class ProjectService:
         _apply_project_data_operations(draft, payload.operations)
         _validate_editable_snapshot(draft, current.snapshot)
         changes = [item.model_dump(mode="json") for item in _business_diff(current.snapshot, draft)]
+        changes.extend(runtime_reset_diff(self.session, project.id, current.snapshot, draft))
         if not changes:
             raise ConflictError("change set does not contain business changes")
         change_set = ProjectChangeSet(
@@ -479,6 +509,12 @@ class ProjectService:
         operations = [ProjectDataOperation.model_validate(item) for item in change_set.operations]
         _apply_project_data_operations(snapshot, operations)
         _validate_editable_snapshot(snapshot, current.snapshot)
+        runtime_changes = runtime_reset_diff(self.session, project.id, current.snapshot, snapshot)
+        if runtime_changes != _runtime_diff_entries(change_set.diff):
+            raise ConflictError(
+                "milestone runtime state changed after change-set preview; "
+                "create the change set again"
+            )
         version = ProjectVersion(
             project_id=project.id,
             version_number=expected_project_version + 1,
@@ -494,7 +530,9 @@ class ProjectService:
         change_set.status = ChangeSetStatus.PUBLISHED
         change_set.published_by_actor_id = self.actor_id
         change_set.resolved_at = datetime.now(UTC)
+        clear_runtime_overrides(self.session, project.id, runtime_changes)
         self._reconcile_member_bindings(project, snapshot)
+        self._reconcile_milestone_runtime_states(project, snapshot)
         self._audit(
             project.id,
             "project_change_set.published",
@@ -534,7 +572,8 @@ class ProjectService:
         version = self._current_version(project)
         if version is None:
             raise ConflictError("project has no published version")
-        target_path, before_value = _find_milestone_window(version.snapshot, milestone_code)
+        snapshot = effective_project_snapshot(self.session, project.id, version.snapshot)
+        target_path, before_value = _find_milestone_window(snapshot, milestone_code)
         after_value = {
             "state": "scheduled",
             "start_date": payload.start_date.isoformat(),
@@ -546,6 +585,9 @@ class ProjectService:
             proposal_kind="schedule",
             target_path=target_path,
             base_version_number=payload.base_version_number,
+            base_runtime_revision=target_runtime_revision(
+                self.session, project.id, milestone_code, "schedule"
+            ),
             before_value=before_value,
             after_value=after_value,
             reason=payload.reason,
@@ -583,7 +625,22 @@ class ProjectService:
         current = self._current_version(project)
         if current is None:
             raise ConflictError("project has no published version")
-        snapshot = copy.deepcopy(current.snapshot)
+        runtime_state = self.session.scalar(
+            select(MilestoneRuntimeState).where(
+                MilestoneRuntimeState.project_id == project.id,
+                MilestoneRuntimeState.milestone_code == proposal.milestone_code,
+            )
+        )
+        current_runtime_revision = (
+            runtime_state.completion_revision
+            if runtime_state is not None and proposal.proposal_kind == "completed"
+            else runtime_state.schedule_revision
+            if runtime_state is not None
+            else 0
+        )
+        if current_runtime_revision != proposal.base_runtime_revision:
+            raise ConflictError("proposal runtime revision is stale")
+        snapshot = effective_project_snapshot(self.session, project.id, current.snapshot)
         if proposal.proposal_kind == "completed":
             current_value = _find_milestone_completion(snapshot, proposal.milestone_code)
             if current_value != proposal.before_value:
@@ -594,18 +651,23 @@ class ProjectService:
             if current_value != proposal.before_value:
                 raise ConflictError("proposal target changed after submission")
             _replace_milestone_window(snapshot, proposal.milestone_code, proposal.after_value)
-        version = ProjectVersion(
-            project_id=project.id,
-            version_number=expected_project_version + 1,
-            template_id=current.template_id,
-            template_version=current.template_version,
-            document_version=current.document_version,
-            content_sha256=_business_hash(snapshot),
-            snapshot=snapshot,
-        )
-        self.session.add(version)
+        if runtime_state is None:
+            runtime_state = MilestoneRuntimeState(
+                project_id=project.id,
+                milestone_code=proposal.milestone_code,
+                schedule_revision=0,
+                completion_revision=0,
+            )
+            self.session.add(runtime_state)
+        if proposal.proposal_kind == "completed":
+            runtime_state.actual_completion = copy.deepcopy(proposal.after_value)
+            runtime_state.completion_revision += 1
+        else:
+            runtime_state.schedule = copy.deepcopy(proposal.after_value)
+            runtime_state.schedule_plan_name = current.snapshot.get("active_plan_name")
+            runtime_state.schedule_revision += 1
+        runtime_state.updated_at = datetime.now(UTC)
         self.session.flush()
-        project.current_version_number = version.version_number
         proposal.status = ProposalStatus.APPROVED
         proposal.approved_by_actor_id = self.actor_id
         proposal.resolved_at = datetime.now(UTC)
@@ -618,7 +680,7 @@ class ProjectService:
             after=proposal.after_value,
             reason=proposal.reason,
         )
-        return _version_dict(version)
+        return _version_dict(current)
 
     def list_proposals(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
         self._require_project(project_id)
@@ -1057,6 +1119,17 @@ class ProjectService:
                         )
                     )
 
+    def _reconcile_milestone_runtime_states(
+        self, project: Project, snapshot: dict[str, Any]
+    ) -> None:
+        milestone_codes = {item["code"] for item in snapshot.get("milestones", [])}
+        self.session.execute(
+            delete(MilestoneRuntimeState).where(
+                MilestoneRuntimeState.project_id == project.id,
+                MilestoneRuntimeState.milestone_code.not_in(milestone_codes),
+            )
+        )
+
     def list_issues(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
         self._require_project(project_id)
         query = (
@@ -1271,6 +1344,7 @@ def _proposal_dict(proposal: ChangeProposal) -> dict[str, Any]:
         "kind": proposal.proposal_kind,
         "target_path": proposal.target_path,
         "base_version_number": proposal.base_version_number,
+        "base_runtime_revision": proposal.base_runtime_revision,
         "before_value": proposal.before_value,
         "after_value": proposal.after_value,
         "reason": proposal.reason,
@@ -1443,6 +1517,17 @@ def _business_hash(snapshot: dict[str, Any]) -> str:
         _business_snapshot(snapshot), ensure_ascii=False, sort_keys=True, separators=(",", ":")
     )
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _runtime_diff_entries(changes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        (
+            copy.deepcopy(item)
+            for item in changes
+            if str(item.get("path", "")).startswith("runtime_state[")
+        ),
+        key=lambda item: item["path"],
+    )
 
 
 def _apply_project_data_operations(

@@ -48,6 +48,10 @@ from project_manager_api.services.errors import (
 )
 from project_manager_api.services.llm import OpenAICompatibleClient
 from project_manager_api.services.member_roles import member_role
+from project_manager_api.services.milestone_runtime import (
+    effective_project_snapshot,
+    target_runtime_revision,
+)
 from project_manager_api.services.operations import current_business_date
 from project_manager_api.services.projects import ProjectService, _issue_risk, milestone_risk
 from project_manager_api.services.wechat import (
@@ -480,6 +484,9 @@ class MobileService:
             proposal_kind=payload.kind,
             target_path=target_path,
             base_version_number=payload.base_version_number,
+            base_runtime_revision=target_runtime_revision(
+                self.session, project.id, milestone_code, payload.kind
+            ),
             before_value=before,
             after_value=after,
             reason=payload.reason,
@@ -725,7 +732,7 @@ class MobileService:
         )
         if version is None:
             raise ConflictError("project has no published version")
-        return project, version.snapshot
+        return project, effective_project_snapshot(self.session, project.id, version.snapshot)
 
     def _user(self) -> MobileUser:
         if self.user is None:

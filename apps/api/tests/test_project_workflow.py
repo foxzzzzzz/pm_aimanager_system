@@ -14,7 +14,12 @@ from sqlalchemy import select
 from project_manager_api.api.app import create_app
 from project_manager_api.api.schemas import IssueUpdate
 from project_manager_api.db.base import Base
-from project_manager_api.db.models import ChangeProposal, Issue, IssueStatus
+from project_manager_api.db.models import (
+    ChangeProposal,
+    Issue,
+    IssueStatus,
+    MilestoneRuntimeState,
+)
 from project_manager_api.services.errors import ConflictError
 from project_manager_api.services.projects import ProjectService, _issue_risk, milestone_risk
 from project_manager_api.settings import AppSettings
@@ -492,25 +497,11 @@ def test_resaving_business_identical_workbook_has_no_semantic_diff(
 def test_historical_workbook_cannot_report_false_publish_success(
     workflow: tuple[TestClient, Path],
 ) -> None:
-    client, _ = workflow
+    client, workdir = workflow
     project_id, _ = _published_project(client)
-    proposal = client.post(
-        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
-        headers=_headers("history-proposal"),
-        json={
-            "base_version_number": 1,
-            "start_date": "2026-08-04",
-            "end_date": "2026-08-04",
-            "reason": "create v2",
-        },
-    ).json()
-    _set_proposal_submitter(client, proposal["id"], "mobile:responsible-member")
-    approved = client.post(
-        f"/api/v1/change-proposals/{proposal['id']}/approve",
-        headers=_headers("history-approve"),
-        json={"expected_project_version": 1},
-    )
-    assert approved.status_code == 200
+    changed = _copy_with_active_plan_date(workdir, "history-v2.xlsx", date(2026, 8, 2))
+    imported = _upload(client, project_id, changed, "history-v2-import")
+    assert _publish(client, imported["id"], 1, "history-v2-publish").status_code == 200
     historical = _upload(client, project_id, key="historical-import")
 
     response = _publish(client, historical["id"], 2, "historical-publish")
@@ -614,8 +605,13 @@ def test_progress_proposal_approval_is_optimistic_and_audited(
     )
 
     assert first.status_code == 200
-    assert first.json()["version_number"] == 2
+    assert first.json()["version_number"] == 1
     assert second.status_code == 409
+    versions = client.get(f"/api/v1/projects/{project_id}/versions", headers=PM_HEADERS)
+    assert [item["version_number"] for item in versions.json()] == [1]
+    review = client.get(f"/api/v1/projects/{project_id}/review", headers=PM_HEADERS)
+    m01 = next(item for item in review.json()["milestones"] if item["code"] == "M01")
+    assert m01["schedule"]["end_date"] == "2026-08-04"
     audit = client.get(f"/api/v1/projects/{project_id}/audit-logs", headers=PM_HEADERS)
     assert "change_proposal.approved" in [item["action"] for item in audit.json()]
 
@@ -649,6 +645,274 @@ def test_proposal_cannot_be_rebased_by_supplying_the_new_current_version(
     assert response.status_code == 409
     dashboard = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM_HEADERS)
     assert dashboard.json()["current_version_number"] == 2
+
+
+def test_formal_import_previews_and_resets_overlapping_runtime_update(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, workdir = workflow
+    project_id, _ = _published_project(client)
+    proposal = client.post(
+        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
+        headers=_headers("runtime-before-import"),
+        json={
+            "base_version_number": 1,
+            "start_date": "2026-08-04",
+            "end_date": "2026-08-04",
+            "reason": "运行期调整",
+        },
+    ).json()
+    approved = client.post(
+        f"/api/v1/change-proposals/{proposal['id']}/approve",
+        headers=_headers("approve-runtime-before-import"),
+        json={"expected_project_version": 1},
+    )
+    assert approved.status_code == 200
+
+    changed = _copy_with_active_plan_date(workdir, "formal-v2.xlsx", date(2026, 8, 2))
+    imported = _upload(client, project_id, changed, "formal-v2-import")
+    runtime_diff = [
+        item for item in imported["diff"] if item["path"] == "runtime_state[M01].schedule"
+    ]
+    assert len(runtime_diff) == 1
+    assert runtime_diff[0]["operation"] == "removed"
+    published = _publish(client, imported["id"], 1, "formal-v2-publish")
+    assert published.status_code == 200
+    assert published.json()["version_number"] == 2
+
+    review = client.get(f"/api/v1/projects/{project_id}/review", headers=PM_HEADERS).json()
+    m01 = next(item for item in review["milestones"] if item["code"] == "M01")
+    assert m01["schedule"]["end_date"] == "2026-08-02"
+    editable = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM_HEADERS
+    ).json()
+    active_plan = next(
+        item for item in editable["plan_versions"] if item["name"] == editable["active_plan_name"]
+    )
+    m01_name = next(item["name"] for item in editable["milestones"] if item["code"] == "M01")
+    assert active_plan["milestones"][m01_name]["end_date"] == "2026-08-02"
+    with client.app.state.session_factory() as session:
+        assert session.scalar(select(MilestoneRuntimeState)) is None
+
+
+def test_pending_runtime_proposal_conflicts_after_same_target_is_approved(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    first = client.post(
+        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
+        headers=_headers("runtime-first"),
+        json={
+            "base_version_number": 1,
+            "start_date": "2026-08-04",
+            "end_date": "2026-08-04",
+            "reason": "首次调整",
+        },
+    ).json()
+    second = client.post(
+        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
+        headers=_headers("runtime-second"),
+        json={
+            "base_version_number": 1,
+            "start_date": "2026-08-05",
+            "end_date": "2026-08-05",
+            "reason": "并发调整",
+        },
+    ).json()
+
+    assert client.post(
+        f"/api/v1/change-proposals/{first['id']}/approve",
+        headers=_headers("runtime-first-approve"),
+        json={"expected_project_version": 1},
+    ).status_code == 200
+    conflict = client.post(
+        f"/api/v1/change-proposals/{second['id']}/approve",
+        headers=_headers("runtime-second-approve"),
+        json={"expected_project_version": 1},
+    )
+
+    assert conflict.status_code == 409
+    versions = client.get(f"/api/v1/projects/{project_id}/versions", headers=PM_HEADERS)
+    assert [item["version_number"] for item in versions.json()] == [1]
+
+
+def test_runtime_revision_rejects_stale_proposal_after_value_returns_to_original(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    original = client.get(
+        f"/api/v1/projects/{project_id}/review", headers=PM_HEADERS
+    ).json()
+    original_m01 = next(item for item in original["milestones"] if item["code"] == "M01")
+    original_schedule = original_m01["schedule"]
+    stale = client.post(
+        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
+        headers=_headers("runtime-aba-stale"),
+        json={
+            "base_version_number": 1,
+            "start_date": "2026-08-06",
+            "end_date": "2026-08-06",
+            "reason": "稍后审批的旧提案",
+        },
+    ).json()
+    first = client.post(
+        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
+        headers=_headers("runtime-aba-first"),
+        json={
+            "base_version_number": 1,
+            "start_date": "2026-08-04",
+            "end_date": "2026-08-04",
+            "reason": "先调整到新值",
+        },
+    ).json()
+    assert client.post(
+        f"/api/v1/change-proposals/{first['id']}/approve",
+        headers=_headers("runtime-aba-first-approve"),
+        json={"expected_project_version": 1},
+    ).status_code == 200
+    restore = client.post(
+        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
+        headers=_headers("runtime-aba-restore"),
+        json={
+            "base_version_number": 1,
+            "start_date": original_schedule["start_date"],
+            "end_date": original_schedule["end_date"],
+            "reason": "恢复原值",
+        },
+    ).json()
+    assert client.post(
+        f"/api/v1/change-proposals/{restore['id']}/approve",
+        headers=_headers("runtime-aba-restore-approve"),
+        json={"expected_project_version": 1},
+    ).status_code == 200
+
+    response = client.post(
+        f"/api/v1/change-proposals/{stale['id']}/approve",
+        headers=_headers("runtime-aba-stale-approve"),
+        json={"expected_project_version": 1},
+    )
+
+    assert response.status_code == 409
+    assert "runtime revision" in response.json()["detail"]
+
+
+def test_import_publish_rejects_runtime_state_changed_after_preview(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, workdir = workflow
+    project_id, _ = _published_project(client)
+    first = client.post(
+        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
+        headers=_headers("runtime-before-preview"),
+        json={
+            "base_version_number": 1,
+            "start_date": "2026-08-04",
+            "end_date": "2026-08-04",
+            "reason": "形成第一版运行状态",
+        },
+    ).json()
+    assert client.post(
+        f"/api/v1/change-proposals/{first['id']}/approve",
+        headers=_headers("runtime-before-preview-approve"),
+        json={"expected_project_version": 1},
+    ).status_code == 200
+    changed = _copy_with_active_plan_date(workdir, "runtime-preview.xlsx", date(2026, 8, 2))
+    imported = _upload(client, project_id, changed, "runtime-preview-import")
+
+    second = client.post(
+        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
+        headers=_headers("runtime-after-preview"),
+        json={
+            "base_version_number": 1,
+            "start_date": "2026-08-05",
+            "end_date": "2026-08-05",
+            "reason": "预览后再次调整",
+        },
+    ).json()
+    assert client.post(
+        f"/api/v1/change-proposals/{second['id']}/approve",
+        headers=_headers("runtime-after-preview-approve"),
+        json={"expected_project_version": 1},
+    ).status_code == 200
+
+    response = _publish(client, imported["id"], 1, "runtime-stale-preview-publish")
+
+    assert response.status_code == 409
+    assert "runtime state changed" in response.json()["detail"]
+    review = client.get(f"/api/v1/projects/{project_id}/review", headers=PM_HEADERS).json()
+    assert review["current_version_number"] == 1
+    m01 = next(item for item in review["milestones"] if item["code"] == "M01")
+    assert m01["schedule"]["end_date"] == "2026-08-05"
+
+
+def test_admin_baseline_change_previews_and_resets_runtime_schedule(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, _ = workflow
+    project_id, _ = _published_project(client)
+    proposal = client.post(
+        f"/api/v1/projects/{project_id}/milestones/M01/progress-proposals",
+        headers=_headers("runtime-before-admin-change"),
+        json={
+            "base_version_number": 1,
+            "start_date": "2026-08-04",
+            "end_date": "2026-08-04",
+            "reason": "运行期调整",
+        },
+    ).json()
+    assert client.post(
+        f"/api/v1/change-proposals/{proposal['id']}/approve",
+        headers=_headers("runtime-before-admin-change-approve"),
+        json={"expected_project_version": 1},
+    ).status_code == 200
+    editable = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM_HEADERS
+    ).json()
+    active_plan = next(
+        item for item in editable["plan_versions"] if item["name"] == editable["active_plan_name"]
+    )
+    m01_name = next(item["name"] for item in editable["milestones"] if item["code"] == "M01")
+    replacement = {**active_plan, "milestones": {**active_plan["milestones"]}}
+    replacement["milestones"][m01_name] = {
+        "state": "scheduled",
+        "start_date": "2026-08-03",
+        "end_date": "2026-08-03",
+    }
+    change_set = client.post(
+        f"/api/v1/projects/{project_id}/change-sets",
+        headers=_headers("admin-runtime-reset-change-set"),
+        json={
+            "base_version_number": 1,
+            "reason": "正式基线调整",
+            "operations": [
+                {
+                    "op": "replace",
+                    "resource": "plan",
+                    "key": active_plan["name"],
+                    "value": replacement,
+                }
+            ],
+        },
+    )
+    assert change_set.status_code == 201
+    assert any(
+        item["path"] == "runtime_state[M01].schedule"
+        for item in change_set.json()["diff"]
+    )
+
+    published = client.post(
+        f"/api/v1/change-sets/{change_set.json()['id']}/publish",
+        headers=_headers("admin-runtime-reset-publish"),
+        json={"expected_project_version": 1},
+    )
+
+    assert published.status_code == 200
+    assert published.json()["version_number"] == 2
+    review = client.get(f"/api/v1/projects/{project_id}/review", headers=PM_HEADERS).json()
+    m01 = next(item for item in review["milestones"] if item["code"] == "M01")
+    assert m01["schedule"]["end_date"] == "2026-08-03"
 
 
 def test_schedule_proposal_rejects_reversed_date_range(

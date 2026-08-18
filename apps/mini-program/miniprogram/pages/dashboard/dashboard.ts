@@ -250,7 +250,7 @@ Page({
     if (this.data.resolvingProposalId) return;
     const confirmation = await wx.showModal({
       title: "批准节点变更",
-      content: "批准后将发布新的正式项目版本，是否继续？",
+      content: "批准后将更新里程碑运行状态并记录审批，不会增加正式版本。是否继续？",
       confirmText: "确认批准",
     });
     if (!confirmation.confirm) return;

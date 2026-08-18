@@ -26,6 +26,7 @@ from project_manager_api.db.models import (
 )
 from project_manager_api.services.crypto import PhoneCipher
 from project_manager_api.services.errors import ConflictError, NotFoundError
+from project_manager_api.services.milestone_runtime import effective_project_snapshot
 from project_manager_api.settings import AppSettings
 
 
@@ -87,7 +88,8 @@ class NotificationService:
             for issue in self.session.scalars(issue_query):
                 issues_by_project[issue.project_id].append(issue)
         for project, version in project_versions:
-            reminders.extend(self._milestone_reminders(project, version.snapshot, business_date))
+            snapshot = effective_project_snapshot(self.session, project.id, version.snapshot)
+            reminders.extend(self._milestone_reminders(project, snapshot, business_date))
             reminders.extend(
                 self._issue_reminders(project, business_date, issues_by_project[project.id])
             )
@@ -105,7 +107,8 @@ class NotificationService:
             [project.id for project, _version in project_versions]
         )
         for project, version in project_versions:
-            items = self._scheduled_milestones(version.snapshot)
+            snapshot = effective_project_snapshot(self.session, project.id, version.snapshot)
+            items = self._scheduled_milestones(snapshot)
             upcoming = [
                 (milestone, window)
                 for milestone, window in items

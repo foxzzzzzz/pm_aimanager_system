@@ -27,6 +27,8 @@ test("dashboard uses right-aligned primary mini actions consistent with approval
   assert.match(template, /提交时间：\{\{item\.createdAtLabel\}\}/);
   assert.match(template, /wx:if="\{\{item\.can_resolve\}\}" class="proposal-actions"/);
   assert.match(source, /formatDateTime\(\s*item\.created_at/s);
+  assert.match(source, /批准后将更新里程碑运行状态并记录审批，不会增加正式版本/);
+  assert.doesNotMatch(source, /批准后将发布新的正式项目版本/);
   assert.match(styles, /\.approval-tag\s*\{[^}]*color:\s*#b54708/s);
   assert.match(styles, /\.approval-tag\s*\{[^}]*background:\s*#fff1e6/s);
 });

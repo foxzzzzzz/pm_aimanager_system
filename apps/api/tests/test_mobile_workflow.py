@@ -750,10 +750,11 @@ def test_responsible_member_can_submit_own_milestone_but_not_another(
         json={"expected_project_version": 1},
     )
     assert approved.status_code == 200
-    assert approved.json()["version_number"] == 2
+    assert approved.json()["version_number"] == 1
     dashboard = client.get(
         f"/api/v1/mobile/projects/{project_id}/dashboard", headers=member_headers
     ).json()
+    assert dashboard["current_version_number"] == 1
     milestone = next(item for item in dashboard["milestones"] if item["code"] == "M23")
     assert milestone["actual_completion"]["end_date"] == "2026-08-06"
 

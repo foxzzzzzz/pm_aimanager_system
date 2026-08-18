@@ -230,6 +230,7 @@ class ChangeProposal(Base):
     proposal_kind: Mapped[str] = mapped_column(String(32), default="schedule", nullable=False)
     target_path: Mapped[str] = mapped_column(String(512), nullable=False)
     base_version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    base_runtime_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     before_value: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     after_value: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
@@ -238,6 +239,29 @@ class ChangeProposal(Base):
     approved_by_actor_id: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MilestoneRuntimeState(Base):
+    __tablename__ = "milestone_runtime_states"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "milestone_code", name="uq_milestone_runtime_project_code"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    milestone_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    schedule: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    schedule_plan_name: Mapped[str | None] = mapped_column(String(255))
+    schedule_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    actual_completion: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    completion_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
 
 
 class ProjectChangeSet(Base):

@@ -14,6 +14,7 @@ from project_manager_api.db.models import (
     InAppMessage,
     Issue,
     MemberBinding,
+    MilestoneRuntimeState,
     MobileUser,
     NotificationDelivery,
     Project,
@@ -401,6 +402,27 @@ def test_issue_due_today_notifies_responsible_and_accountable_without_ci(
         )
     )
     assert recipients == {users["Rita"].id, users["Alan"].id}
+
+
+def test_runtime_completion_suppresses_milestone_reminder(notification_context) -> None:
+    session, settings, _ = notification_context
+    project = session.scalar(select(Project))
+    assert project is not None
+    session.add(
+        MilestoneRuntimeState(
+            project_id=project.id,
+            milestone_code="M01",
+            actual_completion={"state": "scheduled", "end_date": "2026-08-07"},
+            completion_revision=1,
+        )
+    )
+    session.commit()
+
+    result = NotificationService(
+        session, settings, wechat=FakeWechat(), sms=FakeSms()
+    ).scan_daily(date(2026, 8, 7))
+
+    assert result.created == 0
 
 
 def test_weekly_summary_reaches_all_bound_project_members(notification_context) -> None:
