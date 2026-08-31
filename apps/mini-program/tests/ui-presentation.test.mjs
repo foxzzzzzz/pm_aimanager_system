@@ -24,8 +24,13 @@ test("dashboard uses right-aligned primary mini actions consistent with approval
   assert.match(styles, /\.proposal-actions button\s*\{[^}]*margin:\s*0/s);
   assert.match(template, /class="tag approval-tag">\{\{.*待我审批.*\}\}/);
   assert.match(template, /本人提交 · 可审批/);
+  assert.match(template, /原计划：\{\{item\.beforePlanLabel\}\}/);
+  assert.match(template, /申请变更：\{\{item\.afterPlanLabel\}\}/);
+  assert.match(template, /变更原因：\{\{item\.reason\}\}/);
   assert.match(template, /提交时间：\{\{item\.createdAtLabel\}\}/);
   assert.match(template, /wx:if="\{\{item\.can_resolve\}\}" class="proposal-actions"/);
+  assert.match(source, /beforePlanLabel:\s*presentPlan\(item\.before_value\)/);
+  assert.match(source, /afterPlanLabel:\s*presentPlan\(item\.after_value\)/);
   assert.match(source, /formatDateTime\(\s*item\.created_at/s);
   assert.match(source, /批准后将更新里程碑运行状态并记录审批，不会增加正式版本/);
   assert.doesNotMatch(source, /批准后将发布新的正式项目版本/);

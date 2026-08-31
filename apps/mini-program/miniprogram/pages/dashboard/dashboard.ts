@@ -83,6 +83,8 @@ Page({
         dashboard,
         proposals: proposals.map((item) => ({
           ...item,
+          beforePlanLabel: presentPlan(item.before_value),
+          afterPlanLabel: presentPlan(item.after_value),
           createdAtLabel: formatDateTime(
             item.created_at,
             runtimeConfig.presentationTimezoneOffsetMinutes,

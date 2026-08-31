@@ -14,6 +14,9 @@
   <view wx:for="{{proposals}}" wx:key="id" class="card milestone">
     <text class="tag approval-tag">{{item.is_own_submission && item.can_resolve ? "本人提交 · 可审批" : item.is_own_submission ? "本人提交 · 待他人审批" : "待我审批"}}</text>
     <text class="name">{{item.milestone_code}} · {{item.reason}}</text>
+    <text class="muted proposal-detail">原计划：{{item.beforePlanLabel}}</text>
+    <text class="muted proposal-detail">申请变更：{{item.afterPlanLabel}}</text>
+    <text class="muted proposal-detail">变更原因：{{item.reason}}</text>
     <text class="muted proposal-time">提交时间：{{item.createdAtLabel}}</text>
     <view wx:if="{{item.can_resolve}}" class="proposal-actions">
       <button class="dashboard-action dashboard-action-primary" size="mini" loading="{{resolvingProposalId === item.id}}" disabled="{{resolvingProposalId !== ''}}" data-id="{{item.id}}" data-version="{{item.base_version_number}}" bindtap="approveProposal">批准变更</button>

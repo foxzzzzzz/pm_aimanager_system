@@ -8,7 +8,7 @@
 .approval-card { cursor: pointer; }
 .approval-card .name { display: block; }
 .approval-raci { display: flex; flex-wrap: wrap; gap: 8rpx 18rpx; margin-top: 10rpx; color: #53635f; font-size: 22rpx; }
-.proposal-time { display: block; margin-top: 10rpx; }
+.proposal-detail, .proposal-time { display: block; margin-top: 10rpx; }
 .card-action-row {
   display: flex;
   justify-content: flex-end;

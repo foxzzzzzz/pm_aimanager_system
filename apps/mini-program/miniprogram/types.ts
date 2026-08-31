@@ -122,6 +122,8 @@ export interface ChangeProposal {
   id: string;
   milestone_code: string;
   kind: "completed" | "delay";
+  before_value: Milestone["plan"];
+  after_value: Milestone["plan"];
   reason: string;
   status: string;
   base_version_number: number;
