@@ -65,6 +65,7 @@ export interface ReviewMilestone {
   code: string;
   name: string;
   output: string | null;
+  schedule: NonNullable<Milestone["plan"]>;
   assignments: Record<"R" | "A" | "C" | "I", string[]>;
 }
 

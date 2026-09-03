@@ -41,6 +41,7 @@
 .role { color: #146c5a; }
 .milestone-title { display: flex; gap: 14rpx; align-items: center; margin-bottom: 12rpx; }
 .code { color: #146c5a; font-weight: 700; }
+.raci-plan { display: block; margin-bottom: 12rpx; }
 .raci-row { display: flex; margin-top: 14rpx; }
 .raci-key { width: 54rpx; color: #146c5a; font-weight: 700; }
 .raci-names { flex: 1; color: #53635f; }

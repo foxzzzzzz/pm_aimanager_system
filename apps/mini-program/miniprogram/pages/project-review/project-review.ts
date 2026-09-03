@@ -7,6 +7,7 @@ import {
   filterRaciRows,
   hasLongSpecContent,
 } from "../../services/project-review-filter.js";
+import { presentPlan } from "../../services/presentation.js";
 import type { ProductSpec, ProjectMember, ProjectReview } from "../../types";
 
 type ReviewTab = "specs" | "members" | "raci";
@@ -27,6 +28,7 @@ interface SpecView extends ProductSpec {
 interface RaciView {
   code: string;
   name: string;
+  planLabel: string;
   output: string;
   roles: Array<{ key: "R" | "A" | "C" | "I"; names: string }>;
 }
@@ -82,6 +84,7 @@ Page({
       const raciRows = review.milestones.map((milestone) => ({
         code: milestone.code,
         name: milestone.name,
+        planLabel: presentPlan(milestone.schedule),
         output: milestone.output || "—",
         roles: (["R", "A", "C", "I"] as const).map((key) => ({
           key,

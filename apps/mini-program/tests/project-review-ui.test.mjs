@@ -16,6 +16,8 @@ test("project review provides member and RACI keyword search", async () => {
   assert.match(template, /placeholder="搜索节点、输出或成员"/);
   assert.match(template, /filteredMembers\.length/);
   assert.match(template, /filteredRaciRows\.length/);
+  assert.match(template, /完成计划：\{\{milestone\.planLabel\}\}[\s\S]*输出：\{\{milestone\.output\}\}/);
+  assert.match(source, /planLabel:\s*presentPlan\(milestone\.schedule\)/);
 });
 
 test("long product specification content can be expanded and collapsed", async () => {

@@ -71,6 +71,7 @@
         <text class="code">{{milestone.code}}</text>
         <text class="item-title">{{milestone.name}}</text>
       </view>
+      <text class="muted raci-plan">完成计划：{{milestone.planLabel}}</text>
       <text class="muted">输出：{{milestone.output}}</text>
       <view wx:for="{{milestone.roles}}" wx:key="key" wx:for-item="role" class="raci-row">
         <text class="raci-key">{{role.key}}</text>
