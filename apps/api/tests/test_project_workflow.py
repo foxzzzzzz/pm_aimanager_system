@@ -152,6 +152,16 @@ def _copy_with_active_plan_date(workdir: Path, filename: str, value: date) -> Pa
     return changed
 
 
+def _copy_with_actual_completion_date(workdir: Path, filename: str, value: date) -> Path:
+    changed = workdir / filename
+    shutil.copyfile(WORKBOOK, changed)
+    workbook = load_workbook(changed)
+    workbook["项目进度表"]["B6"] = value
+    workbook.save(changed)
+    workbook.close()
+    return changed
+
+
 def test_project_creation_is_idempotent_and_scoped_to_creator(
     workflow: tuple[TestClient, Path],
 ) -> None:
@@ -693,6 +703,47 @@ def test_formal_import_previews_and_resets_overlapping_runtime_update(
     assert active_plan["milestones"][m01_name]["end_date"] == "2026-08-02"
     with client.app.state.session_factory() as session:
         assert session.scalar(select(MilestoneRuntimeState)) is None
+
+
+def test_reimport_preserves_completed_runtime_state_when_workbook_completion_changes(
+    workflow: tuple[TestClient, Path],
+) -> None:
+    client, workdir = workflow
+    project_id, _ = _published_project(client)
+    completed_on = "2026-08-01"
+    with client.app.state.session_factory() as session:
+        session.add(
+            MilestoneRuntimeState(
+                project_id=uuid.UUID(project_id),
+                milestone_code="M01",
+                actual_completion={
+                    "state": "scheduled",
+                    "start_date": completed_on,
+                    "end_date": completed_on,
+                },
+                completion_revision=1,
+            )
+        )
+        session.commit()
+
+    changed = _copy_with_actual_completion_date(
+        workdir, "reimport-completion.xlsx", date(2026, 8, 2)
+    )
+    imported = _upload(client, project_id, changed, "reimport-completion-import")
+    assert not any(
+        item["path"] == "runtime_state[M01].actual_completion"
+        for item in imported["diff"]
+    )
+
+    published = _publish(client, imported["id"], 1, "reimport-completion-publish")
+    assert published.status_code == 200, published.json()
+    dashboard = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM_HEADERS).json()
+    m01 = next(item for item in dashboard["tasks"] if item["code"] == "M01")
+    assert m01["actual_completion"]["end_date"] == completed_on
+    with client.app.state.session_factory() as session:
+        state = session.scalar(select(MilestoneRuntimeState))
+        assert state is not None
+        assert state.actual_completion["end_date"] == completed_on
 
 
 def test_pending_runtime_proposal_conflicts_after_same_target_is_approved(

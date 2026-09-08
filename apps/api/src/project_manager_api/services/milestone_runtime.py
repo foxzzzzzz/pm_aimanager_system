@@ -72,15 +72,21 @@ def runtime_reset_diff(
     project_id: uuid.UUID,
     before: dict[str, Any],
     after: dict[str, Any],
+    *,
+    preserve_actual_completion: bool = False,
 ) -> list[dict[str, Any]]:
     changes: list[dict[str, Any]] = []
     states = session.scalars(
         select(MilestoneRuntimeState).where(MilestoneRuntimeState.project_id == project_id)
     )
     for state in states:
-        if state.actual_completion is not None and (
-            _milestone_completion(before, state.milestone_code)
-            != _milestone_completion(after, state.milestone_code)
+        completion_changed = _milestone_completion(
+            before, state.milestone_code
+        ) != _milestone_completion(after, state.milestone_code)
+        if (
+            not preserve_actual_completion
+            and state.actual_completion is not None
+            and completion_changed
         ):
             changes.append(
                 {

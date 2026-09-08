@@ -159,7 +159,15 @@ class ProjectService:
             entry.model_dump(mode="json")
             for entry in _business_diff(current_snapshot, draft)
         ]
-        changes.extend(runtime_reset_diff(self.session, project.id, current_snapshot, draft))
+        changes.extend(
+            runtime_reset_diff(
+                self.session,
+                project.id,
+                current_snapshot,
+                draft,
+                preserve_actual_completion=True,
+            )
+        )
         record = ImportRecord(
             project_id=project.id,
             filename=filename,
@@ -271,6 +279,7 @@ class ProjectService:
             project.id,
             current.snapshot if current is not None else {},
             record.draft,
+            preserve_actual_completion=True,
         )
         if runtime_changes != _runtime_diff_entries(record.diff or []):
             record.status = ImportStatus.CONFLICT
