@@ -75,6 +75,15 @@ test("RACI search covers nodes, outputs, and assigned members", () => {
   assert.deepEqual(filterRaciRows(rows, "成员乙"), [rows[0]]);
 });
 
+test("software node search uses each project's own code and name", () => {
+  for (const code of ["M09", "M25"]) {
+    const rows = [{ code, name: "驱动bring up", output: "EVT装机固件", roles: [{ key: "R", names: "软件成员" }] }];
+    for (const query of [code, "bring up", "固件", "软件成员"]) {
+      assert.deepEqual(filterRaciRows(rows, query), rows);
+    }
+  }
+});
+
 test("long specification content is detected from details and notes", () => {
   assert.equal(hasLongSpecContent({ detail: "短内容", notes: null }, 10), false);
   assert.equal(hasLongSpecContent({ detail: "12345678", notes: "备注内容" }, 10), true);

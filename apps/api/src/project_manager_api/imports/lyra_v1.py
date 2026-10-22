@@ -39,6 +39,19 @@ class LyraTemplateV1Parser:
             self._marker_matches(workbook, marker) for marker in self.manifest.identity_markers
         )
 
+    def has_milestone_layout(self, workbook: Workbook) -> bool:
+        progress = self.manifest.progress
+        if progress.sheet not in workbook.sheetnames:
+            return False
+        sheet = workbook[progress.sheet]
+        expected = [item.name for item in self.manifest.milestones]
+        last_column = max(sheet.max_column, progress.first_milestone_column + len(expected) - 1)
+        actual = [
+            _cell_text(sheet.cell(progress.milestone_header_row, column).value)
+            for column in range(progress.first_milestone_column, last_column + 1)
+        ]
+        return actual[: len(expected)] == expected and not any(actual[len(expected) :])
+
     def parse_workbook(self, workbook: Workbook, source_path: Path) -> ParseResult:
         self._validate_structure(workbook)
         source_sha256 = hashlib.sha256(source_path.read_bytes()).hexdigest()
@@ -96,6 +109,14 @@ class LyraTemplateV1Parser:
                 )
                 raise WorkbookValidationError(
                     f"invalid milestone header at {location}: expected {milestone.name!r}"
+                )
+        for column in range(
+            progress.first_milestone_column + len(self.manifest.milestones), sheet.max_column + 1
+        ):
+            if _cell_text(sheet.cell(progress.milestone_header_row, column).value):
+                raise WorkbookValidationError(
+                    f"unexpected milestone header at {progress.sheet}!"
+                    f"{get_column_letter(column)}{progress.milestone_header_row}"
                 )
 
     @staticmethod

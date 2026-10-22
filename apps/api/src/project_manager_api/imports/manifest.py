@@ -1,7 +1,8 @@
 from pathlib import Path
+from typing import Self
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class Marker(BaseModel):
@@ -43,11 +44,13 @@ class ProgressConfig(BaseModel):
 class MilestoneConfig(BaseModel):
     code: str
     name: str
+    legacy_code: str | None = None
 
 
 class TemplateManifest(BaseModel):
     template_id: str
     template_version: str
+    legacy_template_version: str | None = None
     required_sheets: dict[str, str]
     identity_markers: list[Marker]
     required_markers: list[Marker]
@@ -55,6 +58,14 @@ class TemplateManifest(BaseModel):
     team: TeamConfig
     progress: ProgressConfig
     milestones: list[MilestoneConfig]
+
+    @model_validator(mode="after")
+    def validate_legacy_codes(self) -> Self:
+        if self.legacy_template_version is not None:
+            codes = [milestone.legacy_code for milestone in self.milestones]
+            if any(not code for code in codes) or len(codes) != len(set(codes)):
+                raise ValueError("legacy milestone codes must be complete and unique")
+        return self
 
     @property
     def identifier(self) -> str:

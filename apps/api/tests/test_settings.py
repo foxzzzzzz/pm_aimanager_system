@@ -18,7 +18,10 @@ def test_example_config_contains_required_external_parameters() -> None:
     assert config["imports"]["timeout_seconds"] > 0
     assert config["imports"]["template_id"] == "lyra_project_spec"
     assert config["imports"]["template_version"] == "1.0"
-    assert config["imports"]["manifest_paths"] == ["config/templates/lyra_project_spec-v1.0.yaml"]
+    assert config["imports"]["manifest_paths"] == [
+        "config/templates/lyra_project_spec-v1.0.yaml",
+        "config/templates/lyra_project_spec-v1.1.yaml",
+    ]
     assert config["object_storage"]["backend"] == "s3"
     assert config["object_storage"]["bucket"] == "project-manager"
     assert config["notifications"]["due_soon_days"] == 3

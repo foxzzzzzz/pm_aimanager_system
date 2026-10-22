@@ -30,7 +30,7 @@ object_storage:
   # Region passed to the S3-compatible client.
   region: ap-guangzhou
 
-# Excel import boundaries and the first supported template.
+# Excel import boundaries and supported structural layouts.
 imports:
   # MVP accepts only modern Office Open XML workbooks.
   allowed_extensions:
@@ -48,6 +48,8 @@ imports:
   # Versioned parser manifests loaded by ParserRegistry.
   manifest_paths:
     - config/templates/lyra_project_spec-v1.0.yaml
+    # V1.4 workbook: 28 nodes; retains legacy codes when importing an existing 1.0 project.
+    - config/templates/lyra_project_spec-v1.1.yaml
   # Maximum processing time for a single workbook.
   timeout_seconds: 30
 

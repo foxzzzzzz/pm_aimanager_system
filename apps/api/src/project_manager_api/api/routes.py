@@ -785,7 +785,10 @@ async def create_project_from_import(
             request.url.path,
             201,
             request_hash,
-            lambda: ProjectService(session, actor_id).create_project_from_import(
+            lambda: ProjectService(
+                session, actor_id,
+                template_manifests=request.app.state.parser_registry.manifests,
+            ).create_project_from_import(
                 filename, object_key, parsed
             ),
             on_concurrent_replay=lambda: request.app.state.import_storage.delete(object_key),
@@ -849,7 +852,10 @@ async def create_import(
             request.url.path,
             201,
             request_hash,
-            lambda: ProjectService(session, actor_id).create_import(
+            lambda: ProjectService(
+                session, actor_id,
+                template_manifests=request.app.state.parser_registry.manifests,
+            ).create_import(
                 project_id,
                 filename,
                 object_key,
@@ -901,7 +907,10 @@ def publish_import(
         request.url.path,
         200,
         _request_hash(payload),
-        lambda: ProjectService(session, actor_id).publish_import(
+        lambda: ProjectService(
+            session, actor_id,
+            template_manifests=request.app.state.parser_registry.manifests,
+        ).publish_import(
             import_id, payload.expected_project_version
         ),
     )

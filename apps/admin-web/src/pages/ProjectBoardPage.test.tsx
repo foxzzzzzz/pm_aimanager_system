@@ -61,6 +61,30 @@ describe("ProjectBoardPage", () => {
     vi.clearAllMocks();
   });
 
+  it.each([
+    ["legacy", ["M08", "M25", "M09"]],
+    ["new", ["M08", "M09", "M10"]],
+  ])("preserves business order for %s project software nodes", async (id, codes) => {
+    mocks.dashboard.mockResolvedValueOnce({
+      current_version_number: 1,
+      business_date: "2026-10-22",
+      tasks: codes.map((code, index) => ({
+        code,
+        name: ["EVT-SMT贴片", "驱动bring up", "EVT装机"][index],
+        plan: { state: "scheduled", start_date: "2026-10-22", end_date: "2026-10-22" },
+        assignments: { R: ["软件成员"], A: ["负责人"], C: [], I: [] },
+        risk: "todo",
+      })),
+      issues: [],
+    });
+    render(<ProjectBoardPage project={{ id, code: id, name: id, status: "active", current_version_number: 1 }} />);
+    await screen.findByText(`${codes[1]} · 驱动bring up`);
+    const titles = screen.getAllByText(/M\d+ · /).map((element) => element.textContent);
+    expect(titles).toEqual([
+      `${codes[0]} · EVT-SMT贴片`, `${codes[1]} · 驱动bring up`, `${codes[2]} · EVT装机`,
+    ]);
+  });
+
   it("uses server risk groups and shows milestone RACI with issue summaries", async () => {
     const onNavigate = vi.fn();
     render(

@@ -332,30 +332,38 @@ class NotificationService:
                 "in_app",
             )
         )
-        key = hashlib.sha256(raw_key.encode()).hexdigest()
+        legacy_key = hashlib.sha256(raw_key.encode()).hexdigest()
+        key = hashlib.sha256(f"{reminder.project.id}:{raw_key}".encode()).hexdigest()
         if self.session.scalar(
-            select(NotificationDelivery.id).where(NotificationDelivery.idempotency_key == key)
+            select(NotificationDelivery.id).where(
+                NotificationDelivery.project_id == reminder.project.id,
+                NotificationDelivery.idempotency_key.in_([key, legacy_key]),
+            )
         ):
             return False
-        self.session.add(
-            NotificationDelivery(
-                project_id=reminder.project.id,
-                user_id=None,
-                event_type=reminder.event_type,
-                object_type=reminder.object_type,
-                object_id=reminder.object_id,
-                channel="in_app",
-                business_date=business_date,
-                idempotency_key=key,
-                status="skipped",
-                payload={
-                    "title": reminder.title,
-                    "body": reminder.body,
-                    "recipient_ref": recipient_ref,
-                },
-                error_message="recipient has no bound mobile identity",
-            )
+        delivery = NotificationDelivery(
+            project_id=reminder.project.id,
+            user_id=None,
+            event_type=reminder.event_type,
+            object_type=reminder.object_type,
+            object_id=reminder.object_id,
+            channel="in_app",
+            business_date=business_date,
+            idempotency_key=key,
+            status="skipped",
+            payload={
+                "title": reminder.title,
+                "body": reminder.body,
+                "recipient_ref": recipient_ref,
+            },
+            error_message="recipient has no bound mobile identity",
         )
+        try:
+            with self.session.begin_nested():
+                self.session.add(delivery)
+                self.session.flush()
+        except IntegrityError:
+            return False
         self.session.commit()
         return True
 
@@ -463,9 +471,13 @@ class NotificationService:
                 channel,
             )
         )
-        key = hashlib.sha256(raw_key.encode()).hexdigest()
+        legacy_key = hashlib.sha256(raw_key.encode()).hexdigest()
+        key = hashlib.sha256(f"{reminder.project.id}:{raw_key}".encode()).hexdigest()
         if self.session.scalar(
-            select(NotificationDelivery.id).where(NotificationDelivery.idempotency_key == key)
+            select(NotificationDelivery.id).where(
+                NotificationDelivery.project_id == reminder.project.id,
+                NotificationDelivery.idempotency_key.in_([key, legacy_key]),
+            )
         ):
             return None
         delivery = NotificationDelivery(

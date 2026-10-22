@@ -28,6 +28,31 @@ describe("ProjectReviewPage", () => {
     vi.clearAllMocks();
   });
 
+  it("shows four software nodes marked not applicable in project review", async () => {
+    const names = ["驱动bring up", "DVT底包", "PVT底包", "MP底包"];
+    const codes = ["M09", "M14", "M19", "M26"];
+    vi.mocked(api.projectReview).mockResolvedValue({
+      current_version_number: 1, document_version: "V1.3", active_plan_name: "原计划",
+      tbd_count: 0, product_specs: [], members: [],
+      milestones: names.map((name, index) => ({
+        code: codes[index], name, output: name,
+        schedule: { state: "not_applicable", start_date: null, end_date: null },
+        assignments: { R: ["软件成员"], A: ["软件经理"], C: [], I: [] },
+        risk_note: null,
+      })),
+    });
+    render(<ProjectReviewPage project={project} />);
+    fireEvent.click(await screen.findByText("里程碑与RACI 4"));
+    for (const name of names) expect(screen.getAllByText(name).length).toBeGreaterThan(0);
+    for (const name of names) {
+      const row = screen.getAllByRole("row").find((item) => within(item).queryAllByText(name).length);
+      expect(row).toBeDefined();
+      expect(within(row!).getAllByText("不适用").length).toBeGreaterThan(0);
+    }
+    fireEvent.click(screen.getByRole("checkbox", { name: "仅显示待确认节点" }));
+    expect(screen.queryByText("驱动bring up")).not.toBeInTheDocument();
+  });
+
   it("shows product specs, merged roles, RACI and filters TBD milestones", async () => {
     vi.mocked(api.projectReview).mockResolvedValue({
       current_version_number: 3,

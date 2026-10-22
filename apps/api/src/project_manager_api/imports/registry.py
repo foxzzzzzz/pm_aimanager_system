@@ -6,9 +6,13 @@ from zipfile import BadZipFile, ZipFile, is_zipfile
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
-from project_manager_api.imports.errors import InvalidWorkbookError, TemplateNotSupportedError
+from project_manager_api.imports.errors import (
+    InvalidWorkbookError,
+    TemplateNotSupportedError,
+    WorkbookValidationError,
+)
 from project_manager_api.imports.lyra_v1 import LyraTemplateV1Parser
-from project_manager_api.imports.manifest import load_manifest
+from project_manager_api.imports.manifest import TemplateManifest, load_manifest
 from project_manager_api.imports.report import ParseResult
 
 
@@ -24,6 +28,10 @@ class ParserRegistry:
     @property
     def supported_versions(self) -> list[str]:
         return [parser.manifest.identifier for parser in self._parsers]
+
+    @property
+    def manifests(self) -> list[TemplateManifest]:
+        return [parser.manifest for parser in self._parsers]
 
     def parse(
         self,
@@ -46,9 +54,22 @@ class ParserRegistry:
         except (BadZipFile, InvalidFileException, KeyError, OSError) as exc:
             raise InvalidWorkbookError("file is not a readable .xlsx workbook") from exc
         try:
-            for parser in self._parsers:
-                if parser.has_template_identity(workbook):
-                    return parser.parse_workbook(workbook, path)
+            candidates = [p for p in self._parsers if p.has_template_identity(workbook)]
+            matches = [p for p in candidates if p.has_milestone_layout(workbook)]
+            if len(matches) == 1:
+                return matches[0].parse_workbook(workbook, path)
+            if len(candidates) == 1 and not matches:
+                # Preserve precise validation errors for single-layout installations.
+                return candidates[0].parse_workbook(workbook, path)
+            if candidates:
+                locations = ", ".join(
+                    f"{p.manifest.progress.sheet}!"
+                    f"{p.manifest.required_sheets[p.manifest.progress.sheet]}"
+                    for p in candidates
+                )
+                raise WorkbookValidationError(
+                    f"milestone layout is not uniquely identified: {locations}"
+                )
         finally:
             workbook.close()
         raise TemplateNotSupportedError(self.supported_versions)

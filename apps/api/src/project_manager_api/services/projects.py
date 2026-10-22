@@ -48,6 +48,7 @@ from project_manager_api.domain.models import (
     ProjectMemberDraft,
 )
 from project_manager_api.imports.diff import semantic_diff
+from project_manager_api.imports.manifest import TemplateManifest
 from project_manager_api.imports.report import ParseResult
 from project_manager_api.services.errors import (
     ConflictError,
@@ -71,11 +72,13 @@ class ProjectService:
         actor_id: str,
         business_date: date | None = None,
         upcoming_days: int = 14,
+        template_manifests: list[TemplateManifest] | None = None,
     ) -> None:
         self.session = session
         self.actor_id = actor_id
         self.business_date = business_date or date.today()
         self.upcoming_days = upcoming_days
+        self.template_manifests = template_manifests or []
 
     def create_project(self, code: str, name: str) -> dict[str, Any]:
         existing = self.session.scalar(select(Project).where(Project.code == code))
@@ -155,6 +158,7 @@ class ProjectService:
         current = self._current_version(project)
         current_snapshot: dict[str, Any] = current.snapshot if current is not None else {}
         draft = result.draft.model_dump(mode="json")
+        self._validate_import_numbering(project, draft, map_source_codes=True)
         changes = [
             entry.model_dump(mode="json")
             for entry in _business_diff(current_snapshot, draft)
@@ -191,6 +195,86 @@ class ProjectService:
             after={"filename": filename, "diff_count": len(changes)},
         )
         return _import_dict(record)
+
+    def _validate_import_numbering(
+        self, project: Project, draft: dict[str, Any], *, map_source_codes: bool = False
+    ) -> None:
+        """Pin identity to the first published layout, before computing preview/hash."""
+        if self.template_manifests:
+            supported = [
+                m.template_version for m in self.template_manifests
+                if m.template_id == draft["template_id"]
+            ]
+            unsupported_history = self.session.scalar(
+                select(ProjectVersion.id).where(
+                    ProjectVersion.project_id == project.id,
+                    ProjectVersion.template_id == draft["template_id"],
+                    ProjectVersion.template_version.not_in(supported),
+                ).limit(1)
+            )
+            if unsupported_history is not None:
+                raise ConflictError("项目曾使用的模板配置未加载，请恢复新版配置后重新解析")
+        for configured in self.template_manifests:
+            if (
+                configured.template_id == draft["template_id"]
+                and configured.legacy_template_version == draft["template_version"]
+            ):
+                upgraded = self.session.scalar(
+                    select(ProjectVersion.id).where(
+                        ProjectVersion.project_id == project.id,
+                        ProjectVersion.template_id == configured.template_id,
+                        ProjectVersion.template_version == configured.template_version,
+                    ).limit(1)
+                )
+                if upgraded is not None:
+                    raise ConflictError(
+                        "该项目已使用新版规格书，请使用新版模板，旧模板缺列不能删除软件节点"
+                    )
+        manifest = next(
+            (
+                m for m in self.template_manifests if m.template_id == draft["template_id"]
+                and m.template_version == draft["template_version"]
+            ),
+            None,
+        )
+        if manifest is None:
+            if self.template_manifests:
+                raise ConflictError("导入模板配置已变化，请重新解析并预览")
+            return
+        if manifest.legacy_template_version is None:
+            return
+        first = self.session.scalar(
+            select(ProjectVersion).where(ProjectVersion.project_id == project.id)
+            .order_by(ProjectVersion.version_number).limit(1)
+        )
+        if first is not None and (
+            first.template_id != manifest.template_id
+            or first.template_version not in (
+                manifest.template_version, manifest.legacy_template_version
+            )
+        ):
+            raise ConflictError("项目首次发布的模板与编号配置不兼容")
+        legacy = first is not None and first.template_version == manifest.legacy_template_version
+        current = self._current_version(project)
+        existing = (current.snapshot if current else {}).get("milestones", [])
+        by_code = {m["code"]: m["name"] for m in existing}
+        by_name = {m["name"]: m["code"] for m in existing}
+        configured_by_name = {m.name: m for m in manifest.milestones}
+        for milestone in draft["milestones"]:
+            definition = configured_by_name[milestone["name"]]
+            target = definition.legacy_code if legacy else definition.code
+            if target is None:
+                raise ConflictError("旧项目节点编号映射缺失，请检查模板配置")
+            if (target in by_code and by_code[target] != milestone["name"]) or (
+                milestone["name"] in by_name and by_name[milestone["name"]] != target
+            ):
+                raise ConflictError(
+                    f"节点编号冲突：{target} / {milestone['name']}，原项目数据未修改"
+                )
+            if map_source_codes:
+                milestone["code"] = target
+            elif milestone["code"] != target:
+                raise ConflictError("项目编号规则已固定，请重新解析并预览，不能直接切换编号")
 
     def create_project_from_import(
         self, filename: str, object_key: str, result: ParseResult
@@ -245,6 +329,7 @@ class ProjectService:
             raise ConflictError("import is not publishable")
         if record.draft is None:
             raise ConflictError("validated import has no draft")
+        self._validate_import_numbering(project, record.draft)
         draft_hash = _business_hash(record.draft)
         current = self._current_version(project)
         if current is not None and current.content_sha256 == draft_hash:
@@ -264,7 +349,10 @@ class ProjectService:
             )
 
         current_number = project.current_version_number or 0
-        if current_number != expected_project_version:
+        if (
+            current_number != expected_project_version
+            or (record.base_version_number or 0) != expected_project_version
+        ):
             conflict_paths = self._import_conflict_paths(record, project)
             record.status = ImportStatus.CONFLICT
             raise PersistedConflictError(
@@ -1601,6 +1689,8 @@ def _apply_project_data_operations(
             value = copy.deepcopy(operation.value)
             if value is None:
                 raise ConflictError(f"{operation.resource} replacement is missing")
+            if operation.resource == "milestone" and str(value.get(key_field)) != operation.key:
+                raise ConflictError("milestone key does not match value")
             collection[index] = value
         else:
             if index is None:

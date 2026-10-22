@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -24,7 +26,7 @@ from project_manager_api.db.models import (
     WechatSubscriptionGrant,
 )
 from project_manager_api.services.crypto import PhoneCipher
-from project_manager_api.services.notifications import NotificationService
+from project_manager_api.services.notifications import NotificationService, Reminder
 from project_manager_api.settings import AppSettings
 
 
@@ -439,3 +441,142 @@ def test_weekly_summary_reaches_all_bound_project_members(notification_context) 
         )
     )
     assert recipients == {users["Rita"].id, users["Alan"].id}
+
+
+@pytest.mark.parametrize("bound", [False, True])
+def test_same_milestone_code_in_two_projects_does_not_share_delivery_key(
+    notification_context, bound: bool,
+) -> None:
+    session, settings, users = notification_context
+    project = session.scalar(select(Project))
+    assert project is not None
+    other = Project(code="NEW", name="New numbering")
+    session.add(other)
+    session.flush()
+    reminder = Reminder(project, "milestone_due_today", "milestone", "M09",
+                        "M09 EVT装机", "today", ("Rita",), True)
+    other_reminder = replace(reminder, project=other, title="M09 驱动bring up")
+    service = NotificationService(session, settings, wechat=FakeWechat(), sms=FakeSms())
+    today = date(2026, 10, 22)
+    if bound:
+        assert service._create_delivery(reminder, users["Rita"], today, "in_app") is not None
+        assert service._create_delivery(other_reminder, users["Rita"], today, "in_app") is not None
+        assert service._create_delivery(reminder, users["Rita"], today, "in_app") is None
+    else:
+        assert service._create_unbound_delivery(reminder, "Rita", today)
+        assert service._create_unbound_delivery(other_reminder, "Rita", today)
+        assert not service._create_unbound_delivery(reminder, "Rita", today)
+
+
+@pytest.mark.parametrize("channel", ["in_app", "wechat", "sms", "unbound"])
+def test_legacy_delivery_keys_are_still_deduplicated_without_resending(
+    notification_context, channel: str,
+) -> None:
+    session, settings, users = notification_context
+    project = session.scalar(select(Project))
+    assert project is not None
+    reminder = Reminder(project, "milestone_due_today", "milestone", "M09",
+                        "M09 EVT装机", "today", ("Rita",), True)
+    user = users["Rita"]
+    today = date(2026, 10, 22)
+    actual_channel = "in_app" if channel == "unbound" else channel
+    recipient = "Rita" if channel == "unbound" else str(user.id)
+    raw = ":".join((reminder.event_type, "milestone", "M09", recipient,
+                    today.isoformat(), actual_channel))
+    session.add(NotificationDelivery(
+        project_id=project.id, user_id=None if channel == "unbound" else user.id,
+        event_type=reminder.event_type, object_type="milestone", object_id="M09",
+        channel=actual_channel, business_date=today, status="sent", payload={},
+        idempotency_key=hashlib.sha256(raw.encode()).hexdigest(),
+    ))
+    session.commit()
+    service = NotificationService(session, settings, wechat=FakeWechat(), sms=FakeSms())
+    if channel == "unbound":
+        assert not service._create_unbound_delivery(reminder, recipient, today)
+    else:
+        assert service._create_delivery(reminder, user, today, channel) is None
+    other = Project(code="HISTORY-OTHER", name="same node in another project")
+    session.add(other)
+    session.flush()
+    other_reminder = replace(reminder, project=other)
+    if channel == "unbound":
+        assert service._create_unbound_delivery(other_reminder, recipient, today)
+    else:
+        assert service._create_delivery(other_reminder, user, today, channel) is not None
+
+
+@pytest.mark.parametrize("status", ["sent", "pending"])
+def test_review_daily_scan_does_not_resend_historical_in_app_delivery(
+    notification_context, status: str,
+) -> None:
+    session, settings, users = notification_context
+    project = session.scalar(select(Project))
+    assert project is not None
+    user = users["Rita"]
+    today = date(2026, 8, 10)
+    raw = ":".join(("milestone_due_today", "milestone", "M01", str(user.id),
+                    today.isoformat(), "in_app"))
+    old_key = hashlib.sha256(raw.encode()).hexdigest()
+    historical = NotificationDelivery(
+        project_id=project.id, user_id=user.id, event_type="milestone_due_today",
+        object_type="milestone", object_id="M01", channel="in_app", business_date=today,
+        status=status, payload={"title": "historical"}, idempotency_key=old_key,
+    )
+    session.add(historical)
+    session.commit()
+    wechat, sms = FakeWechat(), FakeSms()
+    service = NotificationService(session, settings, wechat=wechat, sms=sms)
+    assert service.scan_daily(today).created == 0
+    assert service.scan_daily(today).created == 0
+    assert session.scalar(select(InAppMessage)) is None
+    assert wechat.sent == [] and sms.sent == []
+    session.refresh(historical)
+    assert historical.idempotency_key == old_key and historical.status == status
+
+
+def test_review_failed_historical_sms_can_retry_without_rewriting_its_key(
+    notification_context,
+) -> None:
+    session, settings, users = notification_context
+    project = session.scalar(select(Project))
+    assert project is not None
+    user = users["Rita"]
+    today = date(2026, 8, 10)
+    raw = ":".join(("milestone_due_today", "milestone", "M01", str(user.id),
+                    today.isoformat(), "sms"))
+    old_key = hashlib.sha256(raw.encode()).hexdigest()
+    historical = NotificationDelivery(
+        project_id=project.id, user_id=user.id, event_type="milestone_due_today",
+        object_type="milestone", object_id="M01", channel="sms", business_date=today,
+        status="failed", attempts=1, payload={"title": "historical"}, idempotency_key=old_key,
+    )
+    session.add(historical)
+    session.commit()
+    sms = FakeSms()
+    service = NotificationService(session, settings, wechat=FakeWechat(), sms=sms)
+    assert service.retry_failed(historical.id)["status"] == "sent"
+    assert len(sms.sent) == 1
+    assert historical.idempotency_key == old_key and historical.attempts == 2
+
+
+def test_review_concurrent_unbound_delivery_keeps_the_session_usable(
+    notification_context, monkeypatch,
+) -> None:
+    session, settings, _ = notification_context
+    project = session.scalar(select(Project))
+    assert project is not None
+    reminder = Reminder(project, "milestone_due_today", "milestone", "M09",
+                        "M09 EVT装机", "today", ("unbound",), True)
+    service = NotificationService(session, settings, wechat=FakeWechat(), sms=FakeSms())
+    today = date(2026, 10, 22)
+    assert service._create_unbound_delivery(reminder, "unbound", today)
+    original_scalar = session.scalar
+
+    def stale_lookup(statement):
+        # Simulate another scan inserting the same key after our existence check.
+        monkeypatch.setattr(session, "scalar", original_scalar)
+        return None
+
+    monkeypatch.setattr(session, "scalar", stale_lookup)
+    assert not service._create_unbound_delivery(reminder, "unbound", today)
+    assert len(list(session.scalars(select(NotificationDelivery)))) == 1

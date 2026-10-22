@@ -1,0 +1,102 @@
+# V1.4 workbook layout; this is the structural version, not the document title version.
+template_id: lyra_project_spec
+template_version: "1.1"
+# Projects first published using this predecessor retain their original node codes.
+legacy_template_version: "1.0"
+required_sheets:
+  产品规格书: A1:I75
+  项目团队构成: A1:F26
+  项目进度表: A1:AC15
+identity_markers:
+  - sheet: 产品规格书
+    cell: A1
+    contains: 深圳市智林泰电子科技有限公司
+  - sheet: 产品规格书
+    cell: D4
+    contains: 项目号：
+required_markers:
+  - sheet: 项目团队构成
+    cell: A4
+    equals: 团队成员
+  - sheet: 项目团队构成
+    cell: B4
+    equals: 责任部门
+  - sheet: 项目团队构成
+    cell: C4
+    equals: 负责人
+  - sheet: 项目进度表
+    cell: A2
+    equals: 项目节点
+product_specs:
+  sheet: 产品规格书
+  first_row: 6
+  last_row: 75
+  columns:
+    major_category: A
+    category: B
+    item: C
+    configuration: D
+    core_information: E
+    selected_model: F
+    notes: G
+    check_confirmation: H
+    check_content: I
+team:
+  sheet: 项目团队构成
+  first_row: 5
+  last_row: 26
+  project_manager_role: 项目经理
+  columns:
+    role: B
+    name: C
+    phone: D
+    email: E
+    notes: F
+progress:
+  sheet: 项目进度表
+  milestone_header_row: 2
+  first_milestone_column: 2
+  plan_first_row: 3
+  plan_last_row: 5
+  actual_completion_row: 6
+  variance_days_row: 7
+  variance_note_row: 8
+  risk_note_row: 9
+  raci_rows:
+    R: 11
+    A: 12
+    C: 13
+    I: 14
+  output_row: 15
+# List order is the business/display order. code is used for projects first published
+# with this layout. legacy_code is used only for projects first published with 1.0.
+# Codes are project-scoped identities and must never be regenerated from dates.
+milestones:
+  - {code: M01, legacy_code: M01, name: 正式立项}
+  - {code: M02, legacy_code: M02, name: MD设计}
+  - {code: M03, legacy_code: M03, name: 结构评审}
+  - {code: M04, legacy_code: M04, name: 投模}
+  - {code: M05, legacy_code: M05, name: 硬件设计}
+  - {code: M06, legacy_code: M06, name: EVT投板}
+  - {code: M07, legacy_code: M07, name: 模具T0}
+  - {code: M08, legacy_code: M08, name: EVT-SMT贴片}
+  - {code: M09, legacy_code: M25, name: 驱动bring up}
+  - {code: M10, legacy_code: M09, name: EVT装机}
+  - {code: M11, legacy_code: M10, name: EVT可靠性测试}
+  - {code: M12, legacy_code: M11, name: 认证}
+  - {code: M13, legacy_code: M12, name: DVT发板}
+  - {code: M14, legacy_code: M26, name: DVT底包}
+  - {code: M15, legacy_code: M13, name: DVT-SMT贴片}
+  - {code: M16, legacy_code: M14, name: DVT装机}
+  - {code: M17, legacy_code: M15, name: DVT可靠性测试}
+  - {code: M18, legacy_code: M16, name: PVT发板}
+  - {code: M19, legacy_code: M27, name: PVT底包}
+  - {code: M20, legacy_code: M17, name: PVT-SMT贴片}
+  - {code: M21, legacy_code: M18, name: PVT装机}
+  - {code: M22, legacy_code: M19, name: PVT可靠性测试}
+  - {code: M23, legacy_code: M20, name: 长周期备料}
+  - {code: M24, legacy_code: M21, name: 电容笔调试}
+  - {code: M25, legacy_code: M22, name: 摄像头调试}
+  - {code: M26, legacy_code: M28, name: MP底包}
+  - {code: M27, legacy_code: M23, name: 软件封板}
+  - {code: M28, legacy_code: M24, name: MP}

@@ -35,6 +35,19 @@ const milestones = [
   milestone({ code: "NA", planState: "not_applicable" }),
 ];
 
+test("software nodes retain project order and N/A is only visible in all", () => {
+  for (const codes of [["M08", "M25", "M09"], ["M08", "M09", "M10"]]) {
+    const nodes = codes.map((code, index) => ({
+      ...milestone({ code, endDate: "2026-10-22", planState: index === 1 ? "not_applicable" : "scheduled" }),
+      name: ["EVT-SMT贴片", "驱动bring up", "EVT装机"][index],
+    }));
+    assert.deepEqual(filterMilestones(nodes, "all", "2026-10-22").map((m) => m.code), codes);
+    assert.deepEqual(filterMilestones(nodes, "todo", "2026-10-22").map((m) => m.code), [codes[0], codes[2]]);
+    assert.deepEqual(filterMilestones(nodes, "upcoming", "2026-10-22").map((m) => m.name), ["EVT-SMT贴片", "EVT装机"]);
+    assert.equal(filterMilestones(nodes, "overdue", "2026-10-22").length, 0);
+  }
+});
+
 test("milestone filters expose stable counts at date boundaries", () => {
   assert.deepEqual(buildMilestoneFilters(milestones, "2026-08-10"), [
     { key: "todo", label: "待办", count: 4 },
