@@ -27,7 +27,11 @@ ADMIN_API_TOKEN=$(get_value "ADMIN_API_TOKEN")
 
 docker info >/dev/null
 "${compose[@]}" config --quiet
-"${compose[@]}" up -d --build --wait --wait-timeout 180
+# Build before interrupting running services. A failed build leaves them untouched.
+"${compose[@]}" build
+# Do not run old and new notification scanners with different delivery-key formats together.
+"${compose[@]}" stop notification-beat notification-worker
+"${compose[@]}" up -d --no-build --wait --wait-timeout 180
 "${compose[@]}" exec -T api python -m alembic -c /app/apps/api/alembic.ini upgrade head
 
 curl --fail --silent --show-error --max-time 15 --retry 10 --retry-all-errors --retry-delay 2 \

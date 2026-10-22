@@ -15,7 +15,13 @@ RUN pip install \
 
 COPY apps/api /app/apps/api
 COPY config /app/config
-RUN pip install --disable-pip-version-check --no-cache-dir --no-deps /app/apps/api
+RUN pip install \
+      --disable-pip-version-check \
+      --no-cache-dir \
+      --retries 10 \
+      --timeout "${PIP_DEFAULT_TIMEOUT}" \
+      --index-url "${PYPI_INDEX_URL}" \
+      --no-deps /app/apps/api
 
 RUN addgroup --system app && adduser --system --ingroup app app \
     && mkdir -p /app/tmp \
