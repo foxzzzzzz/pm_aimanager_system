@@ -1,0 +1,12 @@
+# Preferred original commitment plan label; missing labels require explicit manager review.
+original_plan_name: 原计划
+# Human-reviewed reason categories. Changing this list affects new review selections;
+# previously saved confirmed reports retain their original category text.
+reason_categories:
+  - 待确认
+  - 需求与范围
+  - 资源与协作
+  - 技术与质量
+  - 供应链
+  - 外部依赖
+  - 其他

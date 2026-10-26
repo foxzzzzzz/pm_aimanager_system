@@ -16,6 +16,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from project_manager_api.api.retrospective_schemas import (
+    RetrospectiveConfirm,
+    RetrospectiveCreate,
+    RetrospectiveUpdate,
+)
 from project_manager_api.api.schemas import (
     InvitationAccept,
     IssueCreate,
@@ -57,6 +62,7 @@ from project_manager_api.services.notification_adapters import (
 from project_manager_api.services.notifications import NotificationService
 from project_manager_api.services.operations import build_operational_status, current_business_date
 from project_manager_api.services.projects import ProjectService
+from project_manager_api.services.retrospectives import RetrospectiveService
 from project_manager_api.services.wechat import generate_invitation_entries
 
 router = APIRouter(prefix="/api/v1")
@@ -1343,6 +1349,101 @@ def list_audit_logs(
     actor_id: ActorDependency,
 ) -> list[dict[str, Any]]:
     return ProjectService(session, actor_id).list_audit_logs(project_id)
+
+
+@router.get("/projects/{project_id}/retrospective-options")
+def retrospective_options(
+    project_id: uuid.UUID, request: Request, session: SessionDependency, actor_id: ActorDependency
+) -> dict[str, Any]:
+    return RetrospectiveService(session, actor_id, request.app.state.settings).options(project_id)
+
+
+@router.get("/projects/{project_id}/retrospectives")
+def list_retrospectives(
+    project_id: uuid.UUID, request: Request, session: SessionDependency, actor_id: ActorDependency
+) -> list[dict[str, Any]]:
+    return RetrospectiveService(session, actor_id, request.app.state.settings).list_reports(
+        project_id
+    )
+
+
+@router.post("/projects/{project_id}/retrospectives", status_code=201)
+def create_retrospective(
+    project_id: uuid.UUID,
+    payload: RetrospectiveCreate,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    ProjectService(session, actor_id)._require_project(project_id, manager=True)
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        201,
+        _request_hash(payload),
+        lambda: RetrospectiveService(session, actor_id, request.app.state.settings).create(
+            project_id, payload
+        ),
+    )
+
+
+@router.get("/retrospectives/{report_id}")
+def get_retrospective(
+    report_id: uuid.UUID, request: Request, session: SessionDependency, actor_id: ActorDependency
+) -> dict[str, Any]:
+    return RetrospectiveService(session, actor_id, request.app.state.settings).get(report_id)
+
+
+@router.patch("/retrospectives/{report_id}")
+def update_retrospective(
+    report_id: uuid.UUID,
+    payload: RetrospectiveUpdate,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    RetrospectiveService(session, actor_id, request.app.state.settings)._require_report(report_id)
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        _request_hash(payload),
+        lambda: RetrospectiveService(session, actor_id, request.app.state.settings).save(
+            report_id, payload
+        ),
+    )
+
+
+@router.post("/retrospectives/{report_id}/confirm")
+def confirm_retrospective(
+    report_id: uuid.UUID,
+    payload: RetrospectiveConfirm,
+    request: Request,
+    session: SessionDependency,
+    actor_id: ActorDependency,
+    request_key: IdempotencyDependency,
+) -> JSONResponse:
+    RetrospectiveService(session, actor_id, request.app.state.settings)._require_report(report_id)
+    return _execute_idempotent(
+        session,
+        actor_id,
+        request_key,
+        request.method,
+        request.url.path,
+        200,
+        _request_hash(payload),
+        lambda: RetrospectiveService(session, actor_id, request.app.state.settings).confirm(
+            report_id, payload.expected_revision
+        ),
+    )
 
 
 def _cached_response(

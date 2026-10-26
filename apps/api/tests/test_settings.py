@@ -84,3 +84,25 @@ def test_production_channel_and_cors_settings_can_be_overridden_by_environment(
     assert settings.sms_sdk_app_id == "1400000000"
     assert settings.sms_sign_name == "approved-sign"
     assert settings.sms_critical_template_id == "1234567"
+
+
+def test_retrospective_config_path_custom_and_legacy_fallback(monkeypatch) -> None:
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory(dir=ROOT / "tmp") as directory:
+        config = yaml.safe_load((ROOT / "config/app.example.yaml").read_text(encoding="utf-8"))
+        custom = Path(directory) / "custom-retrospectives.yaml"
+        custom.write_text(
+            "original_plan_name: Initial\nreason_categories: [Pending]\n", encoding="utf-8"
+        )
+        config["retrospectives"] = {"config_path": str(custom)}
+        app_config = Path(directory) / "app.yaml"
+        app_config.write_text(yaml.safe_dump(config), encoding="utf-8")
+        monkeypatch.setenv("APP_CONFIG_PATH", str(app_config))
+        assert AppSettings.from_environment().retrospective_config_path == custom
+        del config["retrospectives"]
+        app_config.write_text(yaml.safe_dump(config), encoding="utf-8")
+        assert (
+            AppSettings.from_environment().retrospective_config_path
+            == ROOT / "config/retrospectives.yaml"
+        )

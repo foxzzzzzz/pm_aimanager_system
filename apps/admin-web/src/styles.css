@@ -53,6 +53,8 @@ button, input { font: inherit; }
 .workspace { padding: 28px 32px 48px; }
 .global-alert { margin-bottom: 18px; }
 .page-stack { display: grid; gap: 18px; max-width: 1500px; margin: 0 auto; }
+.retrospective-page { grid-template-columns: minmax(0, 1fr); min-width: 0; overflow-wrap: anywhere; }
+.retrospective-page :where(.ant-card, .ant-card-body, .ant-space, .ant-space-item) { min-width: 0; max-width: 100%; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .page-heading .ant-typography { margin: 0 !important; }
 .ant-card { border-color: #dce8e5; box-shadow: 0 8px 24px rgba(24, 67, 61, .045); }

@@ -24,6 +24,7 @@ def test_database_metadata_contains_versioned_project_data_tables() -> None:
         "project_change_sets",
         "project_versions",
         "projects",
+        "retrospective_reports",
         "wechat_subscription_grants",
     }
     assert "base_runtime_revision" in Base.metadata.tables["change_proposals"].c
@@ -37,7 +38,7 @@ def test_database_metadata_contains_versioned_project_data_tables() -> None:
 def test_database_migration_chain_exists() -> None:
     migrations = list((ROOT / "apps" / "api" / "migrations" / "versions").glob("*.py"))
 
-    assert len(migrations) == 12
+    assert len(migrations) == 13
     revisions = "\n".join(path.read_text(encoding="utf-8") for path in migrations)
     assert 'revision: str = "0001_phase1"' in revisions
     assert 'revision: str = "0002_phase2"' in revisions
@@ -51,6 +52,7 @@ def test_database_migration_chain_exists() -> None:
     assert 'revision: str = "0010_issue_create_proposals"' in revisions
     assert 'revision: str = "0011_issue_delete_proposals"' in revisions
     assert 'revision: str = "0012_milestone_runtime_states"' in revisions
+    assert 'revision: str = "0013_retrospective_reports"' in revisions
     assert '"base_runtime_revision"' in revisions
     assert "substr(phone, length(phone) - 3, 4)" in revisions
     for table in (

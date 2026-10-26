@@ -6,6 +6,74 @@ export interface Project {
   current_version_number: number;
 }
 
+export interface RetrospectiveOptions {
+  baselines: { version_number: number; plan_name: string }[];
+  reason_categories: string[];
+}
+
+export interface RetrospectiveReason {
+  milestone_code: string;
+  category: string;
+  confirmed_reason: string;
+  evidence: string;
+  fact_confirmed_by: string;
+  confirmation_source: string;
+  status: "pending" | "confirmed";
+  recorded_by?: string;
+}
+
+export interface RetrospectiveImprovement {
+  milestone_code: string | null;
+  source_event_ids: string[];
+  scenario: string;
+  action: string;
+  proposed_owner: string;
+  acceptance: string;
+  recorded_by?: string;
+}
+
+export interface RetrospectiveReview {
+  baseline_confirmed: boolean;
+  baseline_note: string;
+  reason_reviews: RetrospectiveReason[];
+  improvements: RetrospectiveImprovement[];
+}
+
+export interface RetrospectiveReport {
+  id: string;
+  project_id: string;
+  report_number: number;
+  revision: number;
+  status: "draft" | "confirmed";
+  created_at: string;
+  confirmed_at: string | null;
+  created_by: string;
+  confirmed_by: string | null;
+  supersedes_report_id: string | null;
+  facts: {
+    cutoff_at: string;
+    date_basis: "calendar_days";
+    project_version_number: number;
+    baseline: { version_number: number; plan_name: string };
+    warnings: string[];
+    milestones: {
+      code: string; name: string;
+      original_plan: PlanWindow | null; latest_plan: PlanWindow | null; variance_plan: PlanWindow | null; actual_completion: PlanWindow | null;
+      original_variance_days: number | null; adjusted_variance_days: number | null;
+      effective_adjustment_count: number; imported_plan_rows_count: number;
+      status: "completed" | "incomplete" | "not_applicable" | "removed";
+      scope_change: "added" | "removed" | null;
+      warnings: string[]; assignments: Record<"R" | "A" | "C" | "I", string[]>;
+    }[];
+    timeline: {
+      id: string; source: string; kind: string; milestone_code: string | null; effective: boolean;
+      occurred_at: string | null; recorded_at: string; status: string; before: unknown; after: unknown;
+      reason: string | null; submitted_by: string | null; resolved_by: string | null; evidence_refs: string[];
+    }[];
+  };
+  review: RetrospectiveReview;
+}
+
 export interface Dashboard {
   project: Project;
   current_version_number: number;

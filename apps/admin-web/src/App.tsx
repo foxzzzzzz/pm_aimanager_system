@@ -25,8 +25,9 @@ const ImportPage = lazy(() => import("./pages/ImportPage"));
 const HistoryPage = lazy(() => import("./pages/HistoryPage"));
 const IssuesAuditPage = lazy(() => import("./pages/IssuesAuditPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
+const ProjectRetrospectivePage = lazy(() => import("./pages/ProjectRetrospectivePage"));
 
-type PageKey = "overview" | "board" | "review" | "imports" | "history" | "issues" | "notifications";
+type PageKey = "overview" | "board" | "review" | "imports" | "history" | "issues" | "notifications" | "retrospective";
 
 interface ProjectForm {
   code: string;
@@ -148,6 +149,7 @@ export function App() {
     history: <HistoryPage project={selectedProject} refreshToken={refreshToken} />,
     issues: <IssuesAuditPage project={selectedProject} />,
     notifications: <NotificationsPage project={selectedProject} />,
+    retrospective: <ProjectRetrospectivePage key={selectedProject?.id} project={selectedProject} />,
   }[page];
 
   return (
@@ -180,6 +182,7 @@ export function App() {
               { key: "overview", label: "项目总览" },
               { key: "board", label: "项目看板" },
               { key: "review", label: "项目核对" },
+              { key: "retrospective", label: "项目复盘" },
               { key: "imports", label: "Excel导入" },
               { key: "history", label: "版本历史" },
               { key: "issues", label: "问题与审计" },

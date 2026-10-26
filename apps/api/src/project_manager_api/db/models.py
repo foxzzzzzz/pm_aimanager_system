@@ -438,3 +438,28 @@ class NotificationDelivery(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+
+
+class RetrospectiveReport(Base):
+    __tablename__ = "retrospective_reports"
+    __table_args__ = (
+        UniqueConstraint("project_id", "report_number", name="uq_retrospective_project_number"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    report_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    supersedes_report_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("retrospective_reports.id", ondelete="RESTRICT")
+    )
+    facts: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    review: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    facts_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    confirmed_by: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

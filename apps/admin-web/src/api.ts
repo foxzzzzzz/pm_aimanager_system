@@ -17,6 +17,9 @@ import type {
   ProjectImportCreateResult,
   ProjectReview,
   ProjectVersion,
+  RetrospectiveOptions,
+  RetrospectiveReport,
+  RetrospectiveReview,
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:18000/api/v1";
@@ -65,6 +68,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  retrospectiveOptions: (projectId: string) => request<RetrospectiveOptions>(`/projects/${projectId}/retrospective-options`),
+  listRetrospectives: (projectId: string) => request<RetrospectiveReport[]>(`/projects/${projectId}/retrospectives`),
+  getRetrospective: (reportId: string) => request<RetrospectiveReport>(`/retrospectives/${reportId}`),
+  createRetrospective: (projectId: string, payload: { baseline_version_number?: number; baseline_plan_name?: string; supersedes_report_id?: string }) =>
+    request<RetrospectiveReport>(`/projects/${projectId}/retrospectives`, {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Idempotency-Key": requestKey("retrospective") }, body: JSON.stringify(payload),
+    }),
+  updateRetrospective: (reportId: string, payload: RetrospectiveReview & { expected_revision: number }) =>
+    request<RetrospectiveReport>(`/retrospectives/${reportId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json", "X-Idempotency-Key": requestKey("retrospective-review") }, body: JSON.stringify(payload),
+    }),
+  confirmRetrospective: (reportId: string, expectedRevision: number) =>
+    request<RetrospectiveReport>(`/retrospectives/${reportId}/confirm`, {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Idempotency-Key": requestKey("retrospective-confirm") }, body: JSON.stringify({ expected_revision: expectedRevision }),
+    }),
   listProjects: () => request<Project[]>("/projects"),
   createProject: (payload: { code: string; name: string }) =>
     request<Project>("/projects", {

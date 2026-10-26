@@ -11,6 +11,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
 
 class AppSettings(BaseModel):
+    retrospective_config_path: Path = REPOSITORY_ROOT / "config" / "retrospectives.yaml"
     database_url: str
     manifest_paths: list[Path]
     import_storage_path: Path
@@ -109,6 +110,14 @@ class AppSettings(BaseModel):
             else [str(origin) for origin in config["app"]["cors_origins"]]
         )
         return cls(
+            retrospective_config_path=_resolve_path(
+                config_path,
+                Path(
+                    config.get("retrospectives", {}).get(
+                        "config_path", "config/retrospectives.yaml"
+                    )
+                ),
+            ),
             database_url=database_url,
             manifest_paths=manifest_paths,
             import_storage_path=storage_path,

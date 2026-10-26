@@ -22,6 +22,7 @@ describe("App", () => {
     expect(await screen.findByText("项目总览")).toBeInTheDocument();
     expect(screen.getByText("项目看板")).toBeInTheDocument();
     expect(screen.getByText("项目核对")).toBeInTheDocument();
+    expect(screen.getByText("项目复盘")).toBeInTheDocument();
     expect(screen.getByText("Excel导入")).toBeInTheDocument();
     expect(screen.getByText("版本历史")).toBeInTheDocument();
     expect(screen.getByText("问题与审计")).toBeInTheDocument();

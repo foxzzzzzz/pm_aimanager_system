@@ -147,3 +147,8 @@ operations:
   notification_failure_threshold: 1
   # Pending delivery age after which the delivery is considered stuck.
   stale_pending_minutes: 10
+
+# Retrospective defaults and categories live independently of legacy import templates.
+retrospectives:
+  # Path to documented original-plan candidate name and manual reason categories.
+  config_path: config/retrospectives.yaml
