@@ -10,7 +10,7 @@
 - 如启用短信，配置腾讯云SecretID/SecretKey、地域、应用ID、签名和已审核模板，并先完成测试号码验证。
 - 所有生产值通过环境变量或密钥管理服务注入，不提交到Git。
 
-使用管理员令牌查询`GET /api/v1/operations/status`。返回`ok`才满足配置和通知运行门禁；本地开发可执行：
+使用管理员令牌查询`GET /api/v1/operations/status`。独立运营巡检要求返回`ok`；生产部署在服务健康、迁移及配置均合格后可完成，已有通知失败、滞留或未绑定等运营告警会继续显示为`alert`和警告，不再单独导致部署失败。`configuration_issues`非空或状态响应异常仍阻断部署。SMS关闭时不要求短信凭据，启用时才校验完整性。问题分析见[SMS关闭时部署检查误报](sms-disabled-deployment-check.md)。本地开发可执行：
 
 ```powershell
 .\scripts\operational-check.ps1 -AllowConfigurationIssues

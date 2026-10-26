@@ -39,9 +39,7 @@ def production_configuration_issues(settings: AppSettings) -> list[str]:
         issues.append("PHONE_ENCRYPTION_KEY must be a valid 32-byte base64url key")
     if any("localhost" in origin or "127.0.0.1" in origin for origin in settings.cors_origins):
         issues.append("localhost CORS origins are not allowed in production")
-    if not settings.sms_enabled:
-        issues.append("Tencent SMS fallback must be enabled after channel verification")
-    if any(
+    if settings.sms_enabled and any(
         _missing_or_placeholder(value)
         for value in (
             settings.tencent_secret_id,

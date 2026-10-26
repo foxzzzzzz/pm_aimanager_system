@@ -41,8 +41,32 @@ status=$(curl --fail --silent --show-error --max-time 15 --retry 3 --retry-all-e
     "https://${API_PUBLIC_DOMAIN}/api/v1/operations/status")
 printf '%s\n' "${status}"
 
-if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' <<<"${status}"; then
-    echo "Production operational status requires action; inspect the JSON above." >&2
+if ! printf '%s\n' "${status}" | "${compose[@]}" exec -T api python -c '
+import json
+import sys
+
+try:
+    result = json.load(sys.stdin)
+except (ValueError, TypeError):
+    sys.exit("Invalid production operational status JSON.")
+if (
+    not isinstance(result, dict)
+    or result.get("status") not in ("ok", "alert")
+    or not isinstance(result.get("checked_at"), str)
+    or not isinstance(result.get("configuration_issues"), list)
+    or not all(isinstance(issue, str) for issue in result["configuration_issues"])
+    or not all(
+        type(result.get(key)) is int and result[key] >= 0
+        for key in ("notification_failures", "stale_pending", "unbound_recipients")
+    )
+):
+    sys.exit("Invalid or incomplete production operational status response.")
+if result["configuration_issues"]:
+    sys.exit("Production configuration requires action; inspect the JSON above.")
+if result["status"] == "alert":
+    print("Warning: operational alerts require follow-up; inspect the JSON above.", file=sys.stderr)
+'; then
+    echo "Production deployment checks failed; inspect the errors above." >&2
     exit 1
 fi
 

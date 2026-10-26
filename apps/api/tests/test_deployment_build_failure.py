@@ -1,7 +1,9 @@
+import json
 import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,11 +21,12 @@ def test_every_python_install_uses_the_configured_mirror_and_network_limits() ->
         assert "--retries 10" in command, command
 
 
-@pytest.mark.parametrize("fail_build", [False, True])
-def test_deployment_builds_before_stopping_workers_and_does_not_build_during_switch(
+def _run_deployment(
     tmp_path: Path,
-    fail_build: bool,
-) -> None:
+    *,
+    response: str | None = None,
+    fail_stage: str = "",
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     if os.name == "nt":
         bash = next(
             (
@@ -54,11 +57,20 @@ def test_deployment_builds_before_stopping_workers_and_does_not_build_during_swi
     startup.write_text(
         "docker() {\n"
         '  printf "%s\\n" "$*" >> "$DEPLOY_TEST_LOG"\n'
-        '  if [[ "$*" == *" build" && "$DEPLOY_TEST_FAIL_BUILD" == "1" ]]; then\n'
+        '  if [[ -n "$DEPLOY_TEST_FAIL_STAGE" && "$*" == *"$DEPLOY_TEST_FAIL_STAGE"* ]]; then\n'
         "    return 42\n"
         "  fi\n"
+        '  if [[ "$*" == *"exec -T api python -c"* ]]; then\n'
+        '    while [[ "$1" != "python" ]]; do shift; done\n'
+        '    shift; "$DEPLOY_TEST_PYTHON" "$@"\n'
+        "  fi\n"
         "}\n"
-        "curl() { printf '%s\\n' '{\"status\":\"ok\"}'; }\n",
+        "curl() {\n"
+        '  if [[ -n "$DEPLOY_TEST_FAIL_STAGE" && "$*" == *"$DEPLOY_TEST_FAIL_STAGE"* ]]; then\n'
+        "    return 42\n"
+        "  fi\n"
+        '  printf "%s\\n" "$DEPLOY_TEST_RESPONSE"\n'
+        "}\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -69,13 +81,35 @@ def test_deployment_builds_before_stopping_workers_and_does_not_build_during_swi
             **os.environ,
             "BASH_ENV": startup.as_posix(),
             "DEPLOY_TEST_LOG": trace.as_posix(),
-            "DEPLOY_TEST_FAIL_BUILD": "1" if fail_build else "0",
+            "DEPLOY_TEST_FAIL_STAGE": fail_stage,
+            "DEPLOY_TEST_PYTHON": Path(sys.executable).as_posix(),
+            "DEPLOY_TEST_RESPONSE": response if response is not None else json.dumps(_status()),
         },
         capture_output=True,
         text=True,
         timeout=30,
     )
-    commands = trace.read_text(encoding="utf-8").splitlines()
+    return result, trace.read_text(encoding="utf-8").splitlines()
+
+
+def _status(**overrides: object) -> dict[str, object]:
+    return {
+        "status": "ok",
+        "checked_at": "2026-10-26T08:00:00+00:00",
+        "notification_failures": 0,
+        "stale_pending": 0,
+        "unbound_recipients": 0,
+        "configuration_issues": [],
+        **overrides,
+    }
+
+
+@pytest.mark.parametrize("fail_build", [False, True])
+def test_deployment_builds_before_stopping_workers_and_does_not_build_during_switch(
+    tmp_path: Path,
+    fail_build: bool,
+) -> None:
+    result, commands = _run_deployment(tmp_path, fail_stage=" build" if fail_build else "")
     build = next((i for i, line in enumerate(commands) if line.endswith(" build")), None)
     assert build is not None, commands
     stops = [i for i, line in enumerate(commands) if " stop " in line]
@@ -90,3 +124,83 @@ def test_deployment_builds_before_stopping_workers_and_does_not_build_during_swi
         assert commands[stops[0]].endswith("stop notification-beat notification-worker")
         assert "--no-build" in commands[starts[0]]
         assert any("alembic" in line for line in commands[starts[0] + 1 :])
+
+
+@pytest.mark.parametrize("counts", [(1, 0, 4), (0, 1, 0)])
+def test_deployment_reports_operational_alerts_without_failing(
+    tmp_path: Path,
+    counts: tuple[int, int, int],
+) -> None:
+    response = json.dumps(
+        _status(
+            status="alert",
+            notification_failures=counts[0],
+            stale_pending=counts[1],
+            unbound_recipients=counts[2],
+        )
+    )
+    result, _ = _run_deployment(tmp_path, response=response)
+
+    assert result.returncode == 0, result.stderr
+    assert response in result.stdout
+    assert "warning" in result.stderr.lower()
+    assert "Deployment completed." in result.stdout
+
+
+@pytest.mark.parametrize("status", ["ok", "alert"])
+def test_deployment_rejects_production_configuration_issues(tmp_path: Path, status: str) -> None:
+    response = json.dumps(_status(status=status, configuration_issues=["missing WeChat AppID"]))
+    result, _ = _run_deployment(tmp_path, response=response)
+
+    assert result.returncode != 0
+    assert response in result.stdout
+    assert "Deployment completed." not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        "not json",
+        "[]",
+        "null",
+        '{"nested":{"status":"ok"}}',
+        json.dumps(_status(status="unknown")),
+        json.dumps(_status(configuration_issues=None)),
+        json.dumps(_status(configuration_issues="")),
+        json.dumps(_status(configuration_issues=[1])),
+        json.dumps(_status(notification_failures=True)),
+        json.dumps(_status(stale_pending=-1)),
+        *[
+            json.dumps({key: value for key, value in _status().items() if key != missing})
+            for missing in _status()
+        ],
+    ],
+)
+def test_deployment_rejects_malformed_or_incomplete_operational_status(
+    tmp_path: Path,
+    response: str,
+) -> None:
+    result, _ = _run_deployment(tmp_path, response=response)
+
+    assert result.returncode != 0
+    assert "Deployment completed." not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "fail_stage",
+    [
+        " up ",
+        "alembic",
+        "/health",
+        "/operations/status",
+        "exec -T api python -c",
+    ],
+)
+def test_deployment_propagates_service_migration_request_and_parser_failures(
+    tmp_path: Path,
+    fail_stage: str,
+) -> None:
+    result, _ = _run_deployment(tmp_path, fail_stage=fail_stage)
+
+    assert result.returncode != 0
+    assert "Deployment completed." not in result.stdout
