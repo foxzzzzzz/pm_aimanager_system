@@ -43,16 +43,36 @@ export default function IssuesAuditPage({ project }: Props) {
   const [form] = Form.useForm<IssueForm>();
   const [invitationForm] = Form.useForm<InvitationForm>();
   const reloadSequence = useRef(0);
+  const proposalAction = useRef(false);
+  const proposalReloadSequence = useRef(0);
+  const activeProjectId = useRef(project?.id);
+  const projectGeneration = useRef(0);
+  if (activeProjectId.current !== project?.id) {
+    activeProjectId.current = project?.id;
+    projectGeneration.current += 1;
+  }
+
+  const reloadProposals = async (sequence: number) => {
+    const proposalSequence = ++proposalReloadSequence.current;
+    const generation = projectGeneration.current;
+    const next = await api.listChangeProposals(project!.id);
+    if (sequence === reloadSequence.current && proposalSequence === proposalReloadSequence.current
+      && generation === projectGeneration.current) setProposals(next);
+    return next;
+  };
 
   const reload = async () => {
     if (!project) return;
     const sequence = ++reloadSequence.current;
+    setError(undefined);
+    void reloadProposals(sequence).catch((reason: Error) => {
+      if (sequence === reloadSequence.current) setError(reason.message);
+    });
     try {
-      const [nextIssues, nextAudit, nextBindings, nextProposals, nextIssueCreateProposals, nextIssueDeleteProposals, review] = await Promise.all([
+      const [nextIssues, nextAudit, nextBindings, nextIssueCreateProposals, nextIssueDeleteProposals, review] = await Promise.all([
         api.listIssues(project.id),
         api.listAuditLogs(project.id),
         api.listMemberBindings(project.id),
-        api.listChangeProposals(project.id),
         api.listIssueCreateProposals(project.id),
         api.listIssueDeleteProposals(project.id),
         api.projectReview(project.id),
@@ -61,17 +81,16 @@ export default function IssuesAuditPage({ project }: Props) {
       setIssues(nextIssues);
       setAuditLogs(nextAudit);
       setBindings(nextBindings);
-      setProposals(nextProposals);
       setIssueCreateProposals(nextIssueCreateProposals);
       setIssueDeleteProposals(nextIssueDeleteProposals);
       setMembers(review.members);
-      setError(undefined);
     } catch (reason) {
       if (sequence === reloadSequence.current) setError((reason as Error).message);
     }
   };
 
   useEffect(() => {
+    setProposals([]);
     void reload();
     return () => { reloadSequence.current += 1; };
   }, [project]);
@@ -159,9 +178,34 @@ export default function IssuesAuditPage({ project }: Props) {
   };
 
   const resolveProposal = async (proposal: ChangeProposal, approve: boolean) => {
-    if (approve) await api.approveChangeProposal(proposal);
-    else await api.rejectChangeProposal(proposal.id, "项目经理驳回");
-    await reload();
+    if (proposalAction.current || (approve && proposal.approval_block_reason)) return;
+    proposalAction.current = true;
+    const generation = projectGeneration.current;
+    setResolvingApproval(`change:${proposal.id}`);
+    setError(undefined);
+    setSuccess(undefined);
+    try {
+      if (approve) await api.approveChangeProposal(proposal);
+      else await api.rejectChangeProposal(proposal.id, "项目经理驳回");
+      if (generation !== projectGeneration.current) return;
+      setProposals((items) => items.map((item) => item.id === proposal.id
+        ? { ...item, status: approve ? "approved" : "rejected", approval_block_reason: null } : item));
+      setSuccess(approve ? "变更申请已通过" : "变更申请已驳回");
+      void reload();
+    } catch (reason) {
+      if (generation !== projectGeneration.current) return;
+      let message = (reason as Error).message;
+      if ((reason as Error & { status?: number }).status === 409) {
+        try {
+          const latest = await reloadProposals(reloadSequence.current);
+          message = latest.find((item) => item.id === proposal.id)?.approval_block_reason || message;
+        } catch { /* Keep the original conflict visible if refresh fails. */ }
+      }
+      if (generation === projectGeneration.current) setError(message);
+    } finally {
+      proposalAction.current = false;
+      setResolvingApproval("");
+    }
   };
 
   const createInvitation = async () => {
@@ -307,7 +351,7 @@ export default function IssuesAuditPage({ project }: Props) {
           },
           {
             key: "proposals",
-            label: `变更审批 ${proposals.filter((item) => item.status === "pending").length}`,
+            label: `变更审批 ${proposals.filter((item) => item.status === "pending" && !item.approval_block_reason).length}`,
             children: (
               <Table
                 rowKey="id"
@@ -317,13 +361,15 @@ export default function IssuesAuditPage({ project }: Props) {
                   { title: "类型", dataIndex: "kind" },
                   { title: "原因", dataIndex: "reason" },
                   { title: "提交时间", dataIndex: "created_at", render: (value: string) => dayjs(value).format("YYYY-MM-DD HH:mm") },
-                  { title: "状态", dataIndex: "status", render: (value: string) => <Tag>{value}</Tag> },
+                  { title: "状态", render: (_: unknown, item: ChangeProposal) => item.status === "pending" && item.approval_block_reason
+                    ? <Space direction="vertical"><Tag color="warning">已过期</Tag><Typography.Text>{item.approval_block_reason}</Typography.Text></Space>
+                    : <Tag>{item.status}</Tag> },
                   {
                     title: "操作",
                     render: (_value: unknown, proposal: ChangeProposal) => proposal.status === "pending" ? (
                       <Space>
-                        <Button size="small" type="primary" onClick={() => resolveProposal(proposal, true)}>通过</Button>
-                        <Button size="small" danger onClick={() => resolveProposal(proposal, false)}>驳回</Button>
+                        <Button size="small" type="primary" loading={resolvingApproval === `change:${proposal.id}`} disabled={Boolean(resolvingApproval) || Boolean(proposal.approval_block_reason)} onClick={() => void resolveProposal(proposal, true)}>通过</Button>
+                        <Button size="small" danger loading={resolvingApproval === `change:${proposal.id}`} disabled={Boolean(resolvingApproval)} onClick={() => void resolveProposal(proposal, false)}>驳回</Button>
                       </Space>
                     ) : "—",
                   },

@@ -216,6 +216,7 @@ export interface ChangeProposal {
   kind: "completed" | "delay" | "schedule";
   reason: string;
   status: "pending" | "approved" | "rejected";
+  approval_block_reason?: string | null;
   base_version_number: number;
   created_at: string;
 }

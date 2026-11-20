@@ -145,7 +145,12 @@ def clear_runtime_overrides(
             state.schedule_plan_name = None
         if "actual_completion" in fields:
             state.actual_completion = None
-        if state.schedule is None and state.actual_completion is None:
+        # Keep completion revisions monotonic even when formal data clears both overlays.
+        if (
+            state.schedule is None
+            and state.actual_completion is None
+            and state.completion_revision == 0
+        ):
             session.delete(state)
 
 

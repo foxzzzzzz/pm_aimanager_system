@@ -653,6 +653,12 @@ def test_proposal_cannot_be_rebased_by_supplying_the_new_current_version(
     )
 
     assert response.status_code == 409
+    listed = client.get(
+        f"/api/v1/projects/{project_id}/change-proposals", headers=PM_HEADERS
+    ).json()
+    assert listed[0]["status"] == "pending"
+    assert "第 1 版" in listed[0]["approval_block_reason"]
+    assert "第 2 版" in listed[0]["approval_block_reason"]
     dashboard = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM_HEADERS)
     assert dashboard.json()["current_version_number"] == 2
 
@@ -784,6 +790,13 @@ def test_pending_runtime_proposal_conflicts_after_same_target_is_approved(
     )
 
     assert conflict.status_code == 409
+    listed = client.get(
+        f"/api/v1/projects/{project_id}/change-proposals", headers=PM_HEADERS
+    ).json()
+    by_id = {item["id"]: item for item in listed}
+    assert by_id[first["id"]]["approval_block_reason"] is None
+    assert by_id[second["id"]]["status"] == "pending"
+    assert "重新提交" in by_id[second["id"]]["approval_block_reason"]
     versions = client.get(f"/api/v1/projects/{project_id}/versions", headers=PM_HEADERS)
     assert [item["version_number"] for item in versions.json()] == [1]
 

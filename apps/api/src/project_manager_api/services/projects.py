@@ -715,7 +715,10 @@ class ProjectService:
         self._require_approval_permission(project, proposal)
         if proposal.status != ProposalStatus.PENDING:
             raise ConflictError("change proposal is already resolved")
-        if project.current_version_number != expected_project_version:
+        if (
+            proposal.proposal_kind != "completed"
+            and project.current_version_number != expected_project_version
+        ):
             raise ConflictError("project version changed before proposal approval")
         if proposal.base_version_number != expected_project_version:
             raise ConflictError("proposal base version is stale")
@@ -728,25 +731,16 @@ class ProjectService:
                 MilestoneRuntimeState.milestone_code == proposal.milestone_code,
             )
         )
-        current_runtime_revision = (
-            runtime_state.completion_revision
-            if runtime_state is not None and proposal.proposal_kind == "completed"
-            else runtime_state.schedule_revision
-            if runtime_state is not None
-            else 0
-        )
-        if current_runtime_revision != proposal.base_runtime_revision:
-            raise ConflictError("proposal runtime revision is stale")
         snapshot = effective_project_snapshot(self.session, project.id, current.snapshot)
+        conflict = _proposal_approval_conflict(
+            proposal, project.current_version_number, snapshot, runtime_state,
+            self._completion_history_compatibility(project, [proposal]).get(proposal.id, False),
+        )
+        if conflict is not None:
+            raise ConflictError(conflict)
         if proposal.proposal_kind == "completed":
-            current_value = _find_milestone_completion(snapshot, proposal.milestone_code)
-            if current_value != proposal.before_value:
-                raise ConflictError("proposal target changed after submission")
             _replace_milestone_completion(snapshot, proposal.milestone_code, proposal.after_value)
         else:
-            _, current_value = _find_milestone_window(snapshot, proposal.milestone_code)
-            if current_value != proposal.before_value:
-                raise ConflictError("proposal target changed after submission")
             _replace_milestone_window(snapshot, proposal.milestone_code, proposal.after_value)
         if runtime_state is None:
             runtime_state = MilestoneRuntimeState(
@@ -780,13 +774,135 @@ class ProjectService:
         return _version_dict(current)
 
     def list_proposals(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
-        self._require_project(project_id)
+        project = self._require_project(project_id)
         query = (
             select(ChangeProposal)
             .where(ChangeProposal.project_id == project_id)
             .order_by(ChangeProposal.created_at.desc())
         )
-        return [_proposal_dict(proposal) for proposal in self.session.scalars(query)]
+        proposals = list(self.session.scalars(query))
+        reasons = self.proposal_approval_block_reasons(project, proposals)
+        return [
+            {**_proposal_dict(proposal), "approval_block_reason": reasons[proposal.id]}
+            for proposal in proposals
+        ]
+
+    def _completion_history_compatibility(
+        self, project: Project, proposals: list[ChangeProposal]
+    ) -> dict[uuid.UUID, bool]:
+        old_completions = [
+            proposal for proposal in proposals
+            if proposal.status == ProposalStatus.PENDING
+            and proposal.proposal_kind == "completed"
+            and proposal.base_version_number != project.current_version_number
+        ]
+        if not old_completions or project.current_version_number is None:
+            return {}
+        # Older releases could delete runtime rows and reuse a completion revision.
+        latest_approvals = {
+            code: resolved_at.replace(tzinfo=UTC)
+            if resolved_at.tzinfo is None else resolved_at.astimezone(UTC)
+            for code, resolved_at in self.session.execute(
+                select(ChangeProposal.milestone_code, func.max(ChangeProposal.resolved_at))
+                .where(
+                    ChangeProposal.project_id == project.id,
+                    ChangeProposal.proposal_kind == "completed",
+                    ChangeProposal.status == ProposalStatus.APPROVED,
+                    ChangeProposal.milestone_code.in_(
+                        {proposal.milestone_code for proposal in old_completions}
+                    ),
+                    ChangeProposal.resolved_at.is_not(None),
+                )
+                .group_by(ChangeProposal.milestone_code)
+            )
+        }
+        oldest = min(proposal.base_version_number for proposal in old_completions)
+        history: dict[int, dict[str, Any]] = {
+            number: snapshot for number, snapshot in self.session.execute(
+                select(ProjectVersion.version_number, ProjectVersion.snapshot).where(
+                    ProjectVersion.project_id == project.id,
+                    ProjectVersion.version_number >= oldest,
+                    ProjectVersion.version_number <= project.current_version_number,
+                )
+            )
+        }
+        removals: dict[str, list[int]] = {}
+        for base, operations in self.session.execute(
+            select(ProjectChangeSet.base_version_number, ProjectChangeSet.operations).where(
+                ProjectChangeSet.project_id == project.id,
+                ProjectChangeSet.status == ChangeSetStatus.PUBLISHED,
+                ProjectChangeSet.base_version_number >= oldest,
+                ProjectChangeSet.base_version_number < project.current_version_number,
+            )
+        ):
+            for operation in operations:
+                if operation.get("resource") == "milestone" and operation.get("op") == "remove":
+                    removals.setdefault(operation["key"], []).append(base)
+        compatibility = {}
+        for proposal in old_completions:
+            submitted_at = (
+                proposal.created_at.replace(tzinfo=UTC)
+                if proposal.created_at.tzinfo is None
+                else proposal.created_at.astimezone(UTC)
+            )
+            latest_approval = latest_approvals.get(proposal.milestone_code)
+            compatibility[proposal.id] = (
+                latest_approval is None or latest_approval < submitted_at
+            ) and _completion_history_compatible(
+                proposal, project.current_version_number, history,
+                removals.get(proposal.milestone_code, []),
+            )
+        return compatibility
+
+    def proposal_approval_block_reasons(
+        self,
+        project: Project,
+        proposals: list[ChangeProposal],
+        snapshot: dict[str, Any] | None = None,
+    ) -> dict[uuid.UUID, str | None]:
+        if not any(proposal.status == ProposalStatus.PENDING for proposal in proposals):
+            return {proposal.id: None for proposal in proposals}
+        if snapshot is None:
+            current = self._current_version(project)
+            snapshot = (
+                effective_project_snapshot(self.session, project.id, current.snapshot)
+                if current is not None else {}
+            )
+        states = {
+            state.milestone_code: state
+            for state in self.session.scalars(
+                select(MilestoneRuntimeState).where(
+                    MilestoneRuntimeState.project_id == project.id
+                )
+            )
+        }
+        completion_history = self._completion_history_compatibility(project, proposals)
+        reasons: dict[uuid.UUID, str | None] = {}
+        for proposal in proposals:
+            conflict = None
+            if proposal.status == ProposalStatus.PENDING:
+                try:
+                    conflict = _proposal_approval_conflict(
+                        proposal,
+                        project.current_version_number,
+                        snapshot,
+                        states.get(proposal.milestone_code),
+                        completion_history.get(proposal.id, False),
+                    )
+                except NotFoundError:
+                    conflict = "proposal target changed after submission"
+            if conflict == "proposal base version is stale":
+                reasons[proposal.id] = (
+                    f"申请基于第 {proposal.base_version_number} 版，"
+                    f"当前为第 {project.current_version_number} 版。请核对后重新提交。"
+                )
+            elif conflict == _COMPLETION_HISTORY_CONFLICT:
+                reasons[proposal.id] = conflict
+            elif conflict is not None:
+                reasons[proposal.id] = "申请对应的节点状态已变化。请核对当前状态后重新提交。"
+            else:
+                reasons[proposal.id] = None
+        return reasons
 
     def reject_proposal(self, proposal_id: uuid.UUID, reason: str) -> dict[str, Any]:
         proposal = self.session.get(ChangeProposal, proposal_id)
@@ -1777,3 +1893,80 @@ def _replace_milestone_completion(
     if milestone is None:
         raise NotFoundError("milestone not found")
     milestone["actual_completion"] = after_value
+
+
+_COMPLETION_HISTORY_CONFLICT = (
+    "完成申请对应的节点名称、输出要求、适用状态或正式完成记录已变化，"
+    "或版本历史不完整。请核对当前节点后重新提交。"
+)
+
+
+def _completion_history_compatible(
+    proposal: ChangeProposal,
+    current_version_number: int,
+    history: dict[int, dict[str, Any]],
+    removal_versions: list[int],
+) -> bool:
+    if proposal.base_version_number > current_version_number or any(
+        base >= proposal.base_version_number for base in removal_versions
+    ):
+        return False
+    baseline = None
+    for number in range(proposal.base_version_number, current_version_number + 1):
+        snapshot = history.get(number)
+        if snapshot is None:
+            return False
+        milestones = [
+            item for item in snapshot.get("milestones", [])
+            if item.get("code") == proposal.milestone_code
+        ]
+        if len(milestones) != 1:
+            return False
+        milestone = milestones[0]
+        if not milestone.get("name") or "actual_completion" not in milestone:
+            return False
+        try:
+            _, window = _find_milestone_window(snapshot, proposal.milestone_code)
+        except NotFoundError:
+            return False
+        if window.get("state") not in {"scheduled", "tbd"}:
+            return False
+        identity = (
+            milestone.get("name"), milestone.get("output"), milestone.get("actual_completion")
+        )
+        if baseline is None:
+            baseline = identity
+        elif identity != baseline:
+            return False
+    return True
+
+
+def _proposal_approval_conflict(
+    proposal: ChangeProposal,
+    current_version_number: int | None,
+    snapshot: dict[str, Any],
+    runtime_state: MilestoneRuntimeState | None,
+    completion_history_compatible: bool = False,
+) -> str | None:
+    if proposal.base_version_number != current_version_number:
+        if proposal.proposal_kind != "completed":
+            return "proposal base version is stale"
+        if not completion_history_compatible:
+            return _COMPLETION_HISTORY_CONFLICT
+    revision = (
+        runtime_state.completion_revision
+        if runtime_state is not None and proposal.proposal_kind == "completed"
+        else runtime_state.schedule_revision
+        if runtime_state is not None
+        else 0
+    )
+    if revision != proposal.base_runtime_revision:
+        return "proposal runtime revision is stale"
+    current_value = (
+        _find_milestone_completion(snapshot, proposal.milestone_code)
+        if proposal.proposal_kind == "completed"
+        else _find_milestone_window(snapshot, proposal.milestone_code)[1]
+    )
+    if current_value != proposal.before_value:
+        return "proposal target changed after submission"
+    return None

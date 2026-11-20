@@ -23,7 +23,7 @@ export function createRequester({ baseUrl, getToken, requestKey, retryAttempts =
             : detail && typeof detail === "object" && typeof detail.message === "string"
               ? detail.message
               : `请求失败：${response.statusCode}`;
-          reject(new Error(message));
+          reject(Object.assign(new Error(message), { status: response.statusCode }));
         },
         fail: (reason) => {
           if (retriesRemaining > 0) {

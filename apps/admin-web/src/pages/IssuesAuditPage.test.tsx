@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -70,6 +70,62 @@ vi.mock("../api", () => ({ api: mocks }));
 import IssuesAuditPage from "./IssuesAuditPage";
 
 describe("IssuesAuditPage", () => {
+  it("locks repeated clicks and updates success before unrelated reload finishes", async () => {
+    let complete!: (value: object) => void;
+    mocks.approveChangeProposal.mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }));
+    render(<IssuesAuditPage project={{ id: "project-1", code: "P", name: "P", status: "active", current_version_number: 1 }} />);
+    fireEvent.click(await screen.findByRole("tab", { name: /变更审批/ }));
+    const button = await screen.findByRole("button", { name: /通\s*过/ });
+    mocks.listChangeProposals.mockImplementationOnce(() => new Promise(() => {}));
+    mocks.listIssues.mockImplementationOnce(() => new Promise(() => {}));
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(mocks.approveChangeProposal).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    await act(async () => complete({}));
+    expect(await screen.findByRole("tab", { name: "变更审批 0" })).toBeInTheDocument();
+    expect(screen.getByText("approved")).toBeInTheDocument();
+  });
+
+  it("refreshes a 409 conflict and reports its current block reason", async () => {
+    mocks.approveChangeProposal.mockRejectedValueOnce(Object.assign(new Error("版本冲突"), { status: 409 }));
+    render(<IssuesAuditPage project={{ id: "project-1", code: "P", name: "P", status: "active", current_version_number: 1 }} />);
+    fireEvent.click(await screen.findByRole("tab", { name: /变更审批/ }));
+    const button = await screen.findByRole("button", { name: /通\s*过/ });
+    mocks.listChangeProposals.mockResolvedValueOnce([{
+      id: "proposal-1", milestone_code: "M23", kind: "delay", reason: "驱动联调延期", status: "pending",
+      base_version_number: 1, created_at: "2026-08-12T10:30:00Z", approval_block_reason: "节点已删除",
+    }]);
+    fireEvent.click(button);
+    await waitFor(() => expect(screen.getAllByText("节点已删除")).toHaveLength(2));
+    expect(screen.getByRole("button", { name: /通\s*过/ })).toBeDisabled();
+    expect(screen.getByRole("tab", { name: "变更审批 0" })).toBeInTheDocument();
+  });
+
+  it("reports other approval errors and preserves the pending row", async () => {
+    mocks.approveChangeProposal.mockRejectedValueOnce(new Error("服务暂不可用"));
+    render(<IssuesAuditPage project={{ id: "project-1", code: "P", name: "P", status: "active", current_version_number: 1 }} />);
+    fireEvent.click(await screen.findByRole("tab", { name: /变更审批/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /通\s*过/ }));
+    expect(await screen.findByText("服务暂不可用")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "变更审批 1" })).toBeInTheDocument();
+  });
+
+  it("disables stale proposal approval and excludes it from pending count", async () => {
+    mocks.listChangeProposals.mockResolvedValueOnce([{
+      id: "stale", milestone_code: "M23", kind: "delay", reason: "旧节点变更", status: "pending",
+      base_version_number: 1, created_at: "2026-08-12T10:30:00Z", approval_block_reason: "节点已删除",
+    }]);
+    render(<IssuesAuditPage project={{ id: "project-1", code: "P", name: "P", status: "active", current_version_number: 1 }} />);
+    fireEvent.click(await screen.findByRole("tab", { name: /变更审批/ }));
+    expect(await screen.findByText("节点已删除")).toBeInTheDocument();
+    expect(screen.getByText("已过期")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "变更审批 0" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /通\s*过/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /驳\s*回/ })).toBeEnabled();
+    expect(mocks.approveChangeProposal).not.toHaveBeenCalled();
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();

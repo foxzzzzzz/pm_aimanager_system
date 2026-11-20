@@ -132,6 +132,7 @@ export interface ChangeProposal {
   createdAtLabel?: string;
   is_own_submission: boolean;
   can_resolve: boolean;
+  approval_block_reason?: string | null;
 }
 
 export interface Message {

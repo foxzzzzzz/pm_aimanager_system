@@ -29,6 +29,13 @@ const presentMilestones = (milestones: Milestone[]): MilestoneView[] => mileston
       : "",
 }));
 
+const presentProposals = (proposals: ChangeProposal[]) => proposals.map((item) => ({
+  ...item,
+  beforePlanLabel: presentPlan(item.before_value),
+  afterPlanLabel: presentPlan(item.after_value),
+  createdAtLabel: formatDateTime(item.created_at, runtimeConfig.presentationTimezoneOffsetMinutes),
+}));
+
 Page({
   data: {
     projectId: "",
@@ -81,15 +88,7 @@ Page({
       const selectedMilestoneFilter = this.data.selectedMilestoneFilter;
       this.setData({
         dashboard,
-        proposals: proposals.map((item) => ({
-          ...item,
-          beforePlanLabel: presentPlan(item.before_value),
-          afterPlanLabel: presentPlan(item.after_value),
-          createdAtLabel: formatDateTime(
-            item.created_at,
-            runtimeConfig.presentationTimezoneOffsetMinutes,
-          ),
-        })),
+        proposals: presentProposals(proposals),
         issueCreateProposals: issueCreateProposals.map((item) => ({
           ...item,
           createdAtLabel: formatDateTime(
@@ -250,14 +249,16 @@ Page({
   },
   async approveProposal(event: ProposalTapEvent) {
     if (this.data.resolvingProposalId) return;
-    const confirmation = await wx.showModal({
-      title: "批准节点变更",
-      content: "批准后将更新里程碑运行状态并记录审批，不会增加正式版本。是否继续？",
-      confirmText: "确认批准",
-    });
-    if (!confirmation.confirm) return;
+    const proposal = this.data.proposals.find((item) => item.id === event.currentTarget.dataset.id);
+    if (!proposal?.can_resolve || proposal.approval_block_reason) return;
     this.setData({ resolvingProposalId: event.currentTarget.dataset.id });
     try {
+      const confirmation = await wx.showModal({
+        title: "批准节点变更",
+        content: "批准后将更新里程碑运行状态并记录审批，不会增加正式版本。是否继续？",
+        confirmText: "确认批准",
+      });
+      if (!confirmation.confirm) return;
       await api.approveProposal(
         event.currentTarget.dataset.id,
         event.currentTarget.dataset.version,
@@ -273,25 +274,38 @@ Page({
         icon: refreshed ? "success" : "none",
       });
     } catch (reason) {
-      wx.showToast({ title: (reason as Error).message, icon: "none" });
+      const error = reason as { message?: string; errMsg?: string; status?: number } | null;
+      let message = error?.message || error?.errMsg || "审批失败，请稍后重试";
+      if (error?.status === 409) {
+        try {
+          const proposals = await api.approvableProposals(this.data.projectId);
+          this.setData({ proposals: presentProposals(proposals) });
+          message = proposals.find((item) => item.id === event.currentTarget.dataset.id)
+            ?.approval_block_reason || message;
+          void syncTabBarBadges();
+        } catch {
+          // Preserve the conflict message if the independent refresh fails.
+        }
+      }
+      wx.showToast({ title: message, icon: "none" });
     } finally {
       this.setData({ resolvingProposalId: "" });
     }
   },
   async rejectProposal(event: ProposalTapEvent) {
     if (this.data.resolvingProposalId) return;
-    const confirmation = await wx.showModal({
-      title: "驳回节点变更",
-      content: "请输入驳回原因",
-      editable: true,
-      placeholderText: "驳回原因（必填）",
-      confirmText: "确认驳回",
-      confirmColor: "#c53030",
-    });
-    const reason = confirmation.content?.trim();
-    if (!confirmation.confirm || !reason) return;
     this.setData({ resolvingProposalId: event.currentTarget.dataset.id });
     try {
+      const confirmation = await wx.showModal({
+        title: "驳回节点变更",
+        content: "请输入驳回原因",
+        editable: true,
+        placeholderText: "驳回原因（必填）",
+        confirmText: "确认驳回",
+        confirmColor: "#c53030",
+      });
+      const reason = confirmation.content?.trim();
+      if (!confirmation.confirm || !reason) return;
       await api.rejectProposal(event.currentTarget.dataset.id, reason);
       this.setData({
         proposals: this.data.proposals.filter(

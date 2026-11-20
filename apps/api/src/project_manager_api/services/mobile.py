@@ -299,7 +299,7 @@ class MobileService:
                     "business_date": business_date,
                     "milestones": _mobile_milestones(snapshot),
                     "pending_approval_count": self._pending_approval_count(
-                        project.id,
+                        project,
                         snapshot,
                         binding.member_name if binding else "",
                     ),
@@ -324,7 +324,7 @@ class MobileService:
             "is_project_manager": member_role(snapshot, binding.member_name)
             == ProjectRole.MANAGER,
             "pending_approval_count": self._pending_approval_count(
-                project.id, snapshot, binding.member_name
+                project, snapshot, binding.member_name
             ),
             "milestones": milestones,
         }
@@ -550,7 +550,7 @@ class MobileService:
         return [_message_dict(message) for message in self.session.scalars(query)]
 
     def list_approvable_proposals(self, project_id: uuid.UUID) -> list[dict[str, Any]]:
-        _, binding, snapshot = self._bound_project(project_id)
+        project, binding, snapshot = self._bound_project(project_id)
         actor_id = _actor_id(self._user())
         is_manager = member_role(snapshot, binding.member_name) == ProjectRole.MANAGER
         accountable_codes = {
@@ -572,13 +572,18 @@ class MobileService:
             )
             .order_by(ChangeProposal.created_at.desc())
         )
+        proposals = list(self.session.scalars(query))
+        reasons = self._project_service().proposal_approval_block_reasons(
+            project, proposals, snapshot
+        )
         return [
             {
                 **_proposal_dict(proposal),
+                "approval_block_reason": reasons[proposal.id],
                 "is_own_submission": proposal.submitted_by_actor_id == actor_id,
                 "can_resolve": is_manager or proposal.submitted_by_actor_id != actor_id,
             }
-            for proposal in self.session.scalars(query)
+            for proposal in proposals
         ]
 
     def update_issue(self, issue_id: uuid.UUID, payload: IssueUpdate) -> dict[str, Any]:
@@ -592,28 +597,32 @@ class MobileService:
 
     def _pending_approval_count(
         self,
-        project_id: uuid.UUID,
+        project: Project,
         snapshot: dict[str, Any],
         member_name: str,
     ) -> int:
         actor_id = _actor_id(self._user())
         is_manager = member_role(snapshot, member_name) == ProjectRole.MANAGER
         query = select(ChangeProposal).where(
-            ChangeProposal.project_id == project_id,
+            ChangeProposal.project_id == project.id,
             ChangeProposal.status == ProposalStatus.PENDING,
         )
         proposals = list(self.session.scalars(query))
+        reasons = self._project_service().proposal_approval_block_reasons(
+            project, proposals, snapshot
+        )
+        proposals = [proposal for proposal in proposals if reasons[proposal.id] is None]
         if is_manager:
             node_count = len(proposals)
             issue_count = self.session.scalar(
                 select(func.count()).select_from(IssueCreateProposal).where(
-                    IssueCreateProposal.project_id == project_id,
+                    IssueCreateProposal.project_id == project.id,
                     IssueCreateProposal.status == ProposalStatus.PENDING,
                 )
             ) or 0
             issue_count += self.session.scalar(
                 select(func.count()).select_from(IssueDeleteProposal).where(
-                    IssueDeleteProposal.project_id == project_id,
+                    IssueDeleteProposal.project_id == project.id,
                     IssueDeleteProposal.status == ProposalStatus.PENDING,
                 )
             ) or 0

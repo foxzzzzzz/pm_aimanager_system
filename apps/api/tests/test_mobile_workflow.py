@@ -15,9 +15,11 @@ from sqlalchemy import select
 from project_manager_api.api.app import create_app
 from project_manager_api.db.base import Base
 from project_manager_api.db.models import (
+    ChangeProposal,
     IdempotencyRecord,
     MemberBinding,
     MobileUser,
+    Project,
     ProjectMembership,
     ProjectRole,
     ProjectVersion,
@@ -759,8 +761,10 @@ def test_responsible_member_can_submit_own_milestone_but_not_another(
     assert milestone["actual_completion"]["end_date"] == "2026-08-06"
 
 
-def test_accountable_member_can_list_only_approvable_pending_proposals(
-    mobile_workflow: TestClient,
+@pytest.mark.parametrize("stale_kind", ["baseline", "runtime", "before_value"])
+@pytest.mark.parametrize("reviewer", ["成员09", "成员01"])
+def test_mobile_retains_expired_proposals_but_excludes_them_from_approval_counts(
+    mobile_workflow: TestClient, stale_kind: str, reviewer: str
 ) -> None:
     client = mobile_workflow
     project_id = _published_project(client)
@@ -782,7 +786,7 @@ def test_accountable_member_can_list_only_approvable_pending_proposals(
             "reason": "联调延期",
         },
     ).json()
-    accountable = _invite(client, project_id, "成员09", "invite-a-list")
+    accountable = _invite(client, project_id, reviewer, "invite-a-list")
     accountable_headers, _ = _login(client, "dev:a-list")
     client.post(
         "/api/v1/mobile/invitations/accept",
@@ -797,6 +801,42 @@ def test_accountable_member_can_list_only_approvable_pending_proposals(
 
     assert response.status_code == 200
     assert [item["id"] for item in response.json()] == [proposal["id"]]
+
+    assert response.json()[0]["approval_block_reason"] is None
+    assert response.json()[0]["can_resolve"] is True
+
+    def pending_counts() -> tuple[int, int]:
+        projects = client.get("/api/v1/mobile/projects", headers=accountable_headers).json()
+        dashboard = client.get(
+            f"/api/v1/mobile/projects/{project_id}/dashboard", headers=accountable_headers
+        ).json()
+        return projects[0]["pending_approval_count"], dashboard["pending_approval_count"]
+
+    assert pending_counts() == (1, 1)
+    with client.app.state.session_factory() as session:
+        stored = session.get(ChangeProposal, uuid.UUID(proposal["id"]))
+        assert stored is not None
+        if stale_kind == "baseline":
+            stored.base_version_number = 0
+        elif stale_kind == "runtime":
+            stored.base_runtime_revision = 99
+        else:
+            stored.before_value = {"start_date": "2000-01-01", "end_date": "2000-01-02"}
+        session.commit()
+    stale = client.get(
+        f"/api/v1/mobile/projects/{project_id}/change-proposals", headers=accountable_headers
+    ).json()
+    assert stale[0]["id"] == proposal["id"]
+    assert stale[0]["status"] == "pending"
+    assert stale[0]["can_resolve"] is True
+    assert "重新提交" in stale[0]["approval_block_reason"]
+    assert pending_counts() == (0, 0)
+    rejected = client.post(
+        f"/api/v1/mobile/change-proposals/{proposal['id']}/reject",
+        headers={**accountable_headers, "X-Idempotency-Key": "reject-stale"},
+        json={"reason": "核对后重新申请"},
+    )
+    assert rejected.status_code == 200
 
 
 def test_only_accountable_member_can_reject_mobile_proposal(
@@ -1295,3 +1335,520 @@ def test_manager_can_reject_mobile_proposal_without_publishing(
     assert rejected.json()["status"] == "rejected"
     dashboard = client.get(f"/api/v1/projects/{project_id}/dashboard", headers=PM)
     assert dashboard.json()["current_version_number"] == 1
+
+
+def _append_mobile_test_version(
+    client: TestClient, project_id: str, mutate: Any = None
+) -> None:
+    from copy import deepcopy
+
+    with client.app.state.session_factory() as session:
+        project = session.get(Project, uuid.UUID(project_id))
+        assert project is not None
+        source = session.scalar(
+            select(ProjectVersion).where(
+                ProjectVersion.project_id == project.id,
+                ProjectVersion.version_number == project.current_version_number,
+            )
+        )
+        assert source is not None
+        snapshot = deepcopy(source.snapshot)
+        if mutate:
+            mutate(snapshot)
+        project.current_version_number += 1
+        session.add(
+            ProjectVersion(
+                project_id=project.id,
+                version_number=project.current_version_number,
+                snapshot=snapshot,
+                **{
+                    name: getattr(source, name)
+                    for name in (
+                        "template_id",
+                        "template_version",
+                        "document_version",
+                        "content_sha256",
+                    )
+                },
+            )
+        )
+        session.commit()
+
+
+@pytest.mark.parametrize("kind", ["completed", "delay"])
+@pytest.mark.parametrize("approver", ["mobile", "admin"])
+def test_mobile_completion_cross_version_listing_counts_and_approval(
+    mobile_workflow: TestClient,
+    kind: str,
+    approver: str,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    actors = []
+    for index, member in enumerate(("成员10", "成员09")):
+        invitation = _invite(
+            client, project_id, member, f"cross-version-invite-{index}"
+        )
+        headers, _ = _login(client, f"dev:cross-version-{index}")
+        accepted = client.post(
+            "/api/v1/mobile/invitations/accept",
+            headers=headers,
+            json={
+                "invitation_token": invitation["invitation_token"],
+                "phone": f"1380000000{index}",
+            },
+        )
+        assert accepted.status_code == 200
+        actors.append(headers)
+    responsible, reviewer = actors
+    payload = {"kind": kind, "base_version_number": 1, "reason": "跨版本审批"}
+    if kind == "completed":
+        payload["actual_completion_date"] = "2026-08-06"
+    else:
+        payload.update(start_date="2026-11-16", end_date="2026-11-20")
+    proposal = client.post(
+        f"/api/v1/mobile/projects/{project_id}/milestones/M23/proposals",
+        headers={**responsible, "X-Idempotency-Key": "cross-version-submit"},
+        json=payload,
+    )
+    assert proposal.status_code == 201, proposal.json()
+
+    def change_dates(snapshot: dict[str, Any]) -> None:
+        milestone = next(
+            item for item in snapshot["milestones"] if item["code"] == "M23"
+        )
+        plan = next(
+            item
+            for item in snapshot["plan_versions"]
+            if item["name"] == snapshot["active_plan_name"]
+        )
+        plan["milestones"][milestone["name"]] = {
+            "state": "scheduled",
+            "start_date": "2026-11-17",
+            "end_date": "2026-11-19",
+        }
+
+    _append_mobile_test_version(client, project_id, change_dates)
+    _append_mobile_test_version(client, project_id)
+    for path, headers in (
+        (f"/api/v1/projects/{project_id}/change-proposals", PM),
+        (f"/api/v1/mobile/projects/{project_id}/change-proposals", reviewer),
+    ):
+        listed = client.get(path, headers=headers)
+        assert listed.status_code == 200
+        assert (listed.json()[0]["approval_block_reason"] is None) == (
+            kind == "completed"
+        )
+    projects = client.get("/api/v1/mobile/projects", headers=reviewer).json()
+    dashboard = client.get(
+        f"/api/v1/mobile/projects/{project_id}/dashboard", headers=reviewer
+    ).json()
+    assert (
+        projects[0]["pending_approval_count"]
+        == dashboard["pending_approval_count"]
+        == int(kind == "completed")
+    )
+    api_prefix = "mobile/" if approver == "mobile" else ""
+    approval_path = f"/api/v1/{api_prefix}change-proposals/{proposal.json()['id']}/approve"
+    wrong_version = client.post(
+        approval_path,
+        headers={
+            **(reviewer if approver == "mobile" else PM),
+            "X-Idempotency-Key": "cross-version-wrong-expected",
+        },
+        json={"expected_project_version": 3},
+    )
+    assert wrong_version.status_code == 409
+    approved = client.post(
+        approval_path,
+        headers={
+            **(reviewer if approver == "mobile" else PM),
+            "X-Idempotency-Key": "cross-version-approve",
+        },
+        json={"expected_project_version": 1},
+    )
+    assert approved.status_code == (200 if kind == "completed" else 409), (
+        approved.json()
+    )
+    if kind == "completed":
+        assert approved.json()["version_number"] == 3
+        current = client.get(
+            f"/api/v1/mobile/projects/{project_id}/dashboard", headers=reviewer
+        ).json()
+        assert current["current_version_number"] == 3
+        milestone = next(
+            item for item in current["milestones"] if item["code"] == "M23"
+        )
+        assert milestone["actual_completion"]["end_date"] == "2026-08-06"
+        review = client.get(f"/api/v1/projects/{project_id}/review", headers=PM).json()
+        assert (
+            next(item for item in review["milestones"] if item["code"] == "M23")[
+                "schedule"
+            ]["end_date"]
+            == "2026-11-19"
+        )
+
+
+@pytest.mark.parametrize("historical_deletion", [False, True])
+@pytest.mark.parametrize("approver", ["admin", "mobile"])
+def test_completion_revision_survives_overlay_reset_and_historical_reuse(
+    mobile_workflow: TestClient, historical_deletion: bool, approver: str
+) -> None:
+    from copy import deepcopy
+
+    from project_manager_api.db.models import MilestoneRuntimeState
+
+    client = mobile_workflow
+    project_id = _published_project(client)
+    actors = []
+    for index, member in enumerate(("成员10", "成员09")):
+        invitation = _invite(client, project_id, member, f"revision-invite-{index}")
+        headers, _ = _login(client, f"dev:revision-{index}")
+        accepted = client.post(
+            "/api/v1/mobile/invitations/accept",
+            headers=headers,
+            json={
+                "invitation_token": invitation["invitation_token"],
+                "phone": f"1380000000{index}",
+            },
+        )
+        assert accepted.status_code == 200
+        actors.append(headers)
+    responsible, reviewer = actors
+
+    def submit(key: str, version: int, kind: str, **dates: str) -> str:
+        response = client.post(
+            f"/api/v1/mobile/projects/{project_id}/milestones/M23/proposals",
+            headers={**responsible, "X-Idempotency-Key": key},
+            json={"kind": kind, "base_version_number": version, "reason": key, **dates},
+        )
+        assert response.status_code == 201, response.json()
+        return response.json()["id"]
+
+    def approve(proposal_id: str, version: int, key: str) -> None:
+        response = client.post(
+            f"/api/v1/change-proposals/{proposal_id}/approve",
+            headers=_admin_headers(key),
+            json={"expected_project_version": version},
+        )
+        assert response.status_code == 200, response.json()
+
+    def publish(version: int, resource: str, key: str, value: dict[str, Any]) -> None:
+        response = client.post(
+            f"/api/v1/projects/{project_id}/change-sets",
+            headers=_admin_headers(f"revision-change-{version}"),
+            json={
+                "base_version_number": version,
+                "reason": "覆盖正式数据",
+                "operations": [
+                    {"op": "replace", "resource": resource, "key": key, "value": value}
+                ],
+            },
+        )
+        assert response.status_code == 201, response.json()
+        published = client.post(
+            f"/api/v1/change-sets/{response.json()['id']}/publish",
+            headers=_admin_headers(f"revision-publish-{version}"),
+            json={"expected_project_version": version},
+        )
+        assert published.status_code == 200, published.json()
+
+    first = submit("revision-first", 1, "completed", actual_completion_date="2026-08-06")
+    approve(first, 1, "revision-approve-first")
+    schedule = submit(
+        "revision-schedule", 1, "delay", start_date="2026-11-16", end_date="2026-11-20"
+    )
+    approve(schedule, 1, "revision-approve-schedule")
+    editable = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM
+    ).json()
+    milestone = next(item for item in editable["milestones"] if item["code"] == "M23")
+    formal_date = "2026-08-07"
+    milestone["actual_completion"] = {
+        "state": "scheduled", "start_date": formal_date, "end_date": formal_date
+    }
+    publish(1, "milestone", "M23", milestone)
+    with client.app.state.session_factory() as session:
+        state = session.scalar(select(MilestoneRuntimeState).where(
+            MilestoneRuntimeState.project_id == uuid.UUID(project_id),
+            MilestoneRuntimeState.milestone_code == "M23",
+        ))
+        assert state is not None
+        assert state.actual_completion is None
+        assert state.schedule is not None
+        assert state.completion_revision == 1
+    old = submit("revision-old", 2, "completed", actual_completion_date="2026-08-08")
+    plan = deepcopy(next(
+        item for item in editable["plan_versions"] if item["name"] == editable["active_plan_name"]
+    ))
+    plan["milestones"][milestone["name"]] = {
+        "state": "scheduled", "start_date": "2026-11-17", "end_date": "2026-11-19"
+    }
+    publish(2, "plan", plan["name"], plan)
+
+    def assert_eligible(expected: bool) -> None:
+        for path, headers in (
+            (f"/api/v1/projects/{project_id}/change-proposals", PM),
+            (f"/api/v1/mobile/projects/{project_id}/change-proposals", reviewer),
+        ):
+            response = client.get(path, headers=headers)
+            assert response.status_code == 200
+            row = next(item for item in response.json() if item["id"] == old)
+            assert row["status"] == "pending"
+            assert (row["approval_block_reason"] is None) == expected
+        projects = client.get("/api/v1/mobile/projects", headers=reviewer).json()
+        dashboard = client.get(
+            f"/api/v1/mobile/projects/{project_id}/dashboard", headers=reviewer
+        ).json()
+        assert projects[0]["pending_approval_count"] == int(expected)
+        assert dashboard["pending_approval_count"] == int(expected)
+
+    assert_eligible(True)
+    if historical_deletion:
+        # Simulate the previous release deleting an empty row before a new approval.
+        with client.app.state.session_factory() as session:
+            state = session.scalar(select(MilestoneRuntimeState).where(
+                MilestoneRuntimeState.project_id == uuid.UUID(project_id),
+                MilestoneRuntimeState.milestone_code == "M23",
+            ))
+            assert state is not None and state.actual_completion is None and state.schedule is None
+            session.delete(state)
+            session.commit()
+    newer = submit("revision-new", 3, "completed", actual_completion_date=formal_date)
+    approve(newer, 3, "revision-approve-new")
+    assert_eligible(False)
+    prefix = "mobile/" if approver == "mobile" else ""
+    rejected = client.post(
+        f"/api/v1/{prefix}change-proposals/{old}/approve",
+        headers={**(reviewer if approver == "mobile" else PM),
+                 "X-Idempotency-Key": "revision-reject-old"},
+        json={"expected_project_version": 2},
+    )
+    assert rejected.status_code == 409, rejected.json()
+    assert_eligible(False)
+    review = client.get(f"/api/v1/projects/{project_id}/review", headers=PM).json()
+    current = next(item for item in review["milestones"] if item["code"] == "M23")
+    assert current["schedule"]["end_date"] == "2026-11-19"
+    dashboard = client.get(
+        f"/api/v1/mobile/projects/{project_id}/dashboard", headers=reviewer
+    ).json()
+    current = next(item for item in dashboard["milestones"] if item["code"] == "M23")
+    assert current["actual_completion"]["end_date"] == formal_date
+
+
+def _pending_cross_version_completion(
+    client: TestClient, project_id: str
+) -> tuple[str, dict[str, str]]:
+    invitation = _invite(client, project_id, "成员10", "history-invite")
+    headers, _ = _login(client, "dev:history-responsible")
+    accepted = client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=headers,
+        json={
+            "invitation_token": invitation["invitation_token"],
+            "phone": "13800000010",
+        },
+    )
+    assert accepted.status_code == 200
+    response = client.post(
+        f"/api/v1/mobile/projects/{project_id}/milestones/M23/proposals",
+        headers={**headers, "X-Idempotency-Key": "history-completion"},
+        json={
+            "kind": "completed",
+            "base_version_number": 1,
+            "actual_completion_date": "2026-08-06",
+            "reason": "历史版本验收",
+        },
+    )
+    assert response.status_code == 201, response.json()
+    return response.json()["id"], headers
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "name",
+        "output",
+        "removed",
+        "formal_completion",
+        "not_applicable",
+        "runtime",
+        "before_value",
+    ],
+)
+def test_cross_version_completion_rejects_intervening_changes_even_after_restore(
+    mobile_workflow: TestClient,
+    change: str,
+) -> None:
+    from copy import deepcopy
+
+    from project_manager_api.db.models import MilestoneRuntimeState
+
+    client = mobile_workflow
+    project_id = _published_project(client)
+    proposal_id, _ = _pending_cross_version_completion(client, project_id)
+    with client.app.state.session_factory() as session:
+        source = session.scalar(
+            select(ProjectVersion).where(
+                ProjectVersion.project_id == uuid.UUID(project_id)
+            )
+        )
+        original = deepcopy(source.snapshot)
+
+    def mutate(snapshot: dict[str, Any]) -> None:
+        milestone = next(
+            item for item in snapshot["milestones"] if item["code"] == "M23"
+        )
+        if change in ("name", "output"):
+            milestone[change] = "Changed definition"
+        elif change == "removed":
+            snapshot["milestones"].remove(milestone)
+        elif change == "not_applicable":
+            plan = next(
+                item
+                for item in snapshot["plan_versions"]
+                if item["name"] == snapshot["active_plan_name"]
+            )
+            plan["milestones"][milestone["name"]] = {
+                "state": "not_applicable",
+                "start_date": None,
+                "end_date": None,
+            }
+        elif change == "formal_completion":
+            milestone["actual_completion"] = {
+                "state": "scheduled",
+                "start_date": "2026-08-07",
+                "end_date": "2026-08-07",
+            }
+
+    _append_mobile_test_version(client, project_id, mutate)
+    _append_mobile_test_version(
+        client,
+        project_id,
+        lambda snapshot: (snapshot.clear(), snapshot.update(original)),
+    )
+    if change in ("runtime", "before_value"):
+        with client.app.state.session_factory() as session:
+            if change == "runtime":
+                session.add(
+                    MilestoneRuntimeState(
+                        project_id=uuid.UUID(project_id),
+                        milestone_code="M23",
+                        completion_revision=2,
+                    )
+                )
+            else:
+                proposal = session.get(ChangeProposal, uuid.UUID(proposal_id))
+                proposal.before_value = {
+                    "state": "scheduled",
+                    "start_date": "2020-01-01",
+                    "end_date": "2020-01-01",
+                }
+            session.commit()
+    listed = client.get(
+        f"/api/v1/projects/{project_id}/change-proposals", headers=PM
+    ).json()
+    assert listed[0]["approval_block_reason"] is not None
+    response = client.post(
+        f"/api/v1/change-proposals/{proposal_id}/approve",
+        headers=_admin_headers("history-approve"),
+        json={"expected_project_version": 1},
+    )
+    assert response.status_code == 409, response.json()
+    listed = client.get(
+        f"/api/v1/projects/{project_id}/change-proposals", headers=PM
+    ).json()
+    assert listed[0]["status"] == "pending"
+
+
+def test_cross_version_completion_rejects_atomic_same_code_replacement(
+    mobile_workflow: TestClient,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    proposal_id, _ = _pending_cross_version_completion(client, project_id)
+    editable = client.get(
+        f"/api/v1/projects/{project_id}/editable-data", headers=PM
+    ).json()
+    milestone = next(item for item in editable["milestones"] if item["code"] == "M23")
+    spec = editable["product_specs"][0]
+    created = client.post(
+        f"/api/v1/projects/{project_id}/change-sets",
+        headers=_admin_headers("replace-same-code"),
+        json={
+            "base_version_number": 1,
+            "reason": "重建节点",
+            "operations": [
+                {"op": "remove", "resource": "milestone", "key": "M23"},
+                {
+                    "op": "add",
+                    "resource": "milestone",
+                    "key": "M23",
+                    "value": milestone,
+                },
+                {
+                    "op": "replace",
+                    "resource": "product_spec",
+                    "key": str(spec["row_number"]),
+                    "value": {**spec, "notes": "Unrelated published change"},
+                },
+            ],
+        },
+    )
+    assert created.status_code == 201, created.json()
+    published = client.post(
+        f"/api/v1/change-sets/{created.json()['id']}/publish",
+        headers=_admin_headers("publish-replace-same-code"),
+        json={"expected_project_version": 1},
+    )
+    assert published.status_code == 200, published.json()
+    response = client.post(
+        f"/api/v1/change-proposals/{proposal_id}/approve",
+        headers=_admin_headers("approve-replaced-code"),
+        json={"expected_project_version": 1},
+    )
+    assert response.status_code == 409, response.json()
+
+
+@pytest.mark.parametrize("self_review", [False, True])
+def test_cross_version_completion_uses_current_reviewer_permissions(
+    mobile_workflow: TestClient,
+    self_review: bool,
+) -> None:
+    client = mobile_workflow
+    project_id = _published_project(client)
+    proposal_id, responsible = _pending_cross_version_completion(client, project_id)
+    invitation = _invite(client, project_id, "成员09", "history-reviewer")
+    old_reviewer, _ = _login(client, "dev:history-reviewer")
+    accepted = client.post(
+        "/api/v1/mobile/invitations/accept",
+        headers=old_reviewer,
+        json={
+            "invitation_token": invitation["invitation_token"],
+            "phone": "13800000009",
+        },
+    )
+    assert accepted.status_code == 200
+
+    def change_accountable(snapshot: dict[str, Any]) -> None:
+        milestone = next(
+            item for item in snapshot["milestones"] if item["code"] == "M23"
+        )
+        milestone["assignments"]["A"] = ["成员10"]
+
+    _append_mobile_test_version(client, project_id, change_accountable)
+    reviewer = responsible if self_review else old_reviewer
+    listed = client.get(
+        f"/api/v1/mobile/projects/{project_id}/change-proposals", headers=reviewer
+    ).json()
+    assert not listed or listed[0]["can_resolve"] is False
+    dashboard = client.get(
+        f"/api/v1/mobile/projects/{project_id}/dashboard", headers=reviewer
+    ).json()
+    assert dashboard["pending_approval_count"] == 0
+    response = client.post(
+        f"/api/v1/mobile/change-proposals/{proposal_id}/approve",
+        headers={**reviewer, "X-Idempotency-Key": "current-reviewer-approve"},
+        json={"expected_project_version": 1},
+    )
+    assert response.status_code == 403, response.json()

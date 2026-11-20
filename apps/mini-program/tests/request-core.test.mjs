@@ -29,7 +29,11 @@ test("requester exposes the backend error detail", async () => {
     transport: (options) => options.success({ statusCode: 409, data: { detail: "版本冲突" } }),
   });
 
-  await assert.rejects(request("/mobile/messages"), /版本冲突/);
+  await assert.rejects(request("/mobile/messages"), (error) => {
+    assert.equal(error.message, "版本冲突");
+    assert.equal(error.status, 409);
+    return true;
+  });
 });
 
 test("requester exposes structured conflict messages", async () => {
